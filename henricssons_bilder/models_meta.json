@@ -9037,18 +9037,5 @@
     ],
     "source": "https://www.henricssonsbatkapell.se/exempel/p054-titanium",
     "published": true
-  },
-  "test-post": {
-    "manufacturer": "nån tillverkare",
-    "model": "TEST POST",
-    "description": "SUPER BRA",
-    "variant": "var",
-    "delivery": "3 - 4 VECKOR",
-    "category": "Vävprover övriga",
-    "images": [
-      "vavprover-ovriga\\ny-post\\ny-post_01.png"
-    ],
-    "source": "",
-    "published": true
   }
 }
