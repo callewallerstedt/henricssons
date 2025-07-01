@@ -594,11 +594,27 @@ function showExtrasEdit() {
         obj.variant = $('#extra-variant').val().trim();
         obj.description = $('#extra-desc').val().trim();
         obj.delivery = $('#extra-delivery').val().trim();
-        obj.published = $('#extra-published').is(':checked');
         saveExtras(()=>{ extrasMsg('Sparat!','success'); });
     }, 800);
-
-    $('#extra-name, #extra-manu, #extra-model, #extra-variant, #extra-desc, #extra-delivery, #extra-published').on('input change blur', autoSaveExtra);
+    
+    // Textfält med debounce
+    $('#extra-name, #extra-manu, #extra-model, #extra-variant, #extra-desc, #extra-delivery').on('input change blur', autoSaveExtra);
+    
+    // Checkbox ska reagera omedelbart utan debounce + uppdatera listans visuella tillstånd
+    $('#extra-published').on('change', function(){
+        obj.published = $('#extra-published').is(':checked');
+        saveExtras(()=>{ 
+            extrasMsg('Publicering uppdaterad!','success'); 
+            // Uppdatera visuellt tillstånd i listan direkt
+            const catKey = activeExtrasKey === 'all' ? editExtrasCat : activeExtrasKey;
+            const item = $(`.extras-item.selected-e`);
+            if (obj.published === false) {
+                item.addClass('inactive');
+            } else {
+                item.removeClass('inactive');
+            }
+        });
+    });
 }
 
 function saveExtras(cb){
