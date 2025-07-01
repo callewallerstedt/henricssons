@@ -26,14 +26,7 @@
     "name": "Adec",
     "models": [
       "700",
-      {
-        "name": "620/630",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      },
+      "620/630",
       "BM 550 m/räcke",
       "Fiskebleka",
       "Fiskebleka special förkapell med båga",
@@ -44,14 +37,7 @@
   "advance": {
     "name": "Advance",
     "models": [
-      {
-        "name": "245 Sprayhood",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      }
+      "245 Sprayhood"
     ]
   },
   "agder": {
@@ -78,14 +64,7 @@
       "23",
       "25",
       "30",
-      {
-        "name": "18 siesta med tak",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      },
+      "18 siesta med tak",
       "23 akterkapell",
       "25 specialtak",
       "25 standard takdel",
@@ -134,22 +113,8 @@
   "alo": {
     "name": "Alo",
     "models": [
-      {
-        "name": "26 Mikkel I Sprayhood",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      },
-      {
-        "name": "26 Mikkel Modell 2 Sprayhood",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      },
+      "26 Mikkel I Sprayhood",
+      "26 Mikkel Modell 2 Sprayhood",
       "28 I kalesje",
       "28 III kalesje",
       "28 Modell 2 kalesje",
@@ -1898,14 +1863,7 @@
   "luna": {
     "name": "Luna",
     "models": [
-      {
-        "name": "26 kalesje",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      }
+      "26 kalesje"
     ]
   },
   "mv-marin": {
@@ -3636,30 +3594,9 @@
   "x": {
     "name": "X",
     "models": [
-      {
-        "name": "412 original sprayhood",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      },
-      {
-        "name": "332 original sprayhood",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      },
-      {
-        "name": "332 original sittbrunnskapell",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      }
+      "412 original sprayhood",
+      "332 original sprayhood",
+      "332 original sittbrunnskapell"
     ]
   },
   "xo": {
@@ -3864,6 +3801,36 @@
       "700 weekender originalkapell",
       "690 Cobra kales",
       "Quatro 8800 kal"
+    ]
+  },
+  "new_1751367847835": {
+    "name": "Ny tillverkare",
+    "models": []
+  },
+  "new_1751375516594": {
+    "name": "1 TEST",
+    "models": [
+      {
+        "name": "TEST MODELL",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
+    ]
+  },
+  "new_1751378058194": {
+    "name": "11 TESt",
+    "models": [
+      {
+        "name": "TESTER",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   }
 }
