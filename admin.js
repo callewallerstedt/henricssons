@@ -519,8 +519,10 @@ function showExtrasEdit() {
         // Spara och uppdatera både listan & redigeringsrutan direkt
         saveExtras(()=>{
             extrasMsg('Sparat!','success');
-            buildExtrasList();
-            showExtrasEdit();
+            // Uppdatera endast listans synlighet och namn utan att förstöra selektionen
+            const updatedObj = extrasData[catKey][selectedExtraIndex];
+            $(`.extras-item.selected-e .extra-name`).text(updatedObj.name || '–');
+            // Behåll formuläret som det är – användaren ser sina ändringar direkt
         });
     });
     $('#delete-extra-btn').on('click', function(){
@@ -593,7 +595,7 @@ function showExtrasEdit() {
         obj.description = $('#extra-desc').val().trim();
         obj.delivery = $('#extra-delivery').val().trim();
         obj.published = $('#extra-published').is(':checked');
-        saveExtras(()=>{ extrasMsg('Sparat!','success'); buildExtrasList(); });
+        saveExtras(()=>{ extrasMsg('Sparat!','success'); });
     }, 800);
 
     $('#extra-name, #extra-manu, #extra-model, #extra-variant, #extra-desc, #extra-delivery, #extra-published').on('input change blur', autoSaveExtra);
@@ -645,10 +647,8 @@ function saveExtras(cb){
     .then(data => {
         if (data.success) {
             showEditMsg('Extras sparade!', 'success');
-            // Uppdatera lokalt genom att läsa om filen
-            setTimeout(()=>{
-                fetchExtras().then(()=>{ buildExtrasList(); });
-            }, 1000);
+            // Ingen ombyggnad av listan behövs – lokala ändringar är redan gjorda.
+            // selectedExtraIndex och editExtrasCat behålls som de är.
         } else {
             showEditMsg('Kunde inte spara till fil: ' + (data.error || 'Okänt fel'), 'error');
         }
