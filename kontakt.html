@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8"/>
+    <title>Kontakt - Henricssons Båtkapell</title>
+    <meta name="description" content="Kontakta Henricssons Båtkapell för frågor om kapell, tillbehör eller bokning av besök. Vi finns i Kungsbacka och hjälper dig gärna."/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="logo.png">
+</head>
+<body>
+    <header class="header">
+        <nav class="navbar">
+            <a href="index.html" class="nav-logo">
+                <img src="logo.png" alt="Henricssons Båtkapell Logo"/>
+            </a>
+            <button class="menu-btn" aria-label="Toggle menu">
+                <span class="menu-line"></span>
+                <span class="menu-line"></span>
+                <span class="menu-line"></span>
+            </button>
+            <div class="nav-menu">
+                <a href="om-oss.html" class="nav-link">Om oss</a>
+                <a href="kapellforfragan.html" class="nav-link">Kapellförfrågan</a>
+                <a href="bilder-och-exempel.html" class="nav-link">Bilder & exempel</a>
+                <a href="tillbehor.html" class="nav-link">Fenderstrumpor</a>
+                <a href="kontakt.html" class="nav-link active">Kontakt</a>
+            </div>
+        </nav>
+    </header>
+    <div class="cta-line--nav"></div>
+    <div class="nav-rugged-border"></div>
+
+    <main>
+        <section class="hero hero--kontakt">
+            <div class="hero-content hero-content--centered">
+                <h1 class="hero-title">Kontakt</h1>
+                <div class="divider"></div>
+                <p class="hero-text">Kontakta oss för frågor om kapell, tillbehör eller bokning av besök. Vi hjälper dig gärna!</p>
+                <div class="hero-down-arrow" aria-hidden="true">&#8595;</div>
+            </div>
+        </section>
+
+        <div class="cta-line"></div>
+
+        <section class="contact-info">
+            <div class="container">
+                <div class="contact-grid">
+                    <div class="contact-details">
+                        <h2>Kontaktinformation</h2>
+                        <div class="contact-item">
+                            <h3>Adress</h3>
+                            <p>
+                                Energigatan 17E<br/>
+                                434 37 Kungsbacka
+                            </p>
+                        </div>
+                        <div class="contact-item">
+                            <h3>Telefon</h3>
+                            <p><a href="tel:+4631471820">+46 (0)31 471820</a></p>
+                        </div>
+                        <div class="contact-item">
+                            <h3>E-post</h3>
+                            <p><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></p>
+                        </div>
+                        <div class="contact-item">
+                            <h3>Öppettider</h3>
+                            <p>
+                                Måndag - Fredag: 08:00 - 17:00<br/>
+                                Lördag - Söndag: Stängt
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="contact-form-wrapper">
+                        <h2>Kontakta oss</h2>
+                        <form id="contactForm" class="contact-form" action="https://formspree.io/f/xnnvovbk" method="POST">
+                            <div class="form-group">
+                                <label for="name">Namn *</label>
+                                <input type="text" id="name" name="1. Namn" placeholder="Ditt namn *" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="email">E-post *</label>
+                                <input type="email" id="email" name="2. E-postadress" placeholder="E-postadress *" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="phone">Telefon</label>
+                                <input type="tel" id="phone" name="3. Telefonnummer" placeholder="Telefonnummer">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="subject">Ämne *</label>
+                                <input type="text" id="subject" name="4. Ämne" placeholder="Ämne *" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="message">Meddelande *</label>
+                                <textarea id="message" name="5. Meddelande" rows="4" placeholder="Meddelande *" required></textarea>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">Skicka meddelande</button>
+                            <div class="w-form-done" style="display:none; padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#b89300;">Tack! Ditt meddelande har skickats.</div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <section class="map">
+            <div class="container">
+                <h2>Hitta hit</h2>
+                <div class="map-container">
+                    <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4660.458833098003!2d12.049716311534919!3d57.508085739122635!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464fed5990737987%3A0x20da512b8425f52!2sHenricssons%20B%C3%A5tkapell%20AB!5e1!3m2!1ssv!2sse!4v1751304808249!5m2!1ssv!2sse" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                </div>
+            </div>
+        </section>
+
+        <div class="cta-line"></div>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <img src="logo.png" alt="Henricssons Båtkapell Logo" class="footer-logo"/>
+                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
+                <p>Vi gör kapell till många olika typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller</p>
+            </div>
+            <div class="footer-section">
+                <h2 style="text-align:left;">Partners</h2>
+                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
+                <div class="partners-grid">
+                    <img src="assets/jens sagen.png" alt="Jens Sagen" class="partner-logo"/>
+                    <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" class="partner-logo"/>
+                    <img src="assets/Varuste.png" alt="VA Varuste" class="partner-logo"/>
+                    <img src="assets/schultz.png" alt="Schultz Kalecher" class="partner-logo"/>
+                    <img src="assets/mpvenekuomo.png" alt="MP Venekuomu" class="partner-logo" style="grid-column: span 2;"/>
+                </div>
+            </div>
+            <div class="footer-section">
+                <h2 style="text-align:left;">Kontakt</h2>
+                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
+                <p>
+                    +46 (0)31 471820<br/>
+                    Energigatan 17E<br/>
+                    434 37 Kungsbacka<br/>
+                    <a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a>
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(function(){
+            $('#contactForm').on('submit',function(e){
+                e.preventDefault();
+                const $form=$(this);
+                const $btn=$form.find('button[type="submit"]');
+                $btn.prop('disabled',true).text('Tack!');
+                $.ajax({url:$form.attr('action'),method:$form.attr('method'),data:$form.serialize(),dataType:'json',complete:function(){
+                    $form.find('.w-form-done').fadeIn();
+                }});
+            });
+        });
+
+        // Prefill subject if coming from gallery modal
+        (function(){
+            const manu = localStorage.getItem('preselectManufacturer') || '';
+            const model = localStorage.getItem('preselectModel') || '';
+            if(manu || model){
+                const subj = document.getElementById('subject');
+                if(subj){
+                    subj.value = `Från Exempel: ${manu} ${model}`.trim();
+                }
+                // Scroll till kontaktformuläret direkt (mjuk scroll)
+                const formSection = document.querySelector('.contact-form-wrapper');
+                if(formSection){
+                    setTimeout(()=>formSection.scrollIntoView({behavior:'smooth', block:'start'}), 100);
+                }
+                // Clean up så det inte sparas
+                localStorage.removeItem('preselectManufacturer');
+                localStorage.removeItem('preselectModel');
+            }
+        })();
+    </script>
+</body>
+</html> 

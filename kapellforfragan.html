@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8"/>
+    <title>Kapellförfrågan - Henricssons Båtkapell</title>
+    <meta name="description" content="Vi har många kapell på vårt lager. Vi besvarar inkomna förfrågningar löpande och där ger er mer exakt leveranstid."/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css?v=20250630">
+    <link rel="icon" href="logo.png">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+    <meta http-equiv="Pragma" content="no-cache"/>
+    <meta http-equiv="Expires" content="0"/>
+</head>
+<body>
+    <header class="header">
+        <nav class="navbar">
+            <a href="index.html" class="nav-logo">
+                <img src="logo.png" alt="Henricssons Båtkapell Logo"/>
+            </a>
+            <button class="menu-btn" aria-label="Toggle menu">
+                <span class="menu-line"></span>
+                <span class="menu-line"></span>
+                <span class="menu-line"></span>
+            </button>
+            <div class="nav-menu">
+                <a href="om-oss.html" class="nav-link">Om oss</a>
+                <a href="kapellforfragan.html" class="nav-link active">Kapellförfrågan</a>
+                <a href="bilder-och-exempel.html" class="nav-link">Bilder & exempel</a>
+                <a href="tillbehor.html" class="nav-link">Fenderstrumpor</a>
+                <a href="kontakt.html" class="nav-link">Kontakt</a>
+            </div>
+        </nav>
+    </header>
+    <div class="cta-line--nav"></div>
+    <div class="nav-rugged-border"></div>
+
+    <main>
+        <section class="hero hero--kapellforfragan">
+            <div class="hero-content hero-content--centered">
+                <h1 class="hero-title">Skicka en <span class="highlight">kapellförfrågan</span></h1>
+                <div class="divider"></div>
+                <p class="hero-text">
+                    Vi har många kapell på vårt lager. Vi besvarar inkomna förfrågningar löpande och där ger er mer exakt leveranstid.
+                </p>
+                <div class="hero-down-arrow" aria-hidden="true">&#8595;</div>
+            </div>
+        </section>
+
+        <div class="divider--hero-form"></div>
+
+        <section class="request-form">
+            <div class="container">
+                <div class="form-grid form-grid--split">
+                    <div class="form-info form-info--left">
+                        <p class="info-title" style="font-weight:700; color:inherit; margin-bottom:1.1rem;">Så här gör du en kapellförfrågan</p>
+                        <p>Om din båtmodell inte finns i sökverktyget kan du skriva in den manuellt i formuläret. Ange gärna tillverkare av gamla kapellet och var du har båten.</p>
+                        <p><strong>Gamla kapell med märkning som vi säkert kan leverera till:</strong></p>
+                        <ul class="info-list">
+                            <li>Båtkapellspecialisten Henrics Product AB</li>
+                            <li>VA-Varuste</li>
+                            <li>MP-Venekuomo</li>
+                            <li>Schulz Seilmakeri</li>
+                            <li>Marin & Industrisöm</li>
+                            <li>Jens Sagen A/S</li>
+                            <li>Hübert</li>
+                            <li>Helly-Hansen</li>
+                            <li>Hansen Protection</li>
+                        </ul>
+                        <p><strong>Vi levererar med DHL &amp; Post Nord.</strong><br>Kapellet hämtar du ut på servicepoint/utlämningställe på din ort. Alla leveranser skickas när de är betalda (faktura via mejl, KIVRA eller post). Alternativt skickas kapellet med efterkrav. Swishbetalning möjlig för snabb expediering.</p>
+                    </div>
+                    <div class="form-content form-content--right">
+                        <div class="section-container">
+                            <h4>Välj båttillverkare</h4>
+                            <p>Sök i rutan nedan och välj sedan en tillverkare i listan.</p>
+                            <div class="search-container">
+                                <input class="quicksearch" type="text" placeholder="Sök tillverkare..." id="tillverkare">
+                                <div id="clear-qs" class="clear-qs">
+                                    <div class="clear-qs-line line-1"></div>
+                                    <div class="clear-qs-line line-2"></div>
+                                </div>
+                            </div>
+                            <div id="tillverkare-container" class="tillverkare-wrapper">
+                                <div class="grid1-wrapper">
+                                    <div class="grid1">
+                                        <!-- Tillverkare items will be populated by JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="rensa-button-wrapper">
+                                <a id="rensa-grid1" data-filter="-" href="#" class="rensa-button">Rensa val</a>
+                            </div>
+                        </div>
+                        <div id="modell-container" class="section-container inaktiv">
+                            <h4 class="h4-boat-selector">Välj båtmodell</h4>
+                            <div id="modeller" class="modeller-wrapper">
+                                <div class="grid2-wrapper">
+                                    <div class="grid2">
+                                        <!-- Modell items will be populated by JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="rensa-button-wrapper">
+                                <a id="rensa-grid2" data-filter="-" href="#" class="rensa-button">Rensa val</a>
+                            </div>
+                        </div>
+                        <div id="contact-form" class="contact-form-section">
+                            <h4>Kontaktformulär</h4>
+                            <form class="contact-form" action="https://formspree.io/f/xnnvovbk" method="POST">
+                                <div class="form-group">
+                                    <label for="name">Namn *</label>
+                                    <input type="text" id="name" name="1. Namn" placeholder="Ditt namn *" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="phone">Telefonnummer *</label>
+                                    <input type="tel" id="phone" name="2. Telefonnummer" placeholder="Telefonnummer *" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="email">E-postadress *</label>
+                                    <input type="email" id="email" name="3. E-postadress" placeholder="E-postadress *" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="T-field">Tillverkare</label>
+                                    <input type="text" id="T-field" name="4. Tillverkare" placeholder="Välj tillverkare ovan eller skriv in manuellt">
+                                </div>
+                                <div class="form-group">
+                                    <label for="M-field">Modell</label>
+                                    <input type="text" id="M-field" name="5. Modell" placeholder="Välj modell ovan eller skriv in manuellt">
+                                </div>
+                                <div class="form-group">
+                                    <label for="boatYear">Årsmodell</label>
+                                    <input type="text" id="boatYear" name="6. Årsmodell" placeholder="Årsmodell">
+                                </div>
+                                <div class="form-group">
+                                    <label for="homePort">Hemmahamn</label>
+                                    <input type="text" id="homePort" name="7. Hemmahamn" placeholder="Hemmahamn">
+                                </div>
+                                <div class="form-group">
+                                    <label for="oldCanopy">Tillverkare av befintligt kapell</label>
+                                    <input type="text" id="oldCanopy" name="8. Tillverkare av befintligt kapell" placeholder="Tillverkare av befintligt kapell">
+                                </div>
+                                <div class="form-group">
+                                    <label for="message">Övrig information</label>
+                                    <textarea id="message" name="9. Övrig information" rows="4" placeholder="Övrig information"></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Skicka förfrågan</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <img src="logo.png" alt="Henricssons Båtkapell Logo" class="footer-logo"/>
+                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
+                <p>Vi gör kapell till många olika typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller</p>
+            </div>
+            <div class="footer-section">
+                <h2 style="text-align:left;">Partners</h2>
+                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
+                <div class="partners-grid">
+                    <img src="assets/jens sagen.png" alt="Jens Sagen" class="partner-logo"/>
+                    <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" class="partner-logo"/>
+                    <img src="assets/Varuste.png" alt="VA Varuste" class="partner-logo"/>
+                    <img src="assets/schultz.png" alt="Schultz Kalecher" class="partner-logo"/>
+                    <img src="assets/mpvenekuomo.png" alt="MP Venekuomu" class="partner-logo" style="grid-column: span 2;"/>
+                </div>
+            </div>
+            <div class="footer-section">
+                <h2 style="text-align:left;">Kontakt</h2>
+                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
+                <p>
+                    +46 (0)31 471820<br/>
+                    Energigatan 17E<br/>
+                    434 37 Kungsbacka<br/>
+                    <a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a>
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js"></script>
+    <script src="kapellforfragan.js?v=20250701"></script>
+    <script>
+        // Behåll endast formulärets Ajax-skick
+        $(function(){
+            $('.contact-form').on('submit',function(e){
+                e.preventDefault();
+                const $form=$(this);
+                const $btn=$form.find('button[type="submit"]');
+                $btn.prop('disabled',true).text('Tack!');
+                if(!$form.find('.w-form-done').length){
+                    $form.append('<div class="w-form-done" style="padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#b89300;">Förfrågan skickad! Vi återkommer så snart vi kan.</div>');
+                }
+                $.ajax({url:$form.attr('action'),method:$form.attr('method'),data:$form.serialize(),dataType:'json',error:function(){alert('Något gick fel. Försök igen eller kontakta oss via e-post.');}});
+            });
+        });
+    </script>
+</body>
+</html> 

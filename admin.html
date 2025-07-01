@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8" />
+    <title>Admin - Henricssons Båtkapell</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.css" />
+    <link rel="icon" href="logo.png">
+    <style>
+        body { padding: 0.5rem 0rem; max-width: 1600px; margin:0 auto; font-family: Montserrat, Arial, sans-serif; }
+        h1 { margin-bottom: 1.5rem; color: #0a2342; }
+        .admin-grid-container { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .admin-grid-col { flex: 1 1 350px; min-width: 300px; }
+        .grid1, .grid2 { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 1.5rem; }
+        /* Enhetlig knappstil för alla listobjekt */
+        .grid1-item, .grid2-item, .extras-item { background: #f5f5f5; border: 1px solid #b89300; border-radius: 6px; padding: 0.2rem 0.6rem; margin: 3px; cursor: pointer; transition: background 0.2s, border 0.2s; font-size: 0.9rem; font-weight: 600; line-height: 1.3; color:#0a2342; }
+        .grid1-item.selected-t, .grid2-item.selected-m { background: #ffe066; border-color: #b89300; color:#0a2342; }
+        .grid1-item:hover, .grid2-item:hover { background: #fffbe6; }
+        /* Behåll gul markering även när man hovrar den valda */
+        .grid1-item.selected-t:hover { background: #ffe066; }
+        .grid2-item.selected-m:hover { background: #ffe066; }
+        .quicksearch { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border-radius: 4px; border: 1px solid #ccc; }
+        .edit-section { background: #fffbe6; border: 1.5px solid #b89300; border-radius: 8px; padding: 1rem; margin-top: 1rem; }
+        .edit-section h2 { margin-top: 0; color: #b89300; }
+        .edit-section label { font-weight: bold; margin-top: 0.5rem; display: block; color: #0a2342; }
+        .edit-section input, .edit-section textarea { width: 100%; padding: 0.5rem; margin-bottom: 0.5rem; border-radius: 4px; border: 1px solid #ccc; }
+        .edit-section .btn { background: #b89300; color: #fff; border: none; border-radius: 4px; padding: 0.35rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; margin: 0.25rem 0.5rem 0.25rem 0; }
+        .edit-section .btn-danger { background: #dc3545; }
+        .edit-section .btn:hover { background: #a08500; }
+        .edit-section .btn-danger:hover { background: #c82333; }
+        .edit-section .success { color: #155724; background: #d4edda; padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; }
+        .edit-section .error { color: #dc3545; background: #f8d7da; padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; }
+        .add-btn { background: #b89300; color: white; border: none; border-radius: 4px; width: 30px; height: 30px; font-size: 18px; font-weight: bold; cursor: pointer; }
+        .add-btn:hover { background: #a08500; }
+        h2 { display: flex; align-items: center; gap: 0.5rem; }
+        .btn-secondary { background: #6c757d !important; }
+        .btn-secondary:hover { background: #5a6268 !important; }
+        .edit-section .img-thumb { position: relative; display:inline-block; margin:4px; }
+        .edit-section .img-thumb img { width:80px; height:60px; object-fit:cover; border-radius:4px; border:1px solid #ccc; }
+        .edit-section .del-img-btn { position:absolute; top:-5px; right:-5px; background:#dc3545; color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:12px; line-height:18px; padding:0; cursor:pointer; }
+        .tab-btn { background:#f5f5f5; border:1px solid #b89300; border-radius:5px; padding:0.35rem 0.8rem; font-weight:600; cursor:pointer; }
+        .tab-btn.active { background:#ffe066; }
+        .grid-extras { display:flex; flex-wrap:wrap; gap:0; margin-bottom:1.5rem; }
+        .extras-item:hover { background:#fffbe6; }
+        .extras-item { box-shadow: 0 1.5px 5px rgba(0,0,0,0.08); background: linear-gradient(135deg, #ffffff, #fefefc); }
+        .extras-item.selected-e { background: linear-gradient(135deg, #ffe066, #ffdb4d); border-color:#b89300; color:#0a2342; opacity:1 !important; filter:none !important; box-shadow: 0 4px 12px rgba(224,184,0,0.45); }
+        .extras-item.selected-e:hover { background:#ffe066; }
+        .models-wrapper { display:flex; gap:1.5rem; align-items:flex-start; }
+        .models-wrapper .grid2 { flex:1 1 0; max-height:80vh; overflow-y:auto; }
+        .models-wrapper #edit-section { flex:0 0 350px; position:sticky; top:0; }
+        .extras-wrapper { display:flex; gap:1.5rem; align-items:flex-start; }
+        .extras-wrapper .grid-extras { flex:1 1 0; max-height:80vh; overflow-y:auto; }
+        .extras-wrapper #extras-edit-section { flex:0 0 350px; position:sticky; top:0; }
+        /* Toggle-switch */
+        .switch { position:relative; display:inline-block; width:36px; height:20px; vertical-align:middle; margin-right:6px; }
+        .switch input { opacity:0; width:0; height:0; }
+        .slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#ccc; transition:.2s; border-radius:20px; }
+        .slider:before { position:absolute; content:""; height:16px; width:16px; left:2px; bottom:2px; background:#fff; transition:.2s; border-radius:50%; }
+        .switch input:checked + .slider { background:#28a745; }
+        .switch input:checked + .slider:before { transform: translateX(16px); }
+        .inactive { opacity:0.45; filter: grayscale(30%); }
+        .no-images { border: 2px solid #dc3545 !important; }
+    </style>
+</head>
+<body>
+    <header style="text-align:center; margin-bottom:1.5rem;">
+        <img src="logo.png" alt="Henricssons Båtkapell" style="max-width:400px;width:50%;height:auto;display:block;margin:0 auto 0.5rem auto;" />
+        <h1 style="margin:0; color:#0a2342;">Admin - Hantera Data</h1>
+    </header>
+    <!-- Primära flikar -->
+    <div id="primary-tabs" style="display:flex; gap:1rem; margin-bottom:1rem;">
+        <button class="primary-tab-btn active" data-primary="boats" style="font-size:1.1rem;padding:0.5rem 1.4rem;font-weight:700;border:2px solid #b89300;border-radius:8px;background:#ffe066;cursor:pointer;">Tillverkare &amp; Modeller</button>
+        <button class="primary-tab-btn" data-primary="images" style="font-size:1.1rem;padding:0.5rem 1.4rem;font-weight:700;border:2px solid #b89300;border-radius:8px;background:#f5f5f5;cursor:pointer;">Bilder &amp; exempel</button>
+    </div>
+    <div id="admin-tabs" style="margin-bottom:1rem; display:flex; flex-wrap:wrap; gap:0.5rem;">
+        <!-- Sekundära flikar som visas under "Bilder & exempel" -->
+        <button class="tab-btn" data-tab="all">Visa alla</button>
+        <button class="tab-btn" data-tab="motorboats">Motorbåtar</button>
+        <button class="tab-btn" data-tab="sailboats">Segelbåtar</button>
+        <button class="tab-btn" data-tab="boatseats">Båtstolar &amp; Dynor</button>
+        <button class="tab-btn" data-tab="otherfabrics">Vävprover övriga</button>
+        <button class="tab-btn" data-tab="special">Specialsömnad &amp; Skräddarsytt</button>
+        <button class="tab-btn" data-tab="sunbrella">Sunbrella Plus Kollektion</button>
+    </div>
+
+    <input type="text" class="quicksearch" placeholder="Sök tillverkare..." />
+
+    <div id="boats-section" class="admin-grid-container">
+        <div class="admin-grid-col">
+            <h2>Tillverkare <button class="add-btn" id="add-manufacturer-btn">+</button></h2>
+            <div class="grid1"></div>
+        </div>
+        <div class="admin-grid-col">
+            <h2>Modeller <button class="add-btn" id="add-model-btn">+</button></h2>
+            <div class="models-wrapper">
+                <div class="grid2"></div>
+                <div id="edit-section" class="edit-section" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sektion för extras -->
+    <div id="extras-section" style="display:none;">
+        <h2 id="extras-heading">Heading <button class="add-btn" id="add-extra-btn">+</button></h2>
+        <input type="text" id="extras-search" placeholder="Sök i bilder & exempel..." style="width:100%;padding:0.5rem;margin:0.5rem 0 1rem 0;border:1px solid #ccc;border-radius:4px;display:none;" />
+        <div class="extras-wrapper">
+            <div class="grid-extras"></div>
+            <div id="extras-edit-section" class="edit-section" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js"></script>
+    <!-- Cache-bust to force latest JS each deploy -->
+    <script src="kapellforfragan_full.js?v=20250628"></script>
+    <script src="admin.js?v=20250628"></script>
+</body>
+</html> 
