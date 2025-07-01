@@ -4,6 +4,9 @@ if (!window.boatData || typeof window.boatData !== 'object') {
 }
 const getBoatData = () => window.boatData;
 
+// API-bas beroende på miljö
+const DATA_BASE = location.hostname === 'localhost' ? 'http://localhost:8001' : 'https://henricssons-api.onrender.com';
+
 // Initialize when document is ready
 $(document).ready(function() {
     const ts = Date.now();
@@ -11,7 +14,7 @@ $(document).ready(function() {
     // För att säkerställa att vi alltid får en kropp (status 200) ber vi uttryckligen
     // om en "no-store"-hämtning. Om vi ändå får 304 faller vi tillbaka till eventuell
     // redan befintlig boatData.
-    fetch(`boat_data.json?v=${ts}`, { cache: 'no-store' })
+    fetch(`${DATA_BASE}/boat_data.json?v=${ts}`, { cache: 'no-store' })
         .then(r => {
             if (r.ok) {
                 return r.json();
@@ -22,7 +25,7 @@ $(document).ready(function() {
                     return window.boatData;
                 }
                 // Första laddningen utan data – försök igen utan villkorad cache.
-                return fetch(`boat_data.json?nocache=${ts + 1}`, { cache: 'reload' }).then(res => res.ok ? res.json() : null);
+                return fetch(`${DATA_BASE}/boat_data.json?nocache=${ts + 1}`, { cache: 'reload' }).then(res => res.ok ? res.json() : null);
             }
             return null;
         })

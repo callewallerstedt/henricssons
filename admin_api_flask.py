@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 import os
 import json
 import base64
@@ -63,6 +63,14 @@ def add_cors_headers(response):
 @app.route('/api/<path:path>', methods=['OPTIONS'])
 def options(path):
     return '', 200
+
+@app.route('/boat_data.json')
+def get_boat_data():
+    return send_from_directory('.', 'boat_data.json')
+
+@app.route('/henricssons_bilder/<path:filename>')
+def get_henricssons_files(filename):
+    return send_from_directory('henricssons_bilder', filename)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8001))

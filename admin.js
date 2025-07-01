@@ -65,7 +65,7 @@ function fetchManufacturers() {
 
 function fetchExtras() {
     // Ladda allt direkt från models_meta.json och mappa till extrasData-strukturen
-    return fetch('henricssons_bilder/models_meta.json?v=' + Date.now())
+    return fetch(`${API_BASE}/henricssons_bilder/models_meta.json?v=${Date.now()}`)
         .then(r => r.json())
         .then(meta => {
             // Initiera tomma listor per kategori
