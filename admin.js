@@ -497,7 +497,7 @@ function showExtrasEdit() {
         obj.published = $('#extra-published').is(':checked');
         // Spara och uppdatera både listan & redigeringsrutan direkt
         saveExtras(()=>{
-            extrasMsg('Sparat!','success');
+            extrasMsg('Post sparad!','success');
             // Uppdatera endast listans synlighet och namn utan att förstöra selektionen
             const updatedObj = extrasData[catKey][selectedExtraIndex];
             $(`.extras-item.selected-e .extra-name`).text(updatedObj.name || '–');
