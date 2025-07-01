@@ -326,8 +326,9 @@ body {
     border-radius: 12px;
     background-origin: border-box;
     background-clip: padding-box, border-box;
-    background-image: linear-gradient(135deg, #ffffff 0%, #ffffff 100%), /* inner fill */
-                      linear-gradient(135deg, #5d8bc6 0%, #4a7bb8 100%); /* border gradient */
+    /* first layer = card fill, second layer = border */
+    background-image: linear-gradient(135deg, #5d8bc6 0%, #4a7bb8 100%), /* inner gradient */
+                      linear-gradient(135deg, #ff512f 0%, #dd2476 50%, #1e90ff 100%); /* vibrant border gradient */
 }
 
 .service-card:hover {
