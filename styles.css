@@ -321,52 +321,11 @@ body {
     transition: transform 0.3s ease;
     position: relative;
     overflow: hidden;
-    /* Zig-zag clip-path for rugged edges */
-    clip-path: polygon(
-        0 0,
-        4% 8px,
-        8% 0,
-        12% 8px,
-        16% 0,
-        20% 8px,
-        24% 0,
-        28% 8px,
-        32% 0,
-        36% 8px,
-        40% 0,
-        60% 0,
-        64% 8px,
-        68% 0,
-        72% 8px,
-        76% 0,
-        80% 8px,
-        84% 0,
-        88% 8px,
-        92% 0,
-        100% 0,
-        100% 100%,
-        96% calc(100% - 8px),
-        92% 100%,
-        88% calc(100% - 8px),
-        84% 100%,
-        80% calc(100% - 8px),
-        76% 100%,
-        72% calc(100% - 8px),
-        68% 100%,
-        64% calc(100% - 8px),
-        60% 100%,
-        40% 100%,
-        36% calc(100% - 8px),
-        32% 100%,
-        28% calc(100% - 8px),
-        24% 100%,
-        20% calc(100% - 8px),
-        16% 100%,
-        12% calc(100% - 8px),
-        8% 100%,
-        4% calc(100% - 8px),
-        0 100%
-    );
+    /* Rugged edges using border-image */
+    border: 10px solid transparent;
+    border-image-slice: 30;
+    border-image-repeat: round;
+    border-image-source: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3E%3Cpolygon points='0,15 15,0 30,15 15,30' fill='%23ffffff'/%3E%3C/svg%3E");
 }
 
 .service-card:hover {
