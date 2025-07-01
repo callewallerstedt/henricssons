@@ -3,7 +3,7 @@
     --primary-hover: #b89300;
     --secondary-color: #004080;
     --secondary-hover: #002855;
-    --yellow-color: #e0c15a;
+    --yellow-color: #e0b800;
     --yellow-hover: #c9a93d;
     --text-color: #333;
     --light-gray: #f5f5f5;
@@ -228,7 +228,7 @@ body {
 
 /* Announcement Section */
 .announcement {
-    background: rgba(255,255,255,0.85);
+    background: rgb(255, 255, 255);
     color: #0a2342;
     border-radius: 16px;
     box-shadow: 0 8px 32px rgba(10,35,66,0.18);
@@ -258,10 +258,23 @@ body {
     left: 8px;
     right: 8px;
     bottom: 8px;
-    border-radius: 12px;
-    border: 3px solid #e0b800;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #e0b800 0%, #fff3c4 50%, #e0b800 100%);
     pointer-events: none;
-    z-index: 1;
+    z-index: -2;
+}
+
+.announcement::after {
+    content: "";
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+    border-radius: 2px;
+    background: rgb(255, 255, 255);
+    pointer-events: none;
+    z-index: -1;
 }
 
 @keyframes announcement-pulse {
@@ -302,7 +315,13 @@ body {
 /* Services Section */
 .services {
     padding: 4rem 1rem;
+    position: relative;
+    overflow: hidden;
 }
+
+
+
+
 
 .service-grid {
     max-width: var(--max-width);
@@ -310,14 +329,16 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 2rem;
+    position: relative;
+    z-index: 1;
 }
 
 .service-card {
-    padding: 2rem;
+    padding: 1.5rem;
     background: linear-gradient(135deg, #5d8bc6 0%, #4a7bb8 100%);
     color: #fff;
     border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.515);
     transition: transform 0.3s ease;
     position: relative;
     overflow: hidden;
@@ -327,8 +348,8 @@ body {
     background-origin: border-box;
     background-clip: padding-box, border-box;
     /* first layer = card fill, second layer = border */
-    background-image: linear-gradient(135deg, #729acf 0%, #4a7bb8 100%), /* inner gradient */
-                      linear-gradient(135deg, #e0b800 0%, #fff1ba 50%, #e0b800 100%); /* vibrant border gradient */
+    background-image: linear-gradient(135deg, #729acf 0%, #1c5294 100%), /* inner gradient */
+                      linear-gradient(135deg, #e0b800 0%, #fff3c4 50%, #e0b800 100%); /* vibrant border gradient */
 }
 
 .service-card:hover {
