@@ -164,9 +164,9 @@
                 const $form=$(this);
                 const $btn=$form.find('button[type="submit"]');
                 $btn.remove();
-                if(!$form.find('.w-form-done').length){
-                    $form.append('<div class="w-form-done" style="padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#b89300;">Tack! Vi har tagit emot ditt meddelande och återkommer så snart vi kan.</div>');
-                }
+                const $thankYou = $form.find('.w-form-done');
+                $thankYou.html('Tack! Vi har tagit emot ditt meddelande och återkommer så snart vi kan.').show();
+
                 $.ajax({
                     url:$form.attr('action'),
                     method:$form.attr('method'),
