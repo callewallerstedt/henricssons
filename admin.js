@@ -225,15 +225,6 @@ function showManufacturerEdit() {
         buildGrids();
         showEditSection();
     });
-
-    // Autospara namn
-    const autoSaveManu = debounce(function(){
-        const newName = $('#edit-manu-name').val().trim();
-        if(!newName) return;
-        manu.name = newName;
-        saveManufacturer(selectedManufacturerKey, manu, ()=>{ showEditMsg('Sparat!','success'); buildGrids(); });
-    },600);
-    $('#edit-manu-name').on('input', autoSaveManu);
 }
 
 function showModelEdit() {
@@ -280,18 +271,6 @@ function showModelEdit() {
         buildModels();
         showEditSection();
     });
-
-    // Autospara modellnamn vid ändring (debounce 600 ms)
-    const autoSaveModel = debounce(function() {
-        const newName = $('#edit-model-name').val().trim();
-        if (!newName) return;
-        setModelName(selectedModelIndex, newName);
-        saveManufacturer(selectedManufacturerKey, manu, () => {
-            showEditMsg('Sparat!', 'success');
-            buildGrids();
-        });
-    }, 600);
-    $('#edit-model-name').on('input', autoSaveModel);
 }
 
 function showEditMsg(msg, type) {
@@ -585,35 +564,16 @@ function showExtrasEdit() {
     bindExtraImageDelete();
     bindSetThumbnail();
 
-    // Autospara på alla textfält (debounce 800 ms)
-    const autoSaveExtra = debounce(function(){
-        if(!obj.images) obj.images = obj.images || [];
-        obj.name = $('#extra-name').val().trim();
-        obj.manufacturer = $('#extra-manu').val().trim();
-        obj.model = $('#extra-model').val().trim();
-        obj.variant = $('#extra-variant').val().trim();
-        obj.description = $('#extra-desc').val().trim();
-        obj.delivery = $('#extra-delivery').val().trim();
-        saveExtras(()=>{ extrasMsg('Sparat!','success'); });
-    }, 800);
-    
-    // Textfält med debounce
-    $('#extra-name, #extra-manu, #extra-model, #extra-variant, #extra-desc, #extra-delivery').on('input change blur', autoSaveExtra);
-    
-    // Checkbox ska reagera omedelbart utan debounce + uppdatera listans visuella tillstånd
+    // Checkbox publicerad – uppdatera bara lokalt, ingen autosave
     $('#extra-published').on('change', function(){
         obj.published = $('#extra-published').is(':checked');
-        saveExtras(()=>{ 
-            extrasMsg('Publicering uppdaterad!','success'); 
-            // Uppdatera visuellt tillstånd i listan direkt
-            const catKey = activeExtrasKey === 'all' ? editExtrasCat : activeExtrasKey;
-            const item = $(`.extras-item.selected-e`);
-            if (obj.published === false) {
-                item.addClass('inactive');
-            } else {
-                item.removeClass('inactive');
-            }
-        });
+        const catKey = activeExtrasKey === 'all' ? editExtrasCat : activeExtrasKey;
+        const item = $(`.extras-item.selected-e`);
+        if (obj.published === false) {
+            item.addClass('inactive');
+        } else {
+            item.removeClass('inactive');
+        }
     });
 }
 

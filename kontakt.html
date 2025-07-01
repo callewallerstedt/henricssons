@@ -49,26 +49,26 @@
         <section class="contact-info">
             <div class="container">
                 <div class="contact-grid">
-                    <div class="contact-details">
-                        <h2>Kontaktinformation</h2>
+                    <div class="contact-details" style="background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); color: #333;">
+                        <h2 style="color: #0a2342;">Kontaktinformation</h2>
                         <div class="contact-item">
-                            <h3>Adress</h3>
-                            <p>
+                            <h3 style="color: #0a2342;">Adress</h3>
+                            <p style="color: #555;">
                                 Energigatan 17E<br/>
                                 434 37 Kungsbacka
                             </p>
                         </div>
                         <div class="contact-item">
-                            <h3>Telefon</h3>
-                            <p><a href="tel:+4631471820">+46 (0)31 471820</a></p>
+                            <h3 style="color: #0a2342;">Telefon</h3>
+                            <p style="color: #555;"><a href="tel:+4631471820" style="color: #0a2342;">+46 (0)31 471820</a></p>
                         </div>
                         <div class="contact-item">
-                            <h3>E-post</h3>
-                            <p><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></p>
+                            <h3 style="color: #0a2342;">E-post</h3>
+                            <p style="color: #555;"><a href="mailto:info@henricssonsbatkapell.se" style="color: #0a2342;">info@henricssonsbatkapell.se</a></p>
                         </div>
                         <div class="contact-item">
-                            <h3>Öppettider</h3>
-                            <p>
+                            <h3 style="color: #0a2342;">Öppettider</h3>
+                            <p style="color: #555;">
                                 Måndag - Fredag: 08:00 - 17:00<br/>
                                 Lördag - Söndag: Stängt
                             </p>
@@ -163,10 +163,16 @@
                 e.preventDefault();
                 const $form=$(this);
                 const $btn=$form.find('button[type="submit"]');
-                $btn.prop('disabled',true).text('Tack!');
-                $.ajax({url:$form.attr('action'),method:$form.attr('method'),data:$form.serialize(),dataType:'json',complete:function(){
-                    $form.find('.w-form-done').fadeIn();
-                }});
+                $btn.remove();
+                if(!$form.find('.w-form-done').length){
+                    $form.append('<div class="w-form-done" style="padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#b89300;">Tack! Vi har tagit emot ditt meddelande och återkommer så snart vi kan.</div>');
+                }
+                $.ajax({
+                    url:$form.attr('action'),
+                    method:$form.attr('method'),
+                    data:$form.serialize(),
+                    dataType:'json'
+                });
             });
         });
 
