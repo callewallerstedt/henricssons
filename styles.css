@@ -321,11 +321,13 @@ body {
     transition: transform 0.3s ease;
     position: relative;
     overflow: hidden;
-    /* Rugged edges using border-image */
-    border: 10px solid transparent;
-    border-image-slice: 30;
-    border-image-repeat: round;
-    border-image-source: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3E%3Cpolygon points='0,15 15,0 30,15 15,30' fill='%23ffffff'/%3E%3C/svg%3E");
+    /* Diagonal gradient border */
+    border: 6px solid transparent;
+    border-radius: 12px;
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    background-image: linear-gradient(135deg, #ffffff 0%, #ffffff 100%), /* inner fill */
+                      linear-gradient(135deg, #5d8bc6 0%, #4a7bb8 100%); /* border gradient */
 }
 
 .service-card:hover {
