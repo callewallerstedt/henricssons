@@ -37,28 +37,13 @@ function fetchManufacturers() {
     } catch (e) {
         console.warn('Kunde inte parsa boatData från localStorage', e);
     }
-    console.log('manufacturers object:', manufacturers);
-    console.log('boatData available:', typeof boatData !== 'undefined');
-    if (typeof boatData !== 'undefined') {
-        console.log('boatData keys:', Object.keys(boatData));
+    // Om fortfarande tomt: hämta från API-servern
+    if (!Object.keys(manufacturers).length) {
+        return fetch(`${API_BASE}/boat_data.json?v=${Date.now()}`)
+            .then(r=>r.json())
+            .then(json=>{ manufacturers=json || {}; buildGrids(); })
+            .catch(e=>{ console.error('Kunde inte hämta boat_data.json',e); buildGrids(); });
     }
-    
-    if (Object.keys(manufacturers).length) {
-        // Data already present from boatData
-        console.log('Using existing manufacturers data');
-        buildGrids();
-        return Promise.resolve();
-    }
-    // boatData should be available from kapellforfragan_full.js
-    if (typeof boatData !== 'undefined') {
-        console.log('Loading manufacturers from boatData');
-        manufacturers = boatData;
-        buildGrids();
-        return Promise.resolve();
-    }
-    // Fallback to empty object if boatData not available
-    console.log('No boatData available, using empty object');
-    manufacturers = {};
     buildGrids();
     return Promise.resolve();
 }
