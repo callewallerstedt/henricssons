@@ -6,6 +6,9 @@ let selectedManufacturerKey = null;
 let selectedModelIndex = null;
 let $grid1, $grid2;
 
+// Lägg in omedelbart efter globala variabler
+const API_BASE = location.hostname === 'localhost' ? 'http://localhost:8001' : 'https://henricssons-api.onrender.com';
+
 // ----------------------------- Tab & Extras logic -----------------------------
 const extrasCategories = {
     all: 'Visa alla',
@@ -313,7 +316,7 @@ function pushFullDataset(cb) {
         localStorage.setItem('boatData', JSON.stringify(manufacturers)); 
         
         // Skicka till Python-server
-        fetch('http://localhost:8001/api/save_boatdata', {
+        fetch(`${API_BASE}/api/save_boatdata`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -564,7 +567,7 @@ function showExtrasEdit() {
             const fileName = `${slug}_${String(nextIdx).padStart(2,'0')}.${fileExt}`;
             const relPath = `${folder}/${slug}/${fileName}`;
 
-            fetch('http://localhost:8001/api/upload_image', {
+            fetch(`${API_BASE}/api/upload_image`, {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({data:e.target.result, rel_path:relPath})
@@ -642,7 +645,7 @@ function saveExtras(cb){
     });
 
     // Skicka till Python-server
-    fetch('http://localhost:8001/api/save_models_meta', {
+    fetch(`${API_BASE}/api/save_models_meta`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
