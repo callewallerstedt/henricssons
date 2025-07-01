@@ -596,7 +596,7 @@ function showExtrasEdit() {
         saveExtras(()=>{ extrasMsg('Sparat!','success'); buildExtrasList(); });
     }, 800);
 
-    $('#extra-name, #extra-manu, #extra-model, #extra-variant, #extra-desc, #extra-delivery, #extra-published').on('input change', autoSaveExtra);
+    $('#extra-name, #extra-manu, #extra-model, #extra-variant, #extra-desc, #extra-delivery, #extra-published').on('input change blur', autoSaveExtra);
 }
 
 function saveExtras(cb){
@@ -646,7 +646,9 @@ function saveExtras(cb){
         if (data.success) {
             showEditMsg('Extras sparade!', 'success');
             // Uppdatera lokalt genom att läsa om filen
-            fetchExtras().then(()=>{ buildExtrasList(); });
+            setTimeout(()=>{
+                fetchExtras().then(()=>{ buildExtrasList(); });
+            }, 1000);
         } else {
             showEditMsg('Kunde inte spara till fil: ' + (data.error || 'Okänt fel'), 'error');
         }
