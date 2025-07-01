@@ -169,6 +169,8 @@
 var bilderexData = [];
 var extrasData = {};
 
+const API_BASE = location.hostname==='localhost' ? 'http://localhost:8001' : 'https://henricssons-api.onrender.com';
+
 function buildData() {
     bilderexData = [];
     if (extrasData && typeof extrasData === 'object') {
@@ -186,7 +188,7 @@ function buildData() {
             const map = catMap[item.category] || {label:'Övrigt', key:'other'};
             // Gör om bildsökvägar till web-vänliga paths
             const imgs = (item.images && item.images.length ? item.images : []).map(img =>
-                img.startsWith('data:') ? img : 'henricssons_bilder/' + img.replace(/\\/g, '/'));
+                img.startsWith('data:') ? img : `${API_BASE}/henricssons_bilder/` + img.replace(/\\/g, '/'));
             const finalImgs = imgs.length ? imgs : ['logo.png'];
             bilderexData.push({
                 namn: item.model,
@@ -408,7 +410,7 @@ function closeFullscreen(){
 function closeModal(){document.getElementById('bildModal').classList.remove('open');}
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', function() {
-    const extrasDataPath='henricssons_bilder/models_meta.json?v=' + Date.now();
+    const extrasDataPath=`${API_BASE}/henricssons_bilder/models_meta.json?v=` + Date.now();
     fetch(extrasDataPath).then(r=>r.json()).then(json=>{ extrasData=json||{}; }).catch(()=>{ extrasData={}; }).finally(()=>{
         buildData();
         bilderexRenderFilters();

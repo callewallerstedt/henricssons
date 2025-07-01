@@ -80,7 +80,7 @@ function fetchExtras() {
                     variant: item.variant,
                     description: item.description,
                     delivery: item.delivery,
-                    images: (item.images || []).map(img => img.startsWith('data:') ? img : 'henricssons_bilder/' + img.replace(/\\/g,'/')),
+                    images: (item.images || []).map(img => img.startsWith('data:') ? img : `${API_BASE}/henricssons_bilder/` + img.replace(/\\/g,'/')),
                     source: item.source,
                     published: item.hasOwnProperty('published') ? item.published : true
                 });
@@ -562,7 +562,7 @@ function showExtrasEdit() {
                     obj.images.push(resp.saved_path);
                     saveExtras(()=>{
                         const idx=obj.images.length-1;
-                        const previewPath='henricssons_bilder/'+resp.saved_path.replace(/\\/g,'/');
+                        const previewPath=`${API_BASE}/henricssons_bilder/`+resp.saved_path.replace(/\\/g,'/');
                         $('#extra-images-list').append(`<div class="img-thumb" data-idx="${idx}"><img src="${previewPath}" alt=""/><button class="set-thumb-btn" title="Gör thumbnail" data-idx="${idx}" style="background:#28a745;color:#fff;position:absolute;top:2px;left:2px;border:none;border-radius:3px;padding:0 4px;cursor:pointer;">★</button><button class="del-img-btn" data-idx="${idx}">&times;</button></div>`);
                         bindExtraImageDelete();
                         bindSetThumbnail();
