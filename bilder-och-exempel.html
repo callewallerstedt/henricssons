@@ -187,8 +187,11 @@ function buildData() {
             };
             const map = catMap[item.category] || {label:'Övrigt', key:'other'};
             // Gör om bildsökvägar till web-vänliga paths
-            const imgs = (item.images && item.images.length ? item.images : []).map(img =>
-                img.startsWith('data:') ? img : `${API_BASE}/henricssons_bilder/` + img.replace(/\\/g, '/'));
+            const imgs = (item.images && item.images.length ? item.images : []).map(img => {
+                if(img.startsWith('data:') || img.startsWith('http')) return img;
+                const clean=img.replace(/^henricssons_bilder[\\/]/,'').replace(/\\/g,'/');
+                return `${API_BASE}/henricssons_bilder/` + clean;
+            });
             const finalImgs = imgs.length ? imgs : ['logo.png'];
             bilderexData.push({
                 namn: item.model,
