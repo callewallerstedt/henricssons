@@ -9037,5 +9037,18 @@
     ],
     "source": "https://www.henricssonsbatkapell.se/exempel/p054-titanium",
     "published": true
+  },
+  "ny-post": {
+    "manufacturer": "",
+    "model": "Ny post",
+    "description": "",
+    "variant": "",
+    "delivery": "",
+    "category": "Vävprover övriga",
+    "images": [
+      "vavprover-ovriga\\ny-post\\ny-post_01.png"
+    ],
+    "source": "",
+    "published": false
   }
 }
