@@ -49,6 +49,10 @@ $(document).ready(function() {
             initializeGrids();
             setupEventListeners();
             preselectFromStorage();
+            
+            // Starta automatisk uppdatering av boat_data.json var 30:e sekund
+            // så att admin-ändringar visas automatiskt
+            setInterval(refreshBoatData, 30000);
         });
     
     // Confirmation message for Formspree
@@ -285,4 +289,30 @@ function preselectFromStorage(){
     // Nollställ sparade värden
     localStorage.removeItem('preselectManufacturer');
     localStorage.removeItem('preselectModel');
+}
+
+// Funktion för att uppdatera boat_data.json automatiskt
+function refreshBoatData() {
+    const ts = Date.now();
+    fetch(`${DATA_BASE}/boat_data.json?v=${ts}`, { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+            if (json && typeof json === 'object') {
+                // Jämför med befintlig data för att se om något ändrats
+                const currentKeys = Object.keys(window.boatData || {});
+                const newKeys = Object.keys(json);
+                
+                // Om antal tillverkare ändrats eller nya tillverkare tillagts
+                if (currentKeys.length !== newKeys.length || 
+                    !currentKeys.every(key => newKeys.includes(key))) {
+                    
+                    console.log('Boat data uppdaterad - laddar om grid');
+                    window.boatData = json;
+                    initializeGrids();
+                }
+            }
+        })
+        .catch(err => {
+            console.log('Kunde inte uppdatera boat_data.json:', err);
+        });
 } 

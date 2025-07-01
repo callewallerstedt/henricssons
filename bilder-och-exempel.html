@@ -176,6 +176,9 @@ function buildData() {
     if (extrasData && typeof extrasData === 'object') {
         // Anpassa för models_meta.json-formatet
         Object.entries(extrasData).forEach(([slug, item]) => {
+            // Hoppa över opublicerade poster
+            if (item.hasOwnProperty('published') && item.published === false) return;
+
             // Kategori-mappning
             let catMap = {
                 'Motorbåtar': {label:'Motorbåtar', key:'motorbåtar'},
@@ -413,14 +416,37 @@ function closeFullscreen(){
 function closeModal(){document.getElementById('bildModal').classList.remove('open');}
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', function() {
-    const extrasDataPath=`${API_BASE}/henricssons_bilder/models_meta.json?v=` + Date.now();
-    fetch(extrasDataPath).then(r=>r.json()).then(json=>{ extrasData=json||{}; }).catch(()=>{ extrasData={}; }).finally(()=>{
-        buildData();
-        bilderexRenderFilters();
-        bilderexApplyFilter();
-        document.getElementById('bilderex-search').addEventListener('input', bilderexApplyFilter);
-    });
+    loadExtrasData();
+    
+    // Starta automatisk uppdatering var 30:e sekund
+    setInterval(loadExtrasData, 30000);
 });
+
+function loadExtrasData() {
+    const extrasDataPath=`${API_BASE}/henricssons_bilder/models_meta.json?v=` + Date.now();
+    fetch(extrasDataPath).then(r=>r.json()).then(json=>{ 
+        const oldData = JSON.stringify(extrasData);
+        extrasData=json||{}; 
+        const newData = JSON.stringify(extrasData);
+        
+        // Om data ändrats, uppdatera sidan
+        if (oldData !== newData) {
+            console.log('Extras data uppdaterad - laddar om gallery');
+            buildData();
+            bilderexRenderFilters();
+            bilderexApplyFilter();
+        }
+    }).catch(()=>{ extrasData={}; }).finally(()=>{
+        // Första laddningen
+        if (!window.bilderexInitialized) {
+            buildData();
+            bilderexRenderFilters();
+            bilderexApplyFilter();
+            document.getElementById('bilderex-search').addEventListener('input', bilderexApplyFilter);
+            window.bilderexInitialized = true;
+        }
+    });
+}
     </script>
 </body>
 </html> 
