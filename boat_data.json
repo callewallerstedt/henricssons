@@ -3806,18 +3806,5 @@
   "new_1751367847835": {
     "name": "Ny tillverkare",
     "models": []
-  },
-  "new_1751375516594": {
-    "name": "1 TEST",
-    "models": [
-      {
-        "name": "TEST MODELL",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      }
-    ]
   }
 }
