@@ -3877,34 +3877,5 @@
         "category": "Kapell - Motorbåt"
       }
     ]
-  },
-  "new_1751492296284": {
-    "name": "TIFFYLIEBE",
-    "models": [
-      {
-        "name": "Glinda",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      },
-      {
-        "name": "Elphaba",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      },
-      {
-        "name": "Callielein",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      }
-    ]
   }
 }
