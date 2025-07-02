@@ -9045,7 +9045,9 @@
     "variant": "variatn1",
     "delivery": "15 minuter en kvart",
     "category": "Vävprover övriga",
-    "images": [],
+    "images": [
+      "vavprover-ovriga\\ny-post\\ny-post_01.jpeg.jpg"
+    ],
     "source": "",
     "published": true
   }
