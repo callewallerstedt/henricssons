@@ -739,7 +739,9 @@ $(document).ready(function() {
             // Lägg till i UI utan att bygga om hela griden
             const item = $(`<div class="grid1-item selected-t" data-key="${newKey}">Ny tillverkare</div>`);
             $('.grid1-item').removeClass('selected-t');
-            $('.grid1').append(item);
+            // Lägg till i Isotope-griden och layouta om direkt så höjden blir korrekt
+            $grid1.append(item);
+            $grid1.isotope('appended', item).isotope('layout');
             $('.grid2').empty();
             bindGridEvents(); // Bind events på nya elementet
             showEditSection();
