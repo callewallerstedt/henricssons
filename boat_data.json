@@ -3889,7 +3889,14 @@
         "delivery": "",
         "category": "Kapell - Motorbåt"
       },
-      "Ny modell"
+      {
+        "name": "Elphaba",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   }
 }
