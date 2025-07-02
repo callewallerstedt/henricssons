@@ -25,12 +25,40 @@
   "adec": {
     "name": "Adec",
     "models": [
-      "700",
-      "620/630",
-      "BM 550 m/räcke",
+      {
+        "name": "700",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
+      {
+        "name": "620/630",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
+      {
+        "name": "BM 550 m/räcke",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
       "Fiskebleka",
       "Fiskebleka special förkapell med båga",
-      "m-bleka mv 1 fast",
+      {
+        "name": "m-bleka mv 1 fast",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
       "m-bleka u.v 2 fäll"
     ]
   },
@@ -3603,7 +3631,8 @@
     "models": [
       "412 original sprayhood",
       "332 original sprayhood",
-      "332 original sittbrunnskapell"
+      "332 original sittbrunnskapell",
+      "Ny modell"
     ]
   },
   "xo": {
