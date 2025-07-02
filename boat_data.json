@@ -797,7 +797,14 @@
   "dehler": {
     "name": "Dehler",
     "models": [
-      "33 sprayhood"
+      {
+        "name": "33 sprayhood TEST",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   },
   "delta": {
