@@ -3629,7 +3629,14 @@
   "x": {
     "name": "X",
     "models": [
-      "412 original sprayhood",
+      {
+        "name": "412 original sprayhood",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
       {
         "name": "332 original sprayhood",
         "images": [],
@@ -3638,15 +3645,7 @@
         "delivery": "",
         "category": "Kapell - Motorbåt"
       },
-      "332 original sittbrunnskapell",
-      {
-        "name": "Ny modell",
-        "images": [],
-        "description": "",
-        "variant": "",
-        "delivery": "",
-        "category": "Kapell - Motorbåt"
-      }
+      "332 original sittbrunnskapell"
     ]
   },
   "xo": {
