@@ -319,10 +319,6 @@ body {
     overflow: hidden;
 }
 
-
-
-
-
 .service-grid {
     max-width: var(--max-width);
     margin: 0 auto;
@@ -1834,6 +1830,28 @@ body {
     }
     .cta-inner {
         padding: 2rem 0.5rem 2rem 0.5rem;
+    }
+    .models-wrapper {
+        display: block !important;
+        gap: 0 !important;
+    }
+    .models-wrapper .grid2 {
+        margin-top: 1rem;
+        max-height: none !important;
+        overflow-y: visible !important;
+    }
+    .extras-wrapper {
+        display: block !important;
+        gap: 0 !important;
+    }
+    .extras-wrapper .grid-extras {
+        margin-top: 1rem;
+        max-height: none !important;
+        overflow-y: visible !important;
+    }
+    .grid1 {
+        max-height: none !important;
+        overflow-y: visible !important;
     }
 }
 

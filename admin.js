@@ -193,6 +193,7 @@ function bindGridEvents() {
 
 function showEditSection() {
     $('#edit-section').show();
+    $('#edit-section').addClass('editing');
     if (selectedManufacturerKey !== null && selectedManufacturerKey !== undefined) {
         if (selectedModelIndex !== null) {
             showModelEdit();
@@ -201,8 +202,10 @@ function showEditSection() {
         }
     } else {
         // Ingen tillverkare vald
-        $('#edit-section').html('<h2>Redigering</h2><p>Välj en tillverkare för att börja.</p>');
+        $('#edit-section').html('<h2>Redigering</h2><p>Välj en tillverkare för att börja.</p>').hide();
     }
+
+    // Ingen automatisk scroll på mobil – låt användaren bläddra själv för att undvika glitch
 }
 
 function showManufacturerEdit() {
@@ -228,17 +231,21 @@ function showManufacturerEdit() {
         saveManufacturer(selectedManufacturerKey, manu, ()=>{
             showEditMsg('Tillverkare sparad!','success');
             setUnsaved('edit', false);
-            fetchManufacturers().then(()=>{ buildGrids(); showEditSection(); });
+            buildGrids(); // Behöver bygga om hela griden för tillverkarnamn
+            showEditSection();
         });
     });
 
     $('#delete-manu-btn').on('click', function(){
         if(!confirm('Ta bort denna tillverkare?')) return;
+        const keyToDelete = selectedManufacturerKey;
         deleteManufacturer(selectedManufacturerKey, ()=>{
             selectedManufacturerKey=null;
             selectedModelIndex=null;
-            buildGrids();
-            showEditSection();
+            // Ta bort tillverkaren från UI utan att bygga om
+            $(`.grid1-item[data-key="${keyToDelete}"]`).remove();
+            $('.grid2').empty();
+            $('#edit-section').removeClass('editing').html('<h2>Redigering</h2><p>Välj en tillverkare för att börja.</p>').hide();
         });
     });
 
@@ -247,8 +254,8 @@ function showManufacturerEdit() {
         selectedModelIndex=null;
         $('.grid1-item').removeClass('selected-t');
         $('.grid2-item').removeClass('selected-m');
-        buildGrids();
-        showEditSection();
+        $('#edit-section').removeClass('editing').html('<h2>Redigering</h2><p>Välj en tillverkare för att börja.</p>').hide();
+        $('.grid2').empty(); // Rensa modellistan
     });
 }
 
@@ -279,7 +286,7 @@ function showModelEdit() {
         saveManufacturer(selectedManufacturerKey, manu, () => {
             showEditMsg('Modell sparad!', 'success');
             setUnsaved('edit', false);
-            buildGrids();
+            buildModels();
         });
     });
     
@@ -289,18 +296,18 @@ function showModelEdit() {
         saveManufacturer(selectedManufacturerKey, manu, () => {
             showEditMsg('Modell borttagen!', 'success');
             setUnsaved('edit', false);
-            fetchManufacturers().then(() => {
-                selectedModelIndex = null;
-                showEditSection();
-            });
+            selectedModelIndex = null;
+            buildModels();
+            showEditSection();
         });
     });
     
     $('#cancel-model-btn').on('click', function() {
         selectedModelIndex = null;
         $('.grid2-item').removeClass('selected-m');
-        buildModels();
-        showEditSection();
+        $('#edit-section').removeClass('editing');
+        // Visa tillverkare-redigering istället för att bygga om
+        showManufacturerEdit();
     });
 }
 
@@ -324,9 +331,7 @@ function pushFullDataset(cb) {
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                showEditMsg('Båtdata sparad!', 'success');
-            } else {
+            if (!data.success) {
                 showEditMsg('Kunde inte spara till fil: ' + (data.error || 'Okänt fel'), 'error');
             }
         })
@@ -412,7 +417,7 @@ function switchTab(tab){
         $('#extras-section').show();
         $('.quicksearch').hide();
         // Visa sekundära flikar under "Bilder & exempel"
-        $('#admin-tabs').show();
+        $('#admin-tabs').css('display', 'flex');
         $('#extras-search').show();
         activeExtrasKey = tab;
         selectedExtraIndex = null;
@@ -479,6 +484,7 @@ function buildExtrasList(){
 
 function showExtrasEdit() {
     $('#extras-edit-section').show();
+    $('#extras-edit-section').addClass('editing');
     if (selectedExtraIndex === null) {
         $('#extras-edit-section').html('<h2>Redigera bild/exempel</h2><p>Välj en post för att redigera</p>');
         return;
@@ -728,7 +734,12 @@ $(document).ready(function() {
         pushFullDataset(() => {
             selectedManufacturerKey = newKey;
             selectedModelIndex = null;
-            buildGrids();
+            // Lägg till i UI utan att bygga om hela griden
+            const item = $(`<div class="grid1-item selected-t" data-key="${newKey}">Ny tillverkare</div>`);
+            $('.grid1-item').removeClass('selected-t');
+            $('.grid1').append(item);
+            $('.grid2').empty();
+            bindGridEvents(); // Bind events på nya elementet
             showEditSection();
         });
     });
@@ -744,7 +755,8 @@ $(document).ready(function() {
         // Spara direkt när modellen läggs till
         saveManufacturer(selectedManufacturerKey, manu, () => {
             selectedModelIndex = manu.models.length - 1;
-            buildGrids();
+            // Bygg bara modellistan (inte tillverkare) för att undvika layout-hopp
+            buildModels();
             showEditSection();
         });
     });

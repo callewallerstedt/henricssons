@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 import os, json, base64, requests, tempfile
 from typing import Optional
+import sys
 
 app = Flask(__name__)
 
@@ -145,5 +146,16 @@ def get_henricssons_files(filename):
     return jsonify(error='File not found'), 404
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8001))
+    # Local static file serving
+    from flask import send_from_directory
+
+    @app.route('/', defaults={'filename': 'index.html'})
+    @app.route('/<path:filename>')
+    def serve_static(filename):
+        if os.path.isfile(filename):
+            return send_from_directory('.', filename)
+        return '404 Not Found', 404
+
+    port = int(os.environ.get("PORT", 25565))
+    print(f"Starting Flask server on port {port} (host=0.0.0.0)")
     app.run(host='0.0.0.0', port=port) 
