@@ -301,7 +301,7 @@ body {
 
 @media (max-width: 800px) {
     .announcement {
-        padding: 1.5rem 0.7rem 1.2rem 0.7rem;
+        padding: 2.2rem 1.1rem 2rem 1.1rem;
         max-width: 98vw;
     }
     .announcement h3 {
