@@ -9037,5 +9037,16 @@
     ],
     "source": "https://www.henricssonsbatkapell.se/exempel/p054-titanium",
     "published": true
+  },
+  "test": {
+    "manufacturer": "Tillverkareeee",
+    "model": "TEST",
+    "description": "Beskrivning tjena",
+    "variant": "variatn1",
+    "delivery": "15 minuter en kvart",
+    "category": "Vävprover övriga",
+    "images": [],
+    "source": "",
+    "published": true
   }
 }
