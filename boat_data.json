@@ -3897,7 +3897,14 @@
         "delivery": "",
         "category": "Kapell - Motorbåt"
       },
-      "Ny modell"
+      {
+        "name": "Callielein",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   }
 }
