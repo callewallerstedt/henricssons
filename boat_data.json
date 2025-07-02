@@ -25,12 +25,40 @@
   "adec": {
     "name": "Adec",
     "models": [
-      "700",
-      "620/630",
-      "BM 550 m/räcke",
+      {
+        "name": "700",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
+      {
+        "name": "620/630",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
+      {
+        "name": "BM 550 m/räcke",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
       "Fiskebleka",
       "Fiskebleka special förkapell med båga",
-      "m-bleka mv 1 fast",
+      {
+        "name": "m-bleka mv 1 fast",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
       "m-bleka u.v 2 fäll"
     ]
   },
@@ -797,7 +825,14 @@
   "dehler": {
     "name": "Dehler",
     "models": [
-      "33 sprayhood"
+      {
+        "name": "33 sprayhood",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   },
   "delta": {
@@ -3594,8 +3629,22 @@
   "x": {
     "name": "X",
     "models": [
-      "412 original sprayhood",
-      "332 original sprayhood",
+      {
+        "name": "412 original sprayhood",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
+      {
+        "name": "332 original sprayhood",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
       "332 original sittbrunnskapell"
     ]
   },
@@ -3802,9 +3851,5 @@
       "690 Cobra kales",
       "Quatro 8800 kal"
     ]
-  },
-  "new_1751406592757": {
-    "name": "1TEST",
-    "models": []
   }
 }
