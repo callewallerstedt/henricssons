@@ -3881,7 +3881,14 @@
   "new_1751492296284": {
     "name": "TIFFYLIEBE",
     "models": [
-      "Ny modell"
+      {
+        "name": "Glinda",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   }
 }
