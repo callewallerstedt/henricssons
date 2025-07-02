@@ -3646,7 +3646,14 @@
         "category": "Kapell - Motorbåt"
       },
       "332 original sittbrunnskapell",
-      "Ny modell"
+      {
+        "name": "Ny",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   },
   "xo": {
