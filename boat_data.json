@@ -3868,7 +3868,14 @@
   "new_1751490556464": {
     "name": "12TESTS",
     "models": [
-      "Ny modell"
+      {
+        "name": "modell i 12test",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   }
 }
