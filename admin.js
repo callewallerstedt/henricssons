@@ -25,27 +25,47 @@ let activeExtrasKey = null;
 let selectedExtraIndex = null;
 let editExtrasCat = null; // håller vilken kategori som redigeras när vi är i "Visa alla"
 
-function fetchManufacturers() {
-    console.log('fetchManufacturers called');
-    // Ladda uppdaterad boatData från localStorage först om den finns
-    try {
-        const stored = localStorage.getItem('boatData');
-        if (stored) {
-            manufacturers = JSON.parse(stored);
-            console.log('Loaded manufacturers from localStorage');
+// -----------------------------
+// UNSAVED INDICATOR
+// -----------------------------
+const unsavedState = { edit: false, extras: false };
+function setUnsaved(target, flag){
+    const id = target==='extras' ? '#extras-unsaved' : '#edit-unsaved';
+    unsavedState[target]=flag;
+    if(flag){
+        if(!$(id).length){
+            const span=$('<span>').attr('id', id.substring(1)).addClass('unsaved-indicator').text(' Ej sparat*');
+            if(target==='extras'){
+                $('#extras-edit-section h2:first').append(span);
+            } else {
+                $('#edit-section h2:first').append(span);
+            }
         }
-    } catch (e) {
-        console.warn('Kunde inte parsa boatData från localStorage', e);
+    } else {
+        $(id).remove();
     }
-    // Om fortfarande tomt: hämta från API-servern
-    if (!Object.keys(manufacturers).length) {
-        return fetch(`${API_BASE}/boat_data.json?v=${Date.now()}`)
-            .then(r=>r.json())
-            .then(json=>{ manufacturers=json || {}; buildGrids(); })
-            .catch(e=>{ console.error('Kunde inte hämta boat_data.json',e); buildGrids(); });
-    }
-    buildGrids();
-    return Promise.resolve();
+}
+
+function fetchManufacturers() {
+    // Försök alltid hämta senaste data från servern
+    return fetch(`${API_BASE}/boat_data.json?v=${Date.now()}`)
+        .then(r => {
+            if(!r.ok) throw new Error('Status ' + r.status);
+            return r.json();
+        })
+        .then(json => {
+            manufacturers = json || {};
+            try { localStorage.setItem('boatData', JSON.stringify(manufacturers)); } catch(_){}
+            buildGrids();
+        })
+        .catch(err => {
+            console.warn('Kunde inte hämta boat_data.json från API – använder ev. localStorage', err);
+            try {
+                const stored = localStorage.getItem('boatData');
+                if(stored){ manufacturers = JSON.parse(stored); }
+            } catch(e){ console.error('Fel vid parsa localStorage boatData', e); }
+            buildGrids();
+        });
 }
 
 function fetchExtras() {
@@ -197,12 +217,17 @@ function showManufacturerEdit() {
         <div id="edit-msg"></div>
     `);
 
+    // Reset unsaved indicator and bind change
+    setUnsaved('edit', false);
+    $('#edit-manu-name').on('input', ()=> setUnsaved('edit', true));
+
     $('#save-manu-btn').on('click', function(){
         const newName = $('#edit-manu-name').val().trim();
         if(!newName) return showEditMsg('Namn krävs','error');
         manu.name = newName;
         saveManufacturer(selectedManufacturerKey, manu, ()=>{
             showEditMsg('Tillverkare sparad!','success');
+            setUnsaved('edit', false);
             fetchManufacturers().then(()=>{ buildGrids(); showEditSection(); });
         });
     });
@@ -243,12 +268,17 @@ function showModelEdit() {
         <div id="edit-msg"></div>
     `);
     
+    // Reset unsaved indicator and bind change
+    setUnsaved('edit', false);
+    $('#edit-model-name').on('input', ()=> setUnsaved('edit', true));
+
     $('#save-model-btn').on('click', function() {
         const newName = $('#edit-model-name').val().trim();
         if (!newName) return showEditMsg('Namn krävs', 'error');
         setModelName(selectedModelIndex, newName);
         saveManufacturer(selectedManufacturerKey, manu, () => {
             showEditMsg('Modell sparad!', 'success');
+            setUnsaved('edit', false);
             buildGrids();
         });
     });
@@ -258,6 +288,7 @@ function showModelEdit() {
         manu.models.splice(selectedModelIndex, 1);
         saveManufacturer(selectedManufacturerKey, manu, () => {
             showEditMsg('Modell borttagen!', 'success');
+            setUnsaved('edit', false);
             fetchManufacturers().then(() => {
                 selectedModelIndex = null;
                 showEditSection();
@@ -486,6 +517,16 @@ function showExtrasEdit() {
 
     function extrasMsg(t, cls){ $('#extras-msg').html(`<div class="${cls}">${t}</div>`); setTimeout(()=>$('#extras-msg').empty(),2000); }
 
+    // Reset unsaved indicator and bind change
+    setUnsaved('extras', false);
+    $('#extra-name, #extra-manu, #extra-model, #extra-variant, #extra-desc, #extra-delivery').on('input', ()=> setUnsaved('extras', true));
+    $('#extra-published').on('change', function(){
+        obj.published = $(this).is(':checked');
+        const item = $('.extras-item.selected-e');
+        if(obj.published===false){ item.addClass('inactive'); } else { item.removeClass('inactive'); }
+        setUnsaved('extras', true);
+    });
+
     $('#save-extra-btn').on('click', function(){
         if(!obj.images) obj.images = obj.images || [];
         obj.name = $('#extra-name').val().trim();
@@ -498,6 +539,7 @@ function showExtrasEdit() {
         // Spara och uppdatera både listan & redigeringsrutan direkt
         saveExtras(()=>{
             extrasMsg('Post sparad!','success');
+            setUnsaved('extras', false);
             // Uppdatera endast listans synlighet och namn utan att förstöra selektionen
             const updatedObj = extrasData[catKey][selectedExtraIndex];
             $(`.extras-item.selected-e .extra-name`).text(updatedObj.name || '–');
@@ -551,6 +593,7 @@ function showExtrasEdit() {
                         $('#extra-images-list').append(`<div class="img-thumb" data-idx="${idx}"><img src="${previewPath}" alt=""/><button class="set-thumb-btn" title="Gör thumbnail" data-idx="${idx}" style="background:#28a745;color:#fff;position:absolute;top:2px;left:2px;border:none;border-radius:3px;padding:0 4px;cursor:pointer;">★</button><button class="del-img-btn" data-idx="${idx}">&times;</button></div>`);
                         bindExtraImageDelete();
                         bindSetThumbnail();
+                        setUnsaved('extras', false);
                     });
                 } else {
                     alert('Kunde inte spara bild: '+ (resp.error||'okänt fel'));
@@ -563,18 +606,6 @@ function showExtrasEdit() {
     });
     bindExtraImageDelete();
     bindSetThumbnail();
-
-    // Checkbox publicerad – uppdatera bara lokalt, ingen autosave
-    $('#extra-published').on('change', function(){
-        obj.published = $('#extra-published').is(':checked');
-        const catKey = activeExtrasKey === 'all' ? editExtrasCat : activeExtrasKey;
-        const item = $(`.extras-item.selected-e`);
-        if (obj.published === false) {
-            item.addClass('inactive');
-        } else {
-            item.removeClass('inactive');
-        }
-    });
 }
 
 function saveExtras(cb){
@@ -623,6 +654,7 @@ function saveExtras(cb){
     .then(data => {
         if (data.success) {
             showEditMsg('Extras sparade!', 'success');
+            setUnsaved('extras', false);
             // Ingen ombyggnad av listan behövs – lokala ändringar är redan gjorda.
             // selectedExtraIndex och editExtrasCat behålls som de är.
         } else {
