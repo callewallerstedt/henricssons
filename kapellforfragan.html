@@ -121,7 +121,7 @@
                         </div>
                         <div id="contact-form" class="contact-form-section">
                             <h4>Kontaktformulär</h4>
-                            <form class="contact-form" action="https://formspree.io/f/xnnvovbk" method="POST">
+                            <form class="contact-form" data-subject="Kapellförfrågan">
                                 <div class="form-group">
                                     <label for="name">Namn *</label>
                                     <input type="text" id="name" name="1. Namn" placeholder="Ditt namn *" required>
@@ -159,6 +159,7 @@
                                     <textarea id="message" name="9. Övrig information" rows="4" placeholder="Övrig information"></textarea>
                                 </div>
                                 <button type="submit" class="btn btn-primary">Skicka förfrågan</button>
+                                <div class="w-form-done" style="display:none; padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#b89300;">Förfrågan skickad! Vi återkommer så snart vi kan.</div>
                             </form>
                         </div>
                     </div>
@@ -201,20 +202,44 @@
     <script src="script.js"></script>
     <script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js"></script>
     <script src="kapellforfragan.js?v=20250701"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
     <script>
-        // Behåll endast formulärets Ajax-skick
-        $(function(){
-            $('.contact-form').on('submit',function(e){
-                e.preventDefault();
-                const $form=$(this);
-                const $btn=$form.find('button[type="submit"]');
-                $btn.prop('disabled',true).text('Tack!');
-                if(!$form.find('.w-form-done').length){
-                    $form.append('<div class="w-form-done" style="padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#b89300;">Förfrågan skickad! Vi återkommer så snart vi kan.</div>');
-                }
-                $.ajax({url:$form.attr('action'),method:$form.attr('method'),data:$form.serialize(),dataType:'json',error:function(){alert('Något gick fel. Försök igen eller kontakta oss via e-post.');}});
+      emailjs.init('pzhOOOVxBi01cMxCm');
+      $(function(){
+        $('.contact-form').on('submit',function(e){
+          e.preventDefault();
+          const $form=$(this);
+          const $btn=$form.find('button[type="submit"]');
+          $btn.prop('disabled',true).text('Skickar...');
+
+          const formData=$form.serializeArray();
+          const data={
+            title:$form.data('subject')||'Förfrågan',
+            name:'Henricssons Båtkapell'
+          };
+          const lines=[];
+          formData.forEach(item=>{
+            const label=item.name.replace(/^\d+\.\s*/, '');
+            lines.push(`<strong>${label}</strong><br>${item.value}`);
+            if(item.name.toLowerCase().includes('e-post')){
+              data.email=item.value;
+            }
+          });
+          if(!data.email){data.email='info@henricssonsbatkapell.se';}
+          data.message=lines.join('<br><br>');
+
+          emailjs.send('service_1u5gpw4','template_iijd5v4',data)
+            .then(()=>{
+              $btn.remove();
+              $form.find('.w-form-done').show();
+            })
+            .catch(err=>{
+              alert('Kunde inte skicka formuläret: '+err.text);
+              $btn.prop('disabled',false).text('Skicka förfrågan');
             });
         });
+      });
     </script>
 </body>
 </html> 

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <title>EmailJS Test – Enkel mall</title>
+</head>
+<body>
+  <h1>EmailJS Test – Enkel mall</h1>
+  <form id="testForm">
+    <label>Ämne:<br><input name="title" value="Kapellförfrågan" required></label><br><br>
+    <label>Namn:<br><input name="name" value="Henricssons Dev" required></label><br><br>
+    <label>E-post:<br><input name="email" value="test@example.com" required type="email"></label><br><br>
+    <label>Meddelande:<br><textarea name="message" rows="5" required>Detta är ett testmeddelande från hemsidan.</textarea></label><br><br>
+    <button>Skicka testmejl</button>
+  </form>
+  <div id="result"></div>
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+  <script>
+    emailjs.init('pzhOOOVxBi01cMxCm');
+    document.getElementById('testForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(this));
+      emailjs.send('service_1u5gpw4', 'template_iijd5v4', data)
+        .then(() => {
+          document.getElementById('result').textContent = '✅ Testmejl skickat! Kontrollera din inkorg.';
+        })
+        .catch(err => {
+          document.getElementById('result').textContent = '❌ Kunde inte skicka: ' + err.text;
+          console.error(err);
+        });
+    });
+  </script>
+</body>
+</html> 

@@ -89,7 +89,7 @@
 
                     <div class="contact-form-wrapper">
                         <h2>Kontakta oss</h2>
-                        <form id="contactForm" class="contact-form" action="https://formspree.io/f/xnnvovbk" method="POST">
+                        <form id="contactForm" class="contact-form" data-subject="Kontakt">
                             <div class="form-group">
                                 <label for="name">Namn *</label>
                                 <input type="text" id="name" name="1. Namn" placeholder="Ditt namn *" required>
@@ -169,22 +169,41 @@
 
     <script src="script.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
     <script>
+        emailjs.init('pzhOOOVxBi01cMxCm');
         $(function(){
             $('#contactForm').on('submit',function(e){
                 e.preventDefault();
                 const $form=$(this);
                 const $btn=$form.find('button[type="submit"]');
-                $btn.remove();
-                const $thankYou = $form.find('.w-form-done');
-                $thankYou.html('Tack! Vi har tagit emot ditt meddelande och återkommer så snart vi kan.').show();
+                $btn.prop('disabled',true).text('Skickar...');
 
-                $.ajax({
-                    url:$form.attr('action'),
-                    method:$form.attr('method'),
-                    data:$form.serialize(),
-                    dataType:'json'
+                const formData=$form.serializeArray();
+                const data={
+                  title:$form.data('subject')||'Kontakt',
+                  name:'Henricssons Båtkapell'
+                };
+                const lines=[];
+                formData.forEach(item=>{
+                  const label=item.name.replace(/^\d+\.\s*/, '');
+                  lines.push(`<strong>${label}</strong><br>${item.value}`);
+                  if(item.name.toLowerCase().includes('e-post')){
+                    data.email=item.value;
+                  }
                 });
+                if(!data.email){data.email='info@henricssonsbatkapell.se';}
+                data.message=lines.join('<br><br>');
+
+                emailjs.send('service_1u5gpw4','template_iijd5v4',data)
+                  .then(()=>{
+                    $btn.remove();
+                    $form.find('.w-form-done').show();
+                  })
+                  .catch(err=>{
+                    alert('Kunde inte skicka meddelandet: '+err.text);
+                    $btn.prop('disabled',false).text('Skicka meddelande');
+                  });
             });
         });
 

@@ -597,6 +597,8 @@ function showExtrasEdit() {
                         const idx=obj.images.length-1;
                         const previewPath=`${API_BASE}/henricssons_bilder/`+resp.saved_path.replace(/^henricssons_bilder[\\/]/,'').replace(/\\/g,'/');
                         $('#extra-images-list').append(`<div class="img-thumb" data-idx="${idx}"><img src="${previewPath}" alt=""/><button class="set-thumb-btn" title="Gör thumbnail" data-idx="${idx}" style="background:#28a745;color:#fff;position:absolute;top:2px;left:2px;border:none;border-radius:3px;padding:0 4px;cursor:pointer;">★</button><button class="del-img-btn" data-idx="${idx}">&times;</button></div>`);
+                        $('.extras-item.selected-e').removeClass('no-images');
+                        $('#extras-edit-section .no-image-indicator, #extras-edit-section .bilderex-no-image').remove();
                         bindExtraImageDelete();
                         bindSetThumbnail();
                         setUnsaved('extras', false);

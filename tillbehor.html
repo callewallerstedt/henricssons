@@ -124,7 +124,7 @@
             <div class="container">
                 <div class="contact-form-wrapper">
                     <h2>Prisförfrågan</h2>
-                    <form id="fenderForm" class="contact-form" action="https://formspree.io/f/xnnvovbk" method="POST">
+                    <form id="fenderForm" class="contact-form" data-subject="Fenderförfrågan">
                         <div class="form-group">
                             <label for="fs-name">Ditt namn *</label>
                             <input type="text" id="fs-name" name="1. Namn" placeholder="Ditt namn *" required>
@@ -272,18 +272,43 @@
 
     <script src="script.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
     <script>
-        $(function(){
-            $('#fenderForm').on('submit',function(e){
-                e.preventDefault();
-                const $form=$(this);
-                const $btn=$form.find('button[type="submit"]');
-                $btn.prop('disabled',true).text('Tack!');
-                $.ajax({url:$form.attr('action'),method:$form.attr('method'),data:$form.serialize(),dataType:'json',complete:function(){
-                    $form.find('.w-form-done').fadeIn();
-                }});
+      emailjs.init('pzhOOOVxBi01cMxCm');
+      $(function(){
+        $('#fenderForm').on('submit',function(e){
+          e.preventDefault();
+          const $form=$(this);
+          const $btn=$form.find('button[type="submit"]');
+          $btn.prop('disabled',true).text('Skickar...');
+
+          const formData=$form.serializeArray();
+          const data={
+            title:$form.data('subject')||'Förfrågan',
+            name:'Henricssons Båtkapell'
+          };
+          const lines=[];
+          formData.forEach(item=>{
+            const label=item.name.replace(/^\d+\.\s*/, '');
+            lines.push(`<strong>${label}</strong><br>${item.value}`);
+            if(item.name.toLowerCase().includes('e-post')){
+              data.email=item.value;
+            }
+          });
+          if(!data.email){data.email='info@henricssonsbatkapell.se';}
+          data.message=lines.join('<br><br>');
+
+          emailjs.send('service_1u5gpw4','template_iijd5v4',data)
+            .then(()=>{
+              $btn.remove();
+              $form.find('.w-form-done').fadeIn();
+            })
+            .catch(err=>{
+              alert('Kunde inte skicka förfrågan: '+err.text);
+              $btn.prop('disabled',false).text('Skicka förfrågan');
             });
         });
+      });
     </script>
 </body>
 </html> 
