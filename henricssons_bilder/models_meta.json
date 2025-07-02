@@ -8260,7 +8260,9 @@
     "variant": "Original dynset",
     "delivery": "8-12 veckor",
     "category": "Båtstolar & Dynor",
-    "images": [],
+    "images": [
+      "batstolar-dynor\\5400-br\\5400-br_01.png"
+    ],
     "source": "https://www.henricssonsbatkapell.se/exempel/5400-br",
     "published": true
   },
