@@ -8261,7 +8261,8 @@
     "delivery": "8-12 veckor",
     "category": "Båtstolar & Dynor",
     "images": [
-      "batstolar-dynor\\5400-br\\5400-br_01.png"
+      "https:\\\\henricssons-api.onrender.com\\henricssons_bilder\\batstolar-dynor\\5400-br\\5400-br_01.png",
+      "batstolar-dynor\\5400-br\\5400-br_02.jpg"
     ],
     "source": "https://www.henricssonsbatkapell.se/exempel/5400-br",
     "published": true
