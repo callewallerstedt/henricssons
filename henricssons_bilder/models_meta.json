@@ -8423,8 +8423,7 @@
     "delivery": "15 minuter en kvart",
     "category": "Vävprover övriga",
     "images": [
-      "vavprover-ovriga\\test\\test_02.jpg",
-      "https:\\\\henricssons-api.onrender.com\\henricssons_bilder\\vavprover-ovriga\\ny-post\\ny-post_01.jpeg.jpg"
+      "https:\\\\henricssons-api.onrender.com\\henricssons_bilder\\vavprover-ovriga\\test\\test_02.jpg"
     ],
     "source": "",
     "published": true
