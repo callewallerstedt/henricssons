@@ -9050,18 +9050,5 @@
     ],
     "source": "https://www.henricssonsbatkapell.se/exempel/p054-titanium",
     "published": true
-  },
-  "karinskapell": {
-    "manufacturer": "calle",
-    "model": "Karinskapell",
-    "description": "ett fint kapell skitsnyggt!",
-    "variant": "varianten",
-    "delivery": "15 minuter en kvart",
-    "category": "Vävprover övriga",
-    "images": [
-      "vavprover-ovriga\\ny-post\\ny-post_01.png"
-    ],
-    "source": "",
-    "published": true
   }
 }
