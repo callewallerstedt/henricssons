@@ -8421,9 +8421,9 @@
     "description": "Beskrivning tjena",
     "variant": "variatn1",
     "delivery": "15 minuter en kvart",
-    "category": "Vävprover övriga",
+    "category": "Motorbåtar",
     "images": [
-      "vavprover-ovriga\\test\\test_01.png"
+      "https:\\\\henricssons-api.onrender.com\\henricssons_bilder\\vavprover-ovriga\\test\\test_01.png"
     ],
     "source": "",
     "published": true
