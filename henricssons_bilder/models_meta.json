@@ -8422,9 +8422,7 @@
     "variant": "variatn1",
     "delivery": "15 minuter en kvart",
     "category": "Vävprover övriga",
-    "images": [
-      "https:\\\\henricssons-api.onrender.com\\henricssons_bilder\\vavprover-ovriga\\test\\test_02.jpg"
-    ],
+    "images": [],
     "source": "",
     "published": true
   },
