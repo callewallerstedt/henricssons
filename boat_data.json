@@ -3868,7 +3868,14 @@
   "new_1751563862326": {
     "name": "Karintest",
     "models": [
-      "Ny modell"
+      {
+        "name": "karins modell",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   }
 }
