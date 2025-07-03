@@ -7442,6 +7442,19 @@
     "source": "https://www.henricssonsbatkapell.se/exempel/650-cruiser",
     "published": true
   },
+  "test": {
+    "manufacturer": "Tillverkareeee",
+    "model": "TEST",
+    "description": "Beskrivning tjena",
+    "variant": "variatn1",
+    "delivery": "15 minuter en kvart",
+    "category": "Motorbåtar",
+    "images": [
+      "https:\\\\henricssons-api.onrender.com\\henricssons_bilder\\vavprover-ovriga\\test\\test_01.png"
+    ],
+    "source": "",
+    "published": true
+  },
   "78-cirrus": {
     "manufacturer": "Albin",
     "model": "78 Cirrus",
@@ -8415,19 +8428,6 @@
     "source": "https://www.henricssonsbatkapell.se/exempel/rs-170-darkblue-marinbla",
     "published": true
   },
-  "test": {
-    "manufacturer": "Tillverkareeee",
-    "model": "TEST",
-    "description": "Beskrivning tjena",
-    "variant": "variatn1",
-    "delivery": "15 minuter en kvart",
-    "category": "Motorbåtar",
-    "images": [
-      "https:\\\\henricssons-api.onrender.com\\henricssons_bilder\\vavprover-ovriga\\test\\test_01.png"
-    ],
-    "source": "",
-    "published": true
-  },
   "2550-saratoga": {
     "manufacturer": "Bayliner",
     "model": "2550 Saratoga",
@@ -9049,6 +9049,17 @@
       "https:\\\\henricssons-api.onrender.com\\henricssons_bilder\\sunbrella-plus-kollektion-vavprover\\sunbrella-plus-p054-titanium\\p054-titanium_04.jpg"
     ],
     "source": "https://www.henricssonsbatkapell.se/exempel/p054-titanium",
+    "published": true
+  },
+  "karinskapell": {
+    "manufacturer": "calle",
+    "model": "Karinskapell",
+    "description": "ett fint kapell skitsnyggt!",
+    "variant": "varianten",
+    "delivery": "15 minuter en kvart",
+    "category": "Vävprover övriga",
+    "images": [],
+    "source": "",
     "published": true
   }
 }
