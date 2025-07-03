@@ -3876,7 +3876,14 @@
         "delivery": "",
         "category": "Kapell - Motorbåt"
       },
-      "Ny modell"
+      {
+        "name": "modell 2",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   }
 }
