@@ -64,7 +64,7 @@ $(document).ready(function() {
                 form.style.display = 'none';
                 const msg = document.createElement('div');
                 msg.className = 'form-success-message';
-                msg.innerHTML = '<h3 style="color:#b89300; text-align:center; margin:2rem 0;">Tack för din förfrågan!<br>Vi återkommer till dig så snart vi kan.</h3>';
+                msg.innerHTML = '<h3 style="color:#1976d2; text-align:center; margin:2rem 0;">Tack för din förfrågan!<br>Vi återkommer till dig så snart vi kan.</h3>';
                 form.parentNode.appendChild(msg);
             }, 100); // Wait a bit to allow Formspree to process
         });

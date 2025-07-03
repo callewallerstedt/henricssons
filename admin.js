@@ -702,7 +702,7 @@ $(document).ready(function() {
     // Primära flikar
     $(document).on('click', '.primary-tab-btn', function(){
         $('.primary-tab-btn').removeClass('active').css('background','#f5f5f5');
-        $(this).addClass('active').css('background','#ffe066');
+        $(this).addClass('active').css('background','#64b5f6');
         const prim = $(this).data('primary');
         if(prim==='boats'){
             switchTab('boats');

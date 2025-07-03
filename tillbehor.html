@@ -85,7 +85,7 @@
                 <h1 class="hero-title">Fenderstrumpor med egen logotyp</h1>
                 <div class="divider"></div>
                 <p class="hero-text">Skydda dina fendrar och ge båten ett proffsigt intryck med fenderstrumpor i toppklass – beställ dem med eller utan personlig logotyp.</p>
-                <div class="hero-down-arrow" aria-hidden="true">&#8595;</div>
+                <div class="hero-down-arrow" aria-hidden="true" style="color:#e0b800;">&#8595;</div>
             </div>
         </section>
 
@@ -164,7 +164,7 @@
                         </div>
 
                         <button type="submit" class="btn btn-primary">Skicka förfrågan</button>
-                        <div class="w-form-done" style="display:none; padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#b89300;">Tack! Din förfrågan har skickats.</div>
+                        <div class="w-form-done" style="display:none; padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#1976d2;">Tack! Din förfrågan har skickats.</div>
                     </form>
                 </div>
             </div>
@@ -290,10 +290,12 @@
           const lines=[];
           formData.forEach(item=>{
             const label=item.name.replace(/^\d+\.\s*/, '');
-            lines.push(`<strong>${label}</strong><br>${item.value}`);
-            if(item.name.toLowerCase().includes('e-post')){
-              data.email=item.value;
+            let value = item.value;
+            if(item.name.toLowerCase().includes('e-post')) {
+              data.email = value;
+              value = `<a href="mailto:${value}">${value}</a>`;
             }
+            lines.push(`<strong>${label}</strong><br>${value}`);
           });
           if(!data.email){data.email='info@henricssonsbatkapell.se';}
           data.message=lines.join('<br><br>');

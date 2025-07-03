@@ -1,6 +1,6 @@
 :root {
-    --primary-color: #e0b800;
-    --primary-hover: #b89300;
+    --primary-color: #1976d2;
+    --primary-hover: #1976d2;
     --secondary-color: #004080;
     --secondary-hover: #002855;
     --yellow-color: #e0b800;
@@ -141,7 +141,7 @@ body {
 .divider {
     height: 3px;
     width: 80px;
-    background: var(--primary-color);
+    background: #e0b800;
     margin: 0.5rem 0 1.5rem 0;
     border-radius: 2px;
     display: block;
@@ -384,7 +384,7 @@ body {
     margin-left: 0;
     margin-right: auto;
     height: 3px;
-    background: var(--primary-color);
+    background: #e0b800;
     display: block;
     border-radius: 2px;
 }
@@ -751,7 +751,7 @@ body {
     width: 100%;
     padding: 0.5rem 0.8rem;
     font-size: 0.95rem;
-    border: 1.5px solid #e0b800;
+    border: 1.5px solid #1976d2;
     border-radius: 7px;
     background: #fffbe6;
     color: var(--text-color);
@@ -767,9 +767,9 @@ body {
 .contact-form input[type="email"]:focus,
 .contact-form input[type="tel"]:focus,
 .contact-form textarea:focus {
-    border: 1.5px solid #b89300;
+    border: 1.5px solid #1976d2;
     background: #fffde7;
-    box-shadow: 0 0 0 2px #ffe066, 0 2px 8px rgba(224, 184, 0, 0.13);
+    box-shadow: 0 0 0 2px #64b5f6, 0 2px 8px rgba(25, 118, 210, 0.13);
 }
 
 .contact-form textarea {
@@ -1782,7 +1782,7 @@ body {
 
 .contact-form input::placeholder,
 .contact-form textarea::placeholder {
-    color: #b89300;
+    color: #1976d2;
     opacity: 1;
     font-weight: 500;
     font-size: 0.97em;

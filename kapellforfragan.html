@@ -53,12 +53,12 @@
     <main>
         <section class="hero hero--kapellforfragan">
             <div class="hero-content hero-content--centered">
-                <h1 class="hero-title">Skicka en <span class="highlight">kapellförfrågan</span></h1>
+                <h1 class="hero-title">Skicka en <span class="highlight" style="color:#e0b800;">kapellförfrågan</span></h1>
                 <div class="divider"></div>
                 <p class="hero-text">
                     Vi har många kapell på vårt lager. Vi besvarar inkomna förfrågningar löpande och där ger er mer exakt leveranstid.
                 </p>
-                <div class="hero-down-arrow" aria-hidden="true">&#8595;</div>
+                <div class="hero-down-arrow" aria-hidden="true" style="color:#e0b800;">&#8595;</div>
             </div>
         </section>
 
@@ -159,7 +159,7 @@
                                     <textarea id="message" name="9. Övrig information" rows="4" placeholder="Övrig information"></textarea>
                                 </div>
                                 <button type="submit" class="btn btn-primary">Skicka förfrågan</button>
-                                <div class="w-form-done" style="display:none; padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#b89300;">Förfrågan skickad! Vi återkommer så snart vi kan.</div>
+                                <div class="w-form-done" style="display:none; padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#1976d2;">Förfrågan skickad! Vi återkommer så snart vi kan.</div>
                             </form>
                         </div>
                     </div>
@@ -220,10 +220,12 @@
           const lines=[];
           formData.forEach(item=>{
             const label=item.name.replace(/^\d+\.\s*/, '');
-            lines.push(`<strong>${label}</strong><br>${item.value}`);
-            if(item.name.toLowerCase().includes('e-post')){
-              data.email=item.value;
+            let value = item.value;
+            if(item.name.toLowerCase().includes('e-post')) {
+              data.email = value;
+              value = `<a href="mailto:${value}">${value}</a>`;
             }
+            lines.push(`<strong>${label}</strong><br>${value}`);
           });
           if(!data.email){data.email='info@henricssonsbatkapell.se';}
           data.message=lines.join('<br><br>');

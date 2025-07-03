@@ -52,7 +52,7 @@
                 <h1 class="hero-title">Kontakt</h1>
                 <div class="divider"></div>
                 <p class="hero-text">Kontakta oss för frågor om kapell, tillbehör eller bokning av besök. Vi hjälper dig gärna!</p>
-                <div class="hero-down-arrow" aria-hidden="true">&#8595;</div>
+                <div class="hero-down-arrow" aria-hidden="true" style="color:#e0b800;">&#8595;</div>
             </div>
         </section>
 
@@ -116,7 +116,7 @@
                             </div>
                             
                             <button type="submit" class="btn btn-primary">Skicka meddelande</button>
-                            <div class="w-form-done" style="display:none; padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#b89300;">Tack! Ditt meddelande har skickats.</div>
+                            <div class="w-form-done" style="display:none; padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#1976d2;">Tack! Ditt meddelande har skickats.</div>
                         </form>
                     </div>
                 </div>
@@ -187,10 +187,12 @@
                 const lines=[];
                 formData.forEach(item=>{
                   const label=item.name.replace(/^\d+\.\s*/, '');
-                  lines.push(`<strong>${label}</strong><br>${item.value}`);
-                  if(item.name.toLowerCase().includes('e-post')){
-                    data.email=item.value;
+                  let value = item.value;
+                  if(item.name.toLowerCase().includes('e-post')) {
+                    data.email = value;
+                    value = `<a href="mailto:${value}">${value}</a>`;
                   }
+                  lines.push(`<strong>${label}</strong><br>${value}`);
                 });
                 if(!data.email){data.email='info@henricssonsbatkapell.se';}
                 data.message=lines.join('<br><br>');
