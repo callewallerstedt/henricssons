@@ -468,7 +468,14 @@
       "621 DC Hamnkapell",
       "621 hamnkapell original",
       "630 Cabin",
-      "640 DC",
+      {
+        "name": "640 DC originalkapell",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      },
       "640-641 HT",
       "641 Ocean",
       "641-642 HT",
@@ -486,7 +493,8 @@
       "Falcon",
       "Falcon Fantino",
       "Falcon RST",
-      "Mosqito"
+      "Mosqito",
+      "Ny modell"
     ]
   },
   "bellmar": {
@@ -2726,7 +2734,14 @@
     "name": "Scantic",
     "models": [
       "575HT",
-      "Ny modell"
+      {
+        "name": "Ny modell",
+        "images": [],
+        "description": "",
+        "variant": "",
+        "delivery": "",
+        "category": "Kapell - Motorbåt"
+      }
     ]
   },
   "scotty": {
