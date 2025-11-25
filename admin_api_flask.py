@@ -2,8 +2,24 @@ from flask import Flask, request, jsonify, send_from_directory
 import os, json, base64, requests, tempfile
 from typing import Optional
 import sys
+from werkzeug.routing import BaseConverter
 
 app = Flask(__name__)
+
+# Custom converter that excludes /api/* paths
+class StaticFileConverter(BaseConverter):
+    """Converter that only matches non-API file paths"""
+    def to_python(self, value):
+        if value.startswith('api/'):
+            # Raise ValueError to prevent this route from matching
+            raise ValueError(f"Path '{value}' is an API route, not a static file")
+        return value
+    
+    def to_url(self, value):
+        return value
+
+# Register the custom converter
+app.url_map.converters['staticfile'] = StaticFileConverter
 
 # ----------------- Simple in-memory caches so data kan serveras även om filsystemet är skrivskyddat -----------------
 boat_data_cache: Optional[str] = None
@@ -145,17 +161,89 @@ def get_henricssons_files(filename):
         return send_from_directory('henricssons_bilder', filename)
     return jsonify(error='File not found'), 404
 
+# Register /api/chat route with explicit methods BEFORE static file serving
+@app.route('/api/chat', methods=['POST', 'OPTIONS'])
+def chat():
+    """Chat endpoint som använder OpenAI API."""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        data = request.get_json()
+        message = data.get('message', '')
+        custom_prompt = data.get('prompt', 'Du är en hjälpsam assistent.')
+        
+        if not message:
+            return jsonify(error='Meddelande krävs'), 400
+        
+        # OpenAI API key - must be set via environment variable
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            return jsonify(error='OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.'), 500
+        
+        # Call OpenAI API
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'model': 'gpt-4o-mini',
+            'messages': [
+                {'role': 'system', 'content': custom_prompt + '\n\nDu kan använda markdown-formatering i dina svar. Använd **fetstil** för viktig text, *kursiv* för betoning, och radbrytningar för att strukturera dina svar.'},
+                {'role': 'user', 'content': message}
+            ],
+            'max_tokens': 1000,
+            'temperature': 0.7
+        }
+        
+        response = requests.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            assistant_message = result['choices'][0]['message']['content']
+            return jsonify(success=True, response=assistant_message)
+        else:
+            return jsonify(error=f'OpenAI API error: {response.status_code} - {response.text}'), 500
+            
+    except requests.RequestException as e:
+        return jsonify(error=f'Network error: {str(e)}'), 500
+    except Exception as e:
+        return jsonify(error=f'Server error: {str(e)}'), 500
+
 if __name__ == '__main__':
     # Local static file serving
-    from flask import send_from_directory
-
-    @app.route('/', defaults={'filename': 'index.html'})
-    @app.route('/<path:filename>')
+    # IMPORTANT: API routes are registered ABOVE (lines 67-197)
+    # Flask matches routes in registration order, so API routes should match first
+    # But to be absolutely sure, we'll use explicit file serving that doesn't interfere
+    
+    @app.route('/', methods=['GET'])
+    def serve_index():
+        return send_from_directory('.', 'index.html')
+    
+    # Serve static files, but explicitly exclude /api/* paths
+    # We'll check if it's an API path BEFORE trying to serve it
+    @app.route('/<path:filename>', methods=['GET'])
     def serve_static(filename):
+        # CRITICAL: Explicitly reject API routes
+        # This should never be reached for /api/* because API routes are registered first
+        # But this is a safety check
+        if filename.startswith('api/'):
+            from flask import abort
+            abort(404)
+        
+        # Only serve actual files
         if os.path.isfile(filename):
             return send_from_directory('.', filename)
-        return '404 Not Found', 404
+        from flask import abort
+        abort(404)
 
     port = int(os.environ.get("PORT", 25565))
     print(f"Starting Flask server on port {port} (host=0.0.0.0)")
-    app.run(host='0.0.0.0', port=port) 
+    print(f"Admin panel available at: http://localhost:{port}/admin.html")
+    print(f"API endpoints available at: http://localhost:{port}/api/...")
+    app.run(host='0.0.0.0', port=port, debug=True) 
