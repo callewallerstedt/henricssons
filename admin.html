@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.css" />
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css" rel="stylesheet" />
     <link rel="icon" href="logo.png">
     <style>
         body { padding: 0.5rem 5px; max-width: 1600px; margin:0 auto; font-family: Montserrat, Arial, sans-serif; color: #111; }
@@ -174,18 +175,466 @@
         h2.tillverkare-heading, h2.modeller-heading, #extras-heading {
             color: #fff !important;
         }
+        /* Admin header */
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 0.6rem 1rem;
+            border-radius: 12px;
+            background: rgba(247, 250, 255, 0.7);
+            border: 1px solid rgba(25, 118, 210, 0.2);
+        }
+        .logo-wrapper {
+            display: flex;
+            align-items: center;
+        }
+        .logo-wrapper img {
+            max-height: 48px;
+            width: auto;
+        }
+        .primary-tabs {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+        .primary-tab-btn {
+            border: 1px solid rgba(25, 118, 210, 0.6);
+            background: #ffffff;
+            color: #0a2342;
+            font-weight: 600;
+            padding: 0.4rem 1.1rem;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(10, 35, 66, 0.08);
+        }
+        .primary-tab-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(10, 35, 66, 0.12);
+        }
+        .primary-tab-btn.active {
+            background: #1976d2;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(25, 118, 210, 0.4);
+        }
+        @media (max-width: 640px) {
+            .admin-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .primary-tabs {
+                width: 100%;
+            }
+            .primary-tab-btn {
+                flex: 1;
+                text-align: center;
+            }
+        }
+        /* Dashboard Styles */
+        .dashboard-container {
+            display: none;
+        }
+        .dashboard-container.active {
+            display: block;
+        }
+        #calendar-section {
+            display: none;
+        }
+        #calendar-section.active {
+            display: block;
+        }
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .chatbot-card {
+            grid-column: 1 / -1; /* Span across all columns */
+        }
+        @media (max-width: 1200px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            .chatbot-card {
+                grid-column: 1; /* Reset on mobile */
+            }
+        }
+        .dashboard-card {
+            background: #fff;
+            border: 1.5px solid #1976d2;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .dashboard-card h2 {
+            margin-top: 0;
+            color: #0a2342;
+            border-bottom: 2px solid #1976d2;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .dashboard-card h3 {
+            color: #0a2342;
+            font-size: 1.1rem;
+            margin-top: 0;
+        }
+        /* Calendar Styles */
+        .calendar-card {
+            min-height: 500px;
+        }
+        #calendar {
+            margin-top: 1rem;
+        }
+        .fc-header-toolbar {
+            margin-bottom: 1rem !important;
+        }
+        /* Chatbot Styles */
+        .chatbot-card {
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+        .chatbot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .settings-btn {
+            background: #6c757d;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 0.3rem 0.6rem;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .settings-btn:hover {
+            background: #5a6268;
+        }
+        .chatbot-settings {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        .chatbot-settings label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #0a2342;
+        }
+        .chatbot-settings textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: inherit;
+            margin-bottom: 0.5rem;
+        }
+        .chatbot-messages {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 350px;
+            margin: 1rem 0;
+            padding: 1rem;
+            background: #f9f9f9;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .chat-message {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            border-radius: 6px;
+        }
+        .chat-message.user {
+            background: #e3f2fd;
+            text-align: right;
+        }
+        .chat-message.assistant {
+            background: #f5f5f5;
+        }
+        .chat-message .message-text {
+            color: #0a2342;
+            margin: 0;
+            line-height: 1.6;
+        }
+        .chat-message .message-text strong {
+            font-weight: bold;
+            color: #0a2342;
+        }
+        .chat-message .message-text em {
+            font-style: italic;
+        }
+        .chat-message .message-text code {
+            background: #f0f0f0;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .chat-message .message-text pre {
+            background: #f0f0f0;
+            padding: 0.5rem;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 0.5rem 0;
+        }
+        .chat-message .message-text pre code {
+            background: none;
+            padding: 0;
+        }
+        .chat-message .message-text ul, .chat-message .message-text ol {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+        .chat-message .message-text li {
+            margin: 0.25rem 0;
+        }
+        .chat-message .message-text a {
+            color: #1976d2;
+            text-decoration: underline;
+        }
+        .chat-message .message-text a:hover {
+            color: #0d47a1;
+        }
+        .chat-message .message-text p {
+            margin: 0.5rem 0;
+        }
+        .chat-message .message-text p:first-child {
+            margin-top: 0;
+        }
+        .chat-message .message-text p:last-child {
+            margin-bottom: 0;
+        }
+        .chat-message .message-time {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+        .chatbot-input-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .chatbot-input-container input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .chatbot-input-container button {
+            padding: 0.5rem 1rem;
+        }
+        /* Status Folders Styles */
+        .status-folders-card {
+            grid-column: 1 / -1;
+        }
+        .status-folders {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .status-folder {
+            background: #f5f5f5;
+            border: 2px solid #1976d2;
+            border-radius: 6px;
+            padding: 1rem;
+            min-height: 300px;
+        }
+        .status-folder h3 {
+            margin-top: 0;
+            color: #1976d2;
+            border-bottom: 1px solid #1976d2;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .folder-items {
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+        }
+        .folder-item {
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .folder-item:hover {
+            background: #e3f2fd;
+        }
+        .folder-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .folder-item-title {
+            font-weight: bold;
+            color: #0a2342;
+        }
+        .folder-item-delete {
+            background: #dc3545;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            padding: 0.2rem 0.5rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .folder-item-delete:hover {
+            background: #c82333;
+        }
+        .folder-item-content {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .add-item-btn {
+            width: 100%;
+            padding: 0.5rem;
+            background: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .add-item-btn:hover {
+            background: #218838;
+        }
+        /* Item Modal */
+        .item-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .item-modal.active {
+            display: flex;
+        }
+        .item-modal-content {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .item-modal-content h3 {
+            margin-top: 0;
+            color: #0a2342;
+        }
+        .item-modal-content label {
+            display: block;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #0a2342;
+        }
+        .item-modal-content input,
+        .item-modal-content textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        .item-modal-content textarea {
+            min-height: 100px;
+        }
+        .item-modal-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
     </style>
 </head>
 <body>
-    <header style="text-align:center; margin-bottom:1.5rem;">
-        <img src="logo.png" alt="Henricssons Båtkapell" style="max-width:400px;width:50%;height:auto;display:block;margin:0 auto 0.5rem auto;" />
+    <header class="admin-header">
+        <div class="logo-wrapper">
+            <img src="logo.png" alt="Henricssons Båtkapell" />
+        </div>
+        <div id="primary-tabs" class="primary-tabs">
+            <button class="primary-tab-btn active" data-primary="dashboard">Dashboard</button>
+            <button class="primary-tab-btn" data-primary="calendar">Kalender</button>
+            <button class="primary-tab-btn" data-primary="boats">Tillverkare &amp; Modeller</button>
+            <button class="primary-tab-btn" data-primary="images">Bilder &amp; exempel</button>
+        </div>
     </header>
-    <!-- Primära flikar -->
-    <div id="primary-tabs" style="display:flex; gap:1rem; margin-bottom:1rem;">
-        <button class="primary-tab-btn active" data-primary="boats" style="font-size:1.1rem;padding:0.5rem 1.4rem;font-weight:700;border:2px solid #1976d2;border-radius:8px;background:#64b5f6;cursor:pointer;">Tillverkare &amp; Modeller</button>
-        <button class="primary-tab-btn" data-primary="images" style="font-size:1.1rem;padding:0.5rem 1.4rem;font-weight:700;border:2px solid #1976d2;border-radius:8px;background:#f5f5f5;cursor:pointer;">Bilder &amp; exempel</button>
+    <!-- Dashboard Section -->
+    <div id="dashboard-section" class="dashboard-container">
+        <div class="dashboard-grid">
+            <!-- Chatbot Section -->
+            <div class="dashboard-card chatbot-card">
+                <div class="chatbot-header">
+                    <h2>Chatbot</h2>
+                    <button id="chatbot-settings-btn" class="settings-btn" title="Inställningar">⚙️</button>
+                </div>
+                <div id="chatbot-settings" class="chatbot-settings" style="display:none;">
+                    <label>Anpassad prompt:</label>
+                    <textarea id="chatbot-prompt" rows="4" placeholder="Ange systemprompt för chatboten..."></textarea>
+                    <button class="btn" id="save-prompt-btn">Spara prompt</button>
+                </div>
+                <div id="chatbot-messages" class="chatbot-messages"></div>
+                <div class="chatbot-input-container">
+                    <input type="text" id="chatbot-input" placeholder="Skriv ett meddelande..." />
+                    <button id="chatbot-send-btn" class="btn">Skicka</button>
+                </div>
+            </div>
+
+            <!-- Status Folders Section -->
+            <div class="dashboard-card status-folders-card">
+                <h2>Statusmappar</h2>
+                <div class="status-folders">
+                    <div class="status-folder" data-status="nya-inskick">
+                        <h3>Nya Inskick</h3>
+                        <div class="folder-items" id="folder-nya-inskick"></div>
+                        <button class="add-item-btn" data-status="nya-inskick">+ Lägg till</button>
+                    </div>
+                    <div class="status-folder" data-status="vantar-pa-svar">
+                        <h3>Väntar på svar</h3>
+                        <div class="folder-items" id="folder-vantar-pa-svar"></div>
+                        <button class="add-item-btn" data-status="vantar-pa-svar">+ Lägg till</button>
+                    </div>
+                    <div class="status-folder" data-status="i-produktion">
+                        <h3>I produktion</h3>
+                        <div class="folder-items" id="folder-i-produktion"></div>
+                        <button class="add-item-btn" data-status="i-produktion">+ Lägg till</button>
+                    </div>
+                    <div class="status-folder" data-status="redo-for-leverans">
+                        <h3>Redo för leverans</h3>
+                        <div class="folder-items" id="folder-redo-for-leverans"></div>
+                        <button class="add-item-btn" data-status="redo-for-leverans">+ Lägg till</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <input type="text" class="quicksearch" placeholder="Sök tillverkare..." />
+
+    <div id="calendar-section" class="calendar-section">
+        <div class="dashboard-card calendar-card">
+            <h2>Kalender</h2>
+            <div id="calendar"></div>
+        </div>
+    </div>
+
+    <input type="text" class="quicksearch" placeholder="Sök tillverkare..." style="display:none;" />
     <input type="text" id="extras-search" class="quicksearch" placeholder="Sök i bilder & exempel..." style="display:none;" />
 
     <div id="admin-tabs" style="margin-bottom:1rem; display:none; flex-wrap:wrap; gap:0.5rem;">
@@ -222,8 +671,27 @@
         </div>
     </div>
 
+    <!-- Item Modal for Status Folders -->
+    <div id="item-modal" class="item-modal">
+        <div class="item-modal-content">
+            <h3 id="item-modal-title">Lägg till objekt</h3>
+            <label>Titel</label>
+            <input type="text" id="item-title" />
+            <label>Beskrivning</label>
+            <textarea id="item-description"></textarea>
+            <label>Datum</label>
+            <input type="date" id="item-date" />
+            <div class="item-modal-actions">
+                <button class="btn" id="item-save-btn">Spara</button>
+                <button class="btn btn-secondary" id="item-cancel-btn">Avbryt</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
     <!-- Cache-bust to force latest JS each deploy -->
     <script src="kapellforfragan_full.js?v=20250628"></script>
     <script src="admin.js?v=20250628"></script>

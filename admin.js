@@ -7,7 +7,16 @@ let selectedModelIndex = null;
 let $grid1, $grid2;
 
 // Lägg in omedelbart efter globala variabler
-const API_BASE = location.hostname === 'localhost' ? 'http://localhost:8001' : 'https://henricssons-api.onrender.com';
+// Auto-detect API base URL based on current location
+let API_BASE;
+if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    // Use current port from the page URL, or default to 25565
+    const port = location.port || '25565';
+    API_BASE = `${location.protocol}//${location.hostname}:${port}`;
+} else {
+    API_BASE = 'https://henricssons-api.onrender.com';
+}
+console.log('API_BASE initialized to:', API_BASE, 'from location:', location.href);
 
 // ----------------------------- Tab & Extras logic -----------------------------
 const extrasCategories = {
@@ -20,10 +29,21 @@ const extrasCategories = {
     sunbrella: 'Sunbrella Plus Kollektion'
 };
 let extrasData = {};
-let activeTab = 'boats';
+let activeTab = 'dashboard';
 let activeExtrasKey = null;
 let selectedExtraIndex = null;
 let editExtrasCat = null; // håller vilken kategori som redigeras när vi är i "Visa alla"
+
+// Dashboard variables
+let calendar = null;
+let statusItems = {
+    'nya-inskick': [],
+    'vantar-pa-svar': [],
+    'i-produktion': [],
+    'redo-for-leverans': []
+};
+let chatbotPrompt = 'Du är en hjälpsam assistent för Henricssons Båtkapell. Du hjälper till med frågor om båtkapell, beställningar och allmän service.';
+let currentEditingItem = null;
 
 // -----------------------------
 // UNSAVED INDICATOR
@@ -400,7 +420,27 @@ function switchTab(tab){
     $('.tab-btn').removeClass('active');
     $(`.tab-btn[data-tab="${tab}"]`).addClass('active');
 
-    if(tab==='boats'){
+    if(tab==='dashboard'){
+        $('#dashboard-section').addClass('active');
+        $('#calendar-section').removeClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        initDashboard();
+    } else if(tab==='calendar'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').addClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        initCalendar();
+    } else if(tab==='boats'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
         $('#boats-section').show();
         $('#extras-section').hide();
         $('.quicksearch').show();
@@ -413,6 +453,8 @@ function switchTab(tab){
         $('#extras-search').hide();
         editExtrasCat = null; // nollställ
     } else {
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').show();
         $('.quicksearch').hide();
@@ -698,13 +740,333 @@ function bindSetThumbnail(){
     });
 }
 
+// Dashboard Functions
+function initDashboard() {
+    initChatbot();
+    loadStatusItems();
+    loadChatbotPrompt();
+}
+
+function initCalendar() {
+    const calendarEl = document.getElementById('calendar');
+    if (!calendarEl) return;
+    
+    if (calendar) {
+        calendar.destroy();
+    }
+    
+    try {
+        calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            events: getCalendarEvents(),
+            eventClick: function(info) {
+                alert('Händelse: ' + info.event.title);
+            },
+            height: 'auto'
+        });
+        calendar.render();
+    } catch(e) {
+        console.error('Kunde inte initiera kalender', e);
+    }
+}
+
+function getCalendarEvents() {
+    const events = [];
+    Object.keys(statusItems).forEach(status => {
+        statusItems[status].forEach(item => {
+            if (item.date) {
+                events.push({
+                    title: item.title,
+                    start: item.date,
+                    backgroundColor: getStatusColor(status),
+                    borderColor: getStatusColor(status)
+                });
+            }
+        });
+    });
+    return events;
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'nya-inskick': '#ff9800',
+        'vantar-pa-svar': '#2196f3',
+        'i-produktion': '#9c27b0',
+        'redo-for-leverans': '#4caf50'
+    };
+    return colors[status] || '#666';
+}
+
+function initChatbot() {
+    $('#chatbot-send-btn').off('click').on('click', sendChatMessage);
+    $('#chatbot-input').off('keypress').on('keypress', function(e) {
+        if (e.which === 13) {
+            sendChatMessage();
+        }
+    });
+    $('#chatbot-settings-btn').off('click').on('click', function() {
+        $('#chatbot-settings').toggle();
+    });
+    $('#save-prompt-btn').off('click').on('click', saveChatbotPrompt);
+}
+
+function sendChatMessage() {
+    const input = $('#chatbot-input');
+    const message = input.val().trim();
+    if (!message) return;
+    
+    // Add user message
+    addChatMessage('user', message);
+    input.val('');
+    
+    // Show loading
+    const loadingId = 'loading-' + Date.now();
+    addChatMessage('assistant', 'Skriver...', loadingId);
+    
+    // Debug: log API_BASE
+    console.log('API_BASE:', API_BASE);
+    const chatUrl = `${API_BASE}/api/chat`;
+    console.log('Chat URL:', chatUrl);
+    
+    // Call OpenAI API
+    fetch(chatUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            message: message,
+            prompt: chatbotPrompt
+        })
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        $(`#${loadingId}`).remove();
+        if (data.success && data.response) {
+            addChatMessage('assistant', data.response);
+        } else {
+            addChatMessage('assistant', 'Ett fel uppstod: ' + (data.error || 'Okänt fel'));
+        }
+    })
+    .catch(error => {
+        console.error('Chat error:', error);
+        $(`#${loadingId}`).remove();
+        addChatMessage('assistant', 'Kunde inte ansluta till servern. Kontrollera att admin_api_flask.py körs. Fel: ' + error.message);
+    });
+}
+
+function addChatMessage(role, text, id) {
+    const messagesDiv = $('#chatbot-messages');
+    const messageDiv = $('<div>').addClass('chat-message ' + role).attr('id', id || '');
+    const textDiv = $('<div>').addClass('message-text');
+    
+    // For assistant messages, render markdown/HTML. For user messages, escape HTML for security
+    if (role === 'assistant' && typeof marked !== 'undefined') {
+        // Use marked.js to render markdown to HTML
+        const html = marked.parse(text);
+        textDiv.html(html);
+    } else if (role === 'assistant') {
+        // Fallback: simple markdown parsing if marked.js not available
+        const html = simpleMarkdownToHtml(text);
+        textDiv.html(html);
+    } else {
+        // User messages: escape HTML for security
+        textDiv.text(text);
+    }
+    
+    const timeDiv = $('<div>').addClass('message-time').text(new Date().toLocaleTimeString('sv-SE'));
+    messageDiv.append(textDiv).append(timeDiv);
+    messagesDiv.append(messageDiv);
+    messagesDiv.scrollTop(messagesDiv[0].scrollHeight);
+}
+
+// Simple markdown to HTML converter (fallback if marked.js not available)
+function simpleMarkdownToHtml(text) {
+    if (!text) return '';
+    
+    let html = text;
+    
+    // Convert **bold** to <strong>bold</strong>
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert *italic* to <em>italic</em>
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    
+    // Convert line breaks to <br>
+    html = html.replace(/\n/g, '<br>');
+    
+    // Convert code blocks
+    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+    
+    // Convert links [text](url) to <a href="url">text</a>
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    
+    // Convert lists
+    html = html.replace(/^\- (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+    
+    // Wrap consecutive <li> in <ul>
+    html = html.replace(/(<li>.*<\/li>)/gs, function(match) {
+        if (match.includes('<ul>')) return match;
+        return '<ul>' + match + '</ul>';
+    });
+    
+    return html;
+}
+
+function loadChatbotPrompt() {
+    try {
+        const saved = localStorage.getItem('chatbotPrompt');
+        if (saved) {
+            chatbotPrompt = saved;
+            $('#chatbot-prompt').val(chatbotPrompt);
+        }
+    } catch(e) {
+        console.error('Kunde inte ladda prompt', e);
+    }
+}
+
+function saveChatbotPrompt() {
+    chatbotPrompt = $('#chatbot-prompt').val().trim() || chatbotPrompt;
+    try {
+        localStorage.setItem('chatbotPrompt', chatbotPrompt);
+        alert('Prompt sparad!');
+    } catch(e) {
+        alert('Kunde inte spara prompt');
+    }
+}
+
+function loadStatusItems() {
+    try {
+        const saved = localStorage.getItem('statusItems');
+        if (saved) {
+            statusItems = JSON.parse(saved);
+        }
+    } catch(e) {
+        console.error('Kunde inte ladda status items', e);
+    }
+    renderStatusFolders();
+}
+
+function saveStatusItems() {
+    try {
+        localStorage.setItem('statusItems', JSON.stringify(statusItems));
+        if (calendar) {
+            calendar.removeAllEvents();
+            const events = getCalendarEvents();
+            events.forEach(event => {
+                calendar.addEvent(event);
+            });
+        }
+    } catch(e) {
+        console.error('Kunde inte spara status items', e);
+    }
+}
+
+function renderStatusFolders() {
+    Object.keys(statusItems).forEach(status => {
+        const folderDiv = $(`#folder-${status}`);
+        folderDiv.empty();
+        statusItems[status].forEach((item, index) => {
+            const itemDiv = $('<div>').addClass('folder-item').attr('data-index', index);
+            const header = $('<div>').addClass('folder-item-header');
+            header.append($('<div>').addClass('folder-item-title').text(item.title || 'Ingen titel'));
+            header.append($('<button>').addClass('folder-item-delete').text('×').on('click', function(e) {
+                e.stopPropagation();
+                if (confirm('Ta bort detta objekt?')) {
+                    statusItems[status].splice(index, 1);
+                    saveStatusItems();
+                    renderStatusFolders();
+                }
+            }));
+            itemDiv.append(header);
+            if (item.description) {
+                itemDiv.append($('<div>').addClass('folder-item-content').text(item.description));
+            }
+            if (item.date) {
+                itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + new Date(item.date).toLocaleDateString('sv-SE')));
+            }
+            itemDiv.on('click', function() {
+                editStatusItem(status, index);
+            });
+            folderDiv.append(itemDiv);
+        });
+    });
+}
+
+function editStatusItem(status, index) {
+    const item = statusItems[status][index] || { title: '', description: '', date: '' };
+    currentEditingItem = { status, index };
+    $('#item-modal-title').text('Redigera objekt');
+    $('#item-title').val(item.title || '');
+    $('#item-description').val(item.description || '');
+    $('#item-date').val(item.date || '');
+    $('#item-modal').addClass('active');
+}
+
+function addStatusItem(status) {
+    currentEditingItem = { status, index: -1 };
+    $('#item-modal-title').text('Lägg till objekt');
+    $('#item-title').val('');
+    $('#item-description').val('');
+    $('#item-date').val('');
+    $('#item-modal').addClass('active');
+}
+
+function saveStatusItem() {
+    const title = $('#item-title').val().trim();
+    const description = $('#item-description').val().trim();
+    const date = $('#item-date').val();
+    
+    if (!title) {
+        alert('Titel krävs');
+        return;
+    }
+    
+    const item = {
+        title,
+        description,
+        date: date || null
+    };
+    
+    if (currentEditingItem.index >= 0) {
+        statusItems[currentEditingItem.status][currentEditingItem.index] = item;
+    } else {
+        if (!statusItems[currentEditingItem.status]) {
+            statusItems[currentEditingItem.status] = [];
+        }
+        statusItems[currentEditingItem.status].push(item);
+    }
+    
+    saveStatusItems();
+    renderStatusFolders();
+    $('#item-modal').removeClass('active');
+    currentEditingItem = null;
+}
+
 $(document).ready(function() {
     // Primära flikar
     $(document).on('click', '.primary-tab-btn', function(){
-        $('.primary-tab-btn').removeClass('active').css('background','#f5f5f5');
-        $(this).addClass('active').css('background','#64b5f6');
+        $('.primary-tab-btn').removeClass('active');
+        $(this).addClass('active');
         const prim = $(this).data('primary');
-        if(prim==='boats'){
+        if(prim==='dashboard'){
+            switchTab('dashboard');
+        } else if(prim==='calendar'){
+            switchTab('calendar');
+        } else if(prim==='boats'){
             switchTab('boats');
         } else {
             // Byt till "Visa alla" som standard
@@ -714,7 +1076,7 @@ $(document).ready(function() {
     });
 
     Promise.all([fetchManufacturers(), fetchExtras()]).then(()=>{
-        switchTab('boats');
+        switchTab('dashboard');
         $('#admin-tabs').hide(); // sekundära flikar dolda initialt
         $('#extras-search').hide();
     });
@@ -791,6 +1153,25 @@ $(document).ready(function() {
             $(this).toggle(txt.indexOf(q)!==-1);
         });
     }, 200));
+
+    // Status folder buttons
+    $(document).on('click', '.add-item-btn', function() {
+        const status = $(this).data('status');
+        addStatusItem(status);
+    });
+
+    // Item modal buttons
+    $('#item-save-btn').on('click', saveStatusItem);
+    $('#item-cancel-btn').on('click', function() {
+        $('#item-modal').removeClass('active');
+        currentEditingItem = null;
+    });
+    $('#item-modal').on('click', function(e) {
+        if ($(e.target).hasClass('item-modal')) {
+            $(this).removeClass('active');
+            currentEditingItem = null;
+        }
+    });
 });
 
 // Debounce-funktion
