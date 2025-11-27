@@ -52,7 +52,7 @@
                 <h1 style="margin-bottom: 1rem;">Kontakt</h1>
                 <p style="margin-bottom: 2rem; font-family: 'Inter', sans-serif; font-weight: 400; color: var(--text-color);">Kontakta oss för frågor om kapell, tillbehör eller bokning av besök. Vi hjälper dig gärna!</p>
                 <div class="contact-grid">
-                    <div class="contact-details" style="background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); color: #333;">
+                    <div class="contact-details" style="background: white; padding: 2rem; border-radius: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); color: #333;">
                         <h2 style="color: #0a2342;">Kontaktinformation</h2>
                         <div class="contact-item">
                             <h3 style="color: #0a2342;">Adress</h3>
@@ -114,6 +114,7 @@
             </div>
         </section>
 
+        <div class="cta-line"></div>
 
         <section class="map">
             <div class="container">
@@ -154,6 +155,14 @@
                     434 37 Kungsbacka<br/>
                     <a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a>
                 </p>
+                <div class="credit-rating">
+                    <img src="KV.svg" alt="Kreditvärdighet" class="credit-logo"/>
+                    <div class="credit-text">
+                        <div class="credit-title">HÖGSTA KREDITVÄRDIGHET</div>
+                        <div class="credit-company">Henricssons Båtkapell AB</div>
+                        <div class="credit-details">556799-2192 | 2025-11-25</div>
+                    </div>
+                </div>
             </div>
         </div>
     </footer>
@@ -171,32 +180,72 @@
                 $btn.prop('disabled',true).text('Skickar...');
 
                 const formData=$form.serializeArray();
-                const data={
-                  title:$form.data('subject')||'Kontakt',
-                  name:'Henricssons Båtkapell'
-                };
-                const lines=[];
+                const fields = {};
                 formData.forEach(item=>{
-                  const label=item.name.replace(/^\d+\.\s*/, '');
-                  let value = item.value;
-                  if(item.name.toLowerCase().includes('e-post')) {
-                    data.email = value;
-                    value = `<a href="mailto:${value}">${value}</a>`;
-                  }
-                  lines.push(`<strong>${label}</strong><br>${value}`);
+                    const label=item.name.replace(/^\d+\.\s*/, '');
+                    fields[label] = item.value;
                 });
-                if(!data.email){data.email='info@henricssonsbatkapell.se';}
-                data.message=lines.join('<br><br>');
 
-                emailjs.send('service_1u5gpw4','template_iijd5v4',data)
-                  .then(()=>{
-                    $btn.remove();
-                    $form.find('.w-form-done').show();
-                  })
-                  .catch(err=>{
-                    alert('Kunde inte skicka meddelandet: '+err.text);
+                // Send to new API endpoint
+                const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1' 
+                    ? `http://localhost:${location.port || '8001'}` 
+                    : 'https://henricssons-api.onrender.com';
+
+                fetch(`${API_BASE}/api/submit_form`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        form_type: $form.data('subject') || 'Kontakt',
+                        fields: fields
+                    })
+                })
+                .then(r => {
+                    if (!r.ok) {
+                        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+                    }
+                    return r.json();
+                })
+                .then(result => {
+                    if (result.success) {
+                        // Also send email via EmailJS (only if API succeeded)
+                        const email = fields['E-postadress'] || fields['2. E-postadress'] || 'info@henricssonsbatkapell.se';
+                        const data = {
+                            title: $form.data('subject') || 'Kontakt',
+                            name: 'Henricssons Båtkapell',
+                            email: email
+                        };
+                        const lines = [];
+                        Object.keys(fields).forEach(key => {
+                            let value = fields[key];
+                            if (key.toLowerCase().includes('e-post')) {
+                                value = `<a href="mailto:${value}">${value}</a>`;
+                            }
+                            lines.push(`<strong>${key}</strong><br>${value}`);
+                        });
+                        data.message = lines.join('<br><br>');
+
+                        emailjs.send('service_1u5gpw4','template_iijd5v4',data)
+                            .then(() => {
+                                $btn.remove();
+                                $form.find('.w-form-done').show();
+                            })
+                            .catch((emailErr) => {
+                                // Even if email fails, form is saved in admin
+                                console.warn('EmailJS failed, but form was saved:', emailErr);
+                                $btn.remove();
+                                $form.find('.w-form-done').show();
+                            });
+                    } else {
+                        throw new Error(result.error || 'Kunde inte spara formulär');
+                    }
+                })
+                .catch(err => {
+                    console.error('Form submission error:', err);
+                    alert('Kunde inte skicka meddelandet: ' + (err.message || err));
                     $btn.prop('disabled',false).text('Skicka meddelande');
-                  });
+                });
             });
         });
 

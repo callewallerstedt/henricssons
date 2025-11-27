@@ -60,10 +60,12 @@
             </div>
             <div class="announcement-animated">
                 <section class="announcement">
-                    <div class="announcement-content">
-                        <h3>Ny lokal i Kungsbacka</h3>
-                        <p>Vi har flyttat till större lokaler i Varla industriområde. Vill du besöka oss? Kontakta oss i förväg så vi säkert är på plats och kan hjälpa dig på bästa sätt.</p>
-                        <p>Vi har kapell på lager till många modeller från VA-Varuste, MP-Venekuomu och Hansen Protection.</p>
+                    <div class="announcement-content" id="announcement-content">
+                        <div id="announcement-text">
+                            <h3>Ny lokal i Kungsbacka</h3>
+                            <p>Vi har flyttat till större lokaler i Varla industriområde. Vill du besöka oss? Kontakta oss i förväg så vi säkert är på plats och kan hjälpa dig på bästa sätt.</p>
+                            <p>Vi har kapell på lager till många modeller från VA-Varuste, MP-Venekuomu och Hansen Protection.</p>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -172,6 +174,119 @@
         </div>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
     <script src="script.js"></script>
+    <script>
+        // Markdown parser with better fallback
+        function parseMarkdown(md) {
+            if (!md || typeof md !== 'string') return '';
+            
+            // Try to use marked.js if available
+            if (typeof marked !== 'undefined' && marked.parse) {
+                try {
+                    // Configure marked to use breaks for single newlines
+                    if (marked.setOptions) {
+                        marked.setOptions({ breaks: true });
+                    }
+                    const result = marked.parse(md);
+                    console.log('Using marked.js for parsing');
+                    return result;
+                } catch(e) {
+                    console.warn('marked.js parse error, using fallback:', e);
+                }
+            } else {
+                console.log('marked.js not available, using fallback parser');
+            }
+            
+            // Fallback parser - handle markdown syntax
+            let html = md;
+            
+            // Process headings first (must be at start of line, before other processing)
+            // Handle headings with or without space after #
+            html = html.replace(/^###\s*(.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^##\s*(.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^#\s*(.+)$/gm, '<h1>$1</h1>');
+            
+            // Bold and italic
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            
+            // Process line by line to handle paragraphs
+            // Single newlines = line breaks, double newlines = new paragraph
+            const lines = html.split('\n');
+            const result = [];
+            let currentParagraph = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+                
+                if (!trimmed) {
+                    // Empty line - close current paragraph if any (creates new paragraph)
+                    if (currentParagraph.length > 0) {
+                        result.push('<p>' + currentParagraph.join('<br>') + '</p>');
+                        currentParagraph = [];
+                    }
+                } else if (trimmed.startsWith('<h')) {
+                    // Heading - close paragraph first, then add heading
+                    if (currentParagraph.length > 0) {
+                        result.push('<p>' + currentParagraph.join('<br>') + '</p>');
+                        currentParagraph = [];
+                    }
+                    result.push(trimmed);
+                } else {
+                    // Regular text - add to current paragraph (will be joined with <br>)
+                    currentParagraph.push(trimmed);
+                }
+            }
+            
+            // Close any remaining paragraph
+            if (currentParagraph.length > 0) {
+                result.push('<p>' + currentParagraph.join('<br>') + '</p>');
+            }
+            
+            return result.join('');
+        }
+        
+        // Load announcement text dynamically
+        function loadAnnouncementContent() {
+            const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1' 
+                ? `http://localhost:${location.port || '8001'}` 
+                : 'https://henricssons-api.onrender.com';
+            
+            fetch(`${API_BASE}/api/page_texts`)
+                .then(r => {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(data => {
+                    console.log('Received data:', data);
+                    if (data && data.announcement && data.announcement.text) {
+                        const textEl = document.getElementById('announcement-text');
+                        if (textEl) {
+                            // Render markdown to HTML
+                            const html = parseMarkdown(data.announcement.text);
+                            console.log('Rendered HTML:', html);
+                            textEl.innerHTML = html;
+                        } else {
+                            console.error('announcement-text element not found');
+                        }
+                    } else {
+                        console.log('No announcement text in data');
+                    }
+                })
+                .catch(err => {
+                    console.log('Could not load announcement text from API, using default:', err);
+                    // Use default content if API fails
+                });
+        }
+        
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadAnnouncementContent);
+        } else {
+            loadAnnouncementContent();
+        }
+    </script>
 </body>
 </html> 

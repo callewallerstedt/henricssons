@@ -42,6 +42,7 @@ let statusItems = {
     'i-produktion': [],
     'redo-for-leverans': []
 };
+let nyaInskickSortOrder = 'newest'; // 'newest' or 'oldest'
 let chatbotPrompt = 'Du är en hjälpsam assistent för Henricssons Båtkapell. Du hjälper till med frågor om båtkapell, beställningar och allmän service.';
 let currentEditingItem = null;
 
@@ -423,15 +424,32 @@ function switchTab(tab){
     if(tab==='dashboard'){
         $('#dashboard-section').addClass('active');
         $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
         initDashboard();
+    } else if(tab==='texts'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
+        $('#texts-section').addClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        loadAnnouncementText();
+        loadFormPrompts(); // Load form prompts when opening texts tab
+        // Set up real-time preview update
+        $('#announcement-text').off('input keyup').on('input keyup', function() {
+            updateAnnouncementPreview();
+        });
     } else if(tab==='calendar'){
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').addClass('active');
+        $('#texts-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('.quicksearch').hide();
@@ -744,6 +762,12 @@ function bindSetThumbnail(){
 function initDashboard() {
     initChatbot();
     loadStatusItems();
+    // Load sort order and update button
+    const savedSort = localStorage.getItem('nyaInskickSortOrder');
+    if (savedSort) {
+        nyaInskickSortOrder = savedSort;
+    }
+    updateSortButton();
     loadChatbotPrompt();
 }
 
@@ -957,7 +981,78 @@ function loadStatusItems() {
     } catch(e) {
         console.error('Kunde inte ladda status items', e);
     }
+    
+    // Load form submissions from API
+    fetch(`${API_BASE}/api/get_form_submissions`)
+        .then(r => r.json())
+        .then(submissions => {
+            if (Array.isArray(submissions)) {
+                // Convert form submissions to status items format
+                submissions.forEach(submission => {
+                    if (submission.status === 'nya-inskick' && !submission.read) {
+                        // Check if this submission already exists
+                        const exists = statusItems['nya-inskick'].some(item => item.form_id === submission.id);
+                        if (!exists) {
+                            statusItems['nya-inskick'].push({
+                                form_id: submission.id,
+                                title: submission.title,
+                                description: submission.form_summary,
+                                date: submission.timestamp,
+                                category: submission.category,
+                                form_type: submission.form_type,
+                                fields: submission.fields,
+                                proposed_response: submission.proposed_response,
+                                is_form_submission: true
+                            });
+                        }
+                    }
+                });
+                // Sort by date (category sorting removed, only date sorting)
+                sortNyaInskick();
+                saveStatusItems();
+            }
+            renderStatusFolders();
+            updateSortButton();
+        })
+        .catch(err => {
+            console.error('Kunde inte ladda form submissions', err);
+            renderStatusFolders();
+            updateSortButton();
+        });
+}
+
+function sortNyaInskick() {
+    // Load sort order from localStorage
+    const savedSort = localStorage.getItem('nyaInskickSortOrder');
+    if (savedSort) {
+        nyaInskickSortOrder = savedSort;
+    }
+    
+    statusItems['nya-inskick'].sort((a, b) => {
+        const dateA = new Date(a.date || a.timestamp || 0);
+        const dateB = new Date(b.date || b.timestamp || 0);
+        
+        if (nyaInskickSortOrder === 'oldest') {
+            return dateA - dateB; // Oldest first
+        } else {
+            return dateB - dateA; // Newest first (default)
+        }
+    });
+}
+
+function toggleNyaInskickSort() {
+    nyaInskickSortOrder = nyaInskickSortOrder === 'newest' ? 'oldest' : 'newest';
+    localStorage.setItem('nyaInskickSortOrder', nyaInskickSortOrder);
+    sortNyaInskick();
     renderStatusFolders();
+    updateSortButton();
+}
+
+function updateSortButton() {
+    const btn = $('#nya-inskick-sort-btn');
+    if (btn.length) {
+        btn.text(nyaInskickSortOrder === 'newest' ? 'Nyaste först' : 'Äldsta först');
+    }
 }
 
 function saveStatusItems() {
@@ -981,8 +1076,47 @@ function renderStatusFolders() {
         folderDiv.empty();
         statusItems[status].forEach((item, index) => {
             const itemDiv = $('<div>').addClass('folder-item').attr('data-index', index);
+            if (item.is_form_submission) {
+                itemDiv.addClass('form-submission-item');
+            }
             const header = $('<div>').addClass('folder-item-header');
-            header.append($('<div>').addClass('folder-item-title').text(item.title || 'Ingen titel'));
+            const titleDiv = $('<div>').addClass('folder-item-title');
+            
+            // For form submissions, show simplified info
+            if (item.is_form_submission && item.fields) {
+                const formType = item.form_type || 'Formulär';
+                const manufacturer = item.fields['Tillverkare'] || item.fields['4. Tillverkare'] || '';
+                const model = item.fields['Modell'] || item.fields['5. Modell'] || '';
+                
+                // Build display text
+                let displayText = formType;
+                if (manufacturer || model) {
+                    const boatInfo = [manufacturer, model].filter(Boolean).join(' ');
+                    if (boatInfo) {
+                        displayText += ' - ' + boatInfo;
+                    }
+                }
+                titleDiv.text(displayText);
+                
+                // Add date and time for form submissions
+                if (item.date || item.timestamp) {
+                    const date = new Date(item.date || item.timestamp);
+                    if (!isNaN(date.getTime())) {
+                        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        const month = months[date.getMonth()];
+                        const day = date.getDate();
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const dateTimeDiv = $('<div>').addClass('folder-item-content').text(`${month} ${day} ${hours}:${minutes}`);
+                        itemDiv.append(dateTimeDiv);
+                    }
+                }
+            } else {
+                // For regular items, show title
+                titleDiv.text(item.title || 'Ingen titel');
+            }
+            
+            header.append(titleDiv);
             header.append($('<button>').addClass('folder-item-delete').text('×').on('click', function(e) {
                 e.stopPropagation();
                 if (confirm('Ta bort detta objekt?')) {
@@ -992,18 +1126,116 @@ function renderStatusFolders() {
                 }
             }));
             itemDiv.append(header);
-            if (item.description) {
-                itemDiv.append($('<div>').addClass('folder-item-content').text(item.description));
+            
+            // Don't show description or date for form submissions in the list
+            if (!item.is_form_submission) {
+                if (item.description) {
+                    const desc = $('<div>').addClass('folder-item-content');
+                    const shortDesc = item.description.length > 150 ? item.description.substring(0, 150) + '...' : item.description;
+                    desc.text(shortDesc);
+                    itemDiv.append(desc);
+                }
+                if (item.date) {
+                    itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + new Date(item.date).toLocaleDateString('sv-SE')));
+                }
             }
-            if (item.date) {
-                itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + new Date(item.date).toLocaleDateString('sv-SE')));
-            }
+            
             itemDiv.on('click', function() {
-                editStatusItem(status, index);
+                if (item.is_form_submission) {
+                    viewFormSubmission(status, index);
+                } else {
+                    editStatusItem(status, index);
+                }
             });
             folderDiv.append(itemDiv);
         });
     });
+    // Update sort button after rendering
+    updateSortButton();
+}
+
+function viewFormSubmission(status, index) {
+    const item = statusItems[status][index];
+    if (!item || !item.is_form_submission) return;
+    
+    // Mark as read
+    item.read = true;
+    saveStatusItems();
+    
+    // Create or update form submission modal
+    let modal = $('#form-submission-modal');
+    if (modal.length === 0) {
+        modal = $('<div>').attr('id', 'form-submission-modal').addClass('modal');
+        modal.html(`
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header">
+                    <h2 id="form-modal-title">Formulärinlägg</h2>
+                    <button class="modal-close">×</button>
+                </div>
+                <div class="modal-body" id="form-modal-body">
+                </div>
+            </div>
+        `);
+        $('body').append(modal);
+        modal.find('.modal-close').on('click', function(e) {
+            e.stopPropagation();
+            modal.removeClass('active');
+        });
+        modal.on('click', function(e) {
+            if (e.target === this) {
+                modal.removeClass('active');
+            }
+        });
+    }
+    
+    // Populate modal
+    $('#form-modal-title').text(item.title || 'Formulärinlägg');
+    const body = $('#form-modal-body');
+    body.empty();
+    
+    // Form details section
+    const formSection = $('<div>').addClass('form-section');
+    formSection.append($('<h3>').text('Formulärinformation'));
+    if (item.form_type) {
+        formSection.append($('<p>').html(`<strong>Typ:</strong> ${item.form_type}`));
+    }
+    if (item.category) {
+        formSection.append($('<p>').html(`<strong>Kategori:</strong> ${item.category}`));
+    }
+    if (item.date) {
+        formSection.append($('<p>').html(`<strong>Datum:</strong> ${new Date(item.date).toLocaleString('sv-SE')}`));
+    }
+    
+    // Form fields
+    if (item.fields) {
+        formSection.append($('<h4>').text('Formulärfält:'));
+        const fieldsList = $('<div>').addClass('form-fields');
+        Object.keys(item.fields).forEach(key => {
+            if (item.fields[key]) {
+                fieldsList.append($('<div>').addClass('form-field').html(`<strong>${key}:</strong> ${item.fields[key]}`));
+            }
+        });
+        formSection.append(fieldsList);
+    }
+    
+    body.append(formSection);
+    
+    // AI Proposed Response section
+    if (item.proposed_response) {
+        const responseSection = $('<div>').addClass('form-section');
+        responseSection.append($('<h3>').text('Föreslaget svar (AI-genererat)'));
+        const responseDiv = $('<div>').addClass('proposed-response');
+        // Use marked.js if available to render markdown
+        if (typeof marked !== 'undefined') {
+            responseDiv.html(marked.parse(item.proposed_response));
+        } else {
+            responseDiv.text(item.proposed_response);
+        }
+        responseSection.append(responseDiv);
+        body.append(responseSection);
+    }
+    
+    modal.addClass('active');
 }
 
 function editStatusItem(status, index) {
@@ -1064,6 +1296,8 @@ $(document).ready(function() {
         const prim = $(this).data('primary');
         if(prim==='dashboard'){
             switchTab('dashboard');
+        } else if(prim==='texts'){
+            switchTab('texts');
         } else if(prim==='calendar'){
             switchTab('calendar');
         } else if(prim==='boats'){
@@ -1173,6 +1407,199 @@ $(document).ready(function() {
         }
     });
 });
+
+// Markdown parser for preview (same as index.html)
+function parseMarkdownForPreview(md) {
+    if (!md || typeof md !== 'string') return '';
+    
+    // Try to use marked.js if available
+    if (typeof marked !== 'undefined' && marked.parse) {
+        try {
+            // Configure marked to use breaks for single newlines
+            if (marked.setOptions) {
+                marked.setOptions({ breaks: true });
+            }
+            return marked.parse(md);
+        } catch(e) {
+            console.warn('marked.js parse error, using fallback:', e);
+        }
+    }
+    
+    // Fallback parser - handle markdown syntax
+    let html = md;
+    
+    // Process headings first (must be at start of line, before other processing)
+    // Handle headings with or without space after #
+    html = html.replace(/^###\s*(.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^##\s*(.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^#\s*(.+)$/gm, '<h1>$1</h1>');
+    
+    // Bold and italic
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    
+    // Process line by line to handle paragraphs
+    // Single newlines = line breaks, double newlines = new paragraph
+    const lines = html.split('\n');
+    const result = [];
+    let currentParagraph = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        
+        if (!trimmed) {
+            // Empty line - close current paragraph if any (creates new paragraph)
+            if (currentParagraph.length > 0) {
+                result.push('<p>' + currentParagraph.join('<br>') + '</p>');
+                currentParagraph = [];
+            }
+        } else if (trimmed.startsWith('<h')) {
+            // Heading - close paragraph first, then add heading
+            if (currentParagraph.length > 0) {
+                result.push('<p>' + currentParagraph.join('<br>') + '</p>');
+                currentParagraph = [];
+            }
+            result.push(trimmed);
+        } else {
+            // Regular text - add to current paragraph (will be joined with <br>)
+            currentParagraph.push(trimmed);
+        }
+    }
+    
+    // Close any remaining paragraph
+    if (currentParagraph.length > 0) {
+        result.push('<p>' + currentParagraph.join('<br>') + '</p>');
+    }
+    
+    return result.join('');
+}
+
+// Update preview in real-time
+function updateAnnouncementPreview() {
+    const text = $('#announcement-text').val() || '';
+    const previewEl = $('#announcement-preview');
+    
+    if (!text.trim()) {
+        previewEl.html('<p style="color: #666; font-style: italic;">Förhandsvisning visas här när du skriver...</p>');
+        return;
+    }
+    
+    const html = parseMarkdownForPreview(text);
+    previewEl.html(html);
+}
+
+// Functions for editing announcement text
+function loadAnnouncementText() {
+    fetch(`${API_BASE}/api/page_texts`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.announcement) {
+                $('#announcement-text').val(data.announcement.text || '');
+                updateAnnouncementPreview(); // Update preview when loading
+            }
+        })
+        .catch(err => {
+            console.error('Error loading announcement text:', err);
+            // Load from current page if API fails (convert HTML back to markdown)
+            const textContainer = document.getElementById('announcement-text');
+            if (textContainer) {
+                // Get text content preserving structure
+                const text = textContainer.innerText || textContainer.textContent;
+                $('#announcement-text').val(text);
+                updateAnnouncementPreview();
+            }
+        });
+}
+
+function saveAnnouncementText() {
+    const text = $('#announcement-text').val().trim();
+    
+    if (!text) {
+        $('#announcement-edit-error').text('Text måste fyllas i.').show();
+        $('#announcement-edit-success').hide();
+        return;
+    }
+    
+    const data = {
+        announcement: {
+            text: text
+        }
+    };
+    
+    fetch(`${API_BASE}/api/page_texts`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            $('#announcement-edit-success').text('Text sparad! Kom ihåg att committa ändringarna till GitHub.').show();
+            $('#announcement-edit-error').hide();
+        } else {
+            $('#announcement-edit-error').text('Fel vid sparande: ' + (result.error || 'Okänt fel')).show();
+            $('#announcement-edit-success').hide();
+        }
+    })
+    .catch(err => {
+        $('#announcement-edit-error').text('Fel vid sparande: ' + err.message).show();
+        $('#announcement-edit-success').hide();
+    });
+}
+
+// Functions for editing form prompts
+function loadFormPrompts() {
+    fetch(`${API_BASE}/api/form_prompts`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.Kapellförfrågan) {
+                $('#prompt-kapell').val(data.Kapellförfrågan);
+            }
+            if (data.Fenderförfrågan) {
+                $('#prompt-fender').val(data.Fenderförfrågan);
+            }
+            if (data.Kontakt) {
+                $('#prompt-kontakt').val(data.Kontakt);
+            }
+        })
+        .catch(err => {
+            console.error('Error loading form prompts:', err);
+        });
+}
+
+function saveFormPrompts() {
+    const data = {
+        'Kapellförfrågan': $('#prompt-kapell').val(),
+        'Fenderförfrågan': $('#prompt-fender').val(),
+        'Kontakt': $('#prompt-kontakt').val()
+    };
+    
+    fetch(`${API_BASE}/api/form_prompts`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            $('#prompts-edit-success').text('Prompts sparade!').show();
+            $('#prompts-edit-error').hide();
+        } else {
+            $('#prompts-edit-error').text('Kunde inte spara prompts: ' + (res.error || 'Okänt fel')).show();
+            $('#prompts-edit-success').hide();
+        }
+    })
+    .catch(err => {
+        console.error('Error saving form prompts:', err);
+        $('#prompts-edit-error').text('Nätverksfel vid sparning.').show();
+        $('#prompts-edit-success').hide();
+    });
+}
 
 // Debounce-funktion
 function debounce(fn, threshold) {
