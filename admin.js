@@ -9,14 +9,99 @@ let $grid1, $grid2;
 // Lägg in omedelbart efter globala variabler
 // Auto-detect API base URL based on current location
 let API_BASE;
-if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    // Use current port from the page URL, or default to 25565
-    const port = location.port || '25565';
-    API_BASE = `${location.protocol}//${location.hostname}:${port}`;
-} else {
-    API_BASE = 'https://henricssons-api.onrender.com';
-}
+API_BASE = `${location.protocol}//${location.host}`;
 console.log('API_BASE initialized to:', API_BASE, 'from location:', location.href);
+
+let ADMIN_API_KEY = localStorage.getItem('adminApiKey') || '';
+const STATUS_FLOW = ['nya-inskick', 'vantar-pa-svar', 'i-produktion', 'redo-for-leverans'];
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function sanitizeHtml(html) {
+    if (window.DOMPurify) {
+        return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    }
+    return escapeHtml(html);
+}
+
+async function adminFetch(url, options = {}) {
+    const opts = { ...options };
+    opts.headers = { ...(options.headers || {}) };
+    if (ADMIN_API_KEY) {
+        opts.headers['X-Admin-Key'] = ADMIN_API_KEY;
+    }
+    let response = await fetch(url, opts);
+    if ((response.status === 401 || response.status === 403) && !ADMIN_API_KEY) {
+        const entered = window.prompt('Ange admin-nyckel');
+        if (entered) {
+            ADMIN_API_KEY = entered.trim();
+            localStorage.setItem('adminApiKey', ADMIN_API_KEY);
+            opts.headers['X-Admin-Key'] = ADMIN_API_KEY;
+            response = await fetch(url, opts);
+        }
+    }
+    return response;
+}
+
+async function updateSubmissionStatusOnServer(item, status, readFlag) {
+    if (!item || !item.is_form_submission || !item.form_id) return true;
+    try {
+        const payload = { id: item.form_id };
+        if (status) payload.status = status;
+        if (typeof readFlag === 'boolean') payload.read = readFlag;
+        const res = await adminFetch(`${API_BASE}/api/update_submission_status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        return res.ok;
+    } catch (_) {
+        return false;
+    }
+}
+
+async function deleteSubmissionOnServer(item) {
+    if (!item || !item.is_form_submission || !item.form_id) return false;
+    try {
+        const res = await adminFetch(`${API_BASE}/api/delete_submission`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: item.form_id })
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        return Boolean(data && data.success);
+    } catch (_) {
+        return false;
+    }
+}
+
+function removeSubmissionFromAllStatuses(formId) {
+    if (!formId) return false;
+    let removed = false;
+    Object.keys(statusItems).forEach(status => {
+        const list = statusItems[status] || [];
+        const idx = list.findIndex(item => item && item.form_id === formId);
+        if (idx >= 0) {
+            list.splice(idx, 1);
+            removed = true;
+        }
+    });
+    return removed;
+}
+
+function getNextStatus(status) {
+    const idx = STATUS_FLOW.indexOf(status);
+    if (idx < 0 || idx === STATUS_FLOW.length - 1) return null;
+    return STATUS_FLOW[idx + 1];
+}
 
 // ----------------------------- Tab & Extras logic -----------------------------
 const extrasCategories = {
@@ -43,8 +128,70 @@ let statusItems = {
     'redo-for-leverans': []
 };
 let nyaInskickSortOrder = 'newest'; // 'newest' or 'oldest'
+let currentFormFilter = 'all'; // 'all', 'Kapellförfrågan', 'Fenderförfrågan', 'Kontakt'
 let chatbotPrompt = 'Du är en hjälpsam assistent för Henricssons Båtkapell. Du hjälper till med frågor om båtkapell, beställningar och allmän service.';
 let currentEditingItem = null;
+function getAdvancedGreeting(language = 'sv') {
+    return language === 'en'
+        ? 'Hello! What do you need help with today?'
+        : 'Hej! Vad behöver du hjälp med idag?';
+}
+
+function createAdvancedChatState(language = 'sv') {
+    return {
+        intent: '',
+        draft: {},
+        readyToSubmit: false,
+        needsConfirmation: false,
+        summary: '',
+        confirmed: false,
+        language,
+        isTyping: false,
+        isSubmitting: false,
+        history: [{ role: 'assistant', content: getAdvancedGreeting(language) }]
+    };
+}
+
+const ADVANCED_SUMMARY_FIELD_ORDER = {
+    Kapellforfragan: ['name', 'phone', 'email', 'manufacturer', 'model', 'boat_year', 'home_port', 'old_canopy', 'message'],
+    Fenderforfragan: ['name', 'phone', 'email', 'address', 'quantity', 'size'],
+    Kontakt: ['name', 'email', 'phone', 'subject', 'message']
+};
+
+const ADVANCED_SUMMARY_FIELD_LABELS = {
+    sv: {
+        name: 'Namn',
+        phone: 'Telefonnummer',
+        email: 'E-postadress',
+        manufacturer: 'Tillverkare',
+        model: 'Modell',
+        boat_year: 'Arsmodell',
+        home_port: 'Hemmahamn',
+        old_canopy: 'Tillverkare av befintligt kapell',
+        message: 'Meddelande',
+        quantity: 'Antal',
+        size: 'Storlek',
+        address: 'Adress',
+        subject: 'Amne'
+    },
+    en: {
+        name: 'Name',
+        phone: 'Phone number',
+        email: 'Email',
+        manufacturer: 'Manufacturer',
+        model: 'Model',
+        boat_year: 'Year model',
+        home_port: 'Home port',
+        old_canopy: 'Current canopy manufacturer',
+        message: 'Message',
+        quantity: 'Quantity',
+        size: 'Size',
+        address: 'Address',
+        subject: 'Subject'
+    }
+};
+
+let advancedChatState = createAdvancedChatState('sv');
 
 // -----------------------------
 // UNSAVED INDICATOR
@@ -80,7 +227,7 @@ function fetchManufacturers() {
             buildGrids();
         })
         .catch(err => {
-            console.warn('Kunde inte hämta boat_data.json från API – använder ev. localStorage', err);
+            console.warn('Kunde inte hämta boat_data.json från API ? använder ev. localStorage', err);
             try {
                 const stored = localStorage.getItem('boatData');
                 if(stored){ manufacturers = JSON.parse(stored); }
@@ -90,10 +237,20 @@ function fetchManufacturers() {
 }
 
 function fetchExtras() {
+    console.log('fetchExtras() called');
     // Ladda allt direkt från models_meta.json och mappa till extrasData-strukturen
-    return fetch(`${API_BASE}/henricssons_bilder/models_meta.json?v=${Date.now()}`)
-        .then(r => r.json())
+    const url = `${API_BASE}/henricssons_bilder/models_meta.json?v=${Date.now()}`;
+    console.log('Fetching extras from:', url);
+    return fetch(url)
+        .then(r => {
+            console.log('Fetch response status:', r.status);
+            if (!r.ok) {
+                throw new Error('HTTP error! status: ' + r.status);
+            }
+            return r.json();
+        })
         .then(meta => {
+            console.log('Fetched meta data, entries:', Object.keys(meta).length);
             // Initiera tomma listor per kategori
             extrasData = {
                 all: [],
@@ -140,9 +297,11 @@ function fetchExtras() {
                 extrasData.special,
                 extrasData.sunbrella
             );
+            console.log('Extras data processed successfully. Total items:', extrasData.all.length);
         })
         .catch(err => {
             console.error('Could not load models_meta.json', err);
+            console.error('Error details:', err.message);
             extrasData = {};
         });
 }
@@ -173,7 +332,7 @@ function buildGrids() {
         });
     }
     $grid1 = grid1.isotope({ itemSelector: '.grid1-item', layoutMode: 'fitRows', filter: '*' });
-    // Ingen Isotope på grid2 – vi behåller vanlig flex-layout så redigeringsrutan inte överlappas
+    // Ingen Isotope på grid2 ? vi behåller vanlig flex-layout så redigeringsrutan inte överlappas
     bindGridEvents();
 }
 
@@ -226,15 +385,16 @@ function showEditSection() {
         $('#edit-section').html('<h2>Redigering</h2><p>Välj en tillverkare för att börja.</p>').hide();
     }
 
-    // Ingen automatisk scroll på mobil – låt användaren bläddra själv för att undvika glitch
+    // Ingen automatisk scroll på mobil ? låt användaren bläddra själv för att undvika glitch
 }
 
 function showManufacturerEdit() {
     const manu = manufacturers[selectedManufacturerKey];
+    const safeManufacturerName = escapeHtml(manu.name || '');
     $('#edit-section').html(`
         <h2>Redigera tillverkare</h2>
         <label>Tillverkarnamn</label>
-        <input type="text" id="edit-manu-name" value="${manu.name}" />
+        <input type="text" id="edit-manu-name" value="${safeManufacturerName}" />
         <button class="btn" id="save-manu-btn">Spara</button>
         <button class="btn btn-danger" id="delete-manu-btn">Ta bort</button>
         <button class="btn btn-secondary" id="cancel-manu-btn">Avbryt</button>
@@ -284,12 +444,13 @@ function showModelEdit() {
     const manu = manufacturers[selectedManufacturerKey];
     const modelObj = manu.models[selectedModelIndex];
     const modelName = getModelName(modelObj);
+    const safeModelName = escapeHtml(modelName || '');
     ensureModelObject(selectedModelIndex);
     
     $('#edit-section').html(`
         <h2>Redigera modell</h2>
         <label>Modellnamn</label>
-        <input type="text" id="edit-model-name" value="${modelName}" />
+        <input type="text" id="edit-model-name" value="${safeModelName}" />
         <button class="btn" id="save-model-btn">Spara</button>
         <button class="btn btn-danger" id="delete-model-btn">Ta bort</button>
         <button class="btn btn-secondary" id="cancel-model-btn">Avbryt</button>
@@ -333,37 +494,42 @@ function showModelEdit() {
 }
 
 function showEditMsg(msg, type) {
-    $('#edit-msg').html(`<div class="${type}">${msg}</div>`);
+    $('#edit-msg').empty().append($('<div>').addClass(type).text(msg));
     setTimeout(() => { $('#edit-msg').empty(); }, 2000);
 }
 
 function pushFullDataset(cb) {
     // Spara i localStorage och skicka till server
-    try { 
-        localStorage.setItem('boatData', JSON.stringify(manufacturers)); 
-        
+    try {
+        localStorage.setItem('boatData', JSON.stringify(manufacturers));
+
         // Skicka till Python-server
-        fetch(`${API_BASE}/api/save_boatdata`, {
+        adminFetch(`${API_BASE}/api/save_boatdata`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(manufacturers)
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
+        })
         .then(data => {
             if (!data.success) {
-                showEditMsg('Kunde inte spara till fil: ' + (data.error || 'Okänt fel'), 'error');
+                showEditMsg('Kunde inte spara till fil: ' + (data.error || 'Okant fel'), 'error');
             }
+            cb && cb();
         })
-        .catch(error => {
-            showEditMsg('Kunde inte ansluta till server. Kör admin_server.py i en separat terminal.', 'error');
+        .catch(() => {
+            showEditMsg('Kunde inte ansluta till server. Kontrollera admin-nyckel och server.', 'error');
+            cb && cb();
         });
-        
-    } catch(e){
+
+    } catch (e) {
         showEditMsg('Kunde inte spara', 'error');
+        cb && cb();
     }
-    cb && cb();
 }
 
 function saveManufacturer(key, manu, cb) {
@@ -425,6 +591,7 @@ function switchTab(tab){
         $('#dashboard-section').addClass('active');
         $('#calendar-section').removeClass('active');
         $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('.quicksearch').hide();
@@ -435,21 +602,34 @@ function switchTab(tab){
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').removeClass('active');
         $('#texts-section').addClass('active');
+        $('#advanced-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
         loadAnnouncementText();
-        loadFormPrompts(); // Load form prompts when opening texts tab
         // Set up real-time preview update
         $('#announcement-text').off('input keyup').on('input keyup', function() {
             updateAnnouncementPreview();
         });
+    } else if(tab==='advanced'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
+        $('#advanced-section').addClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        loadAiSettings();
+        initAdvancedTestChat();
     } else if(tab==='calendar'){
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').addClass('active');
         $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('.quicksearch').hide();
@@ -459,6 +639,8 @@ function switchTab(tab){
     } else if(tab==='boats'){
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
         $('#boats-section').show();
         $('#extras-section').hide();
         $('.quicksearch').show();
@@ -473,6 +655,8 @@ function switchTab(tab){
     } else {
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').show();
         $('.quicksearch').hide();
@@ -508,7 +692,8 @@ function buildExtrasList(){
         const isSelected = idx===selectedExtraIndex && (activeExtrasKey==='all'?cat===editExtrasCat:cat===activeExtrasKey);
         const inactiveCls = obj.published===false ? 'inactive' : '';
         const noImagesCls = (!obj.images || obj.images.length === 0) ? 'no-images' : '';
-        const div = $(`<div class="extras-item ${inactiveCls} ${noImagesCls} ${isSelected?'selected-e':''}" data-index="${idx}" data-cat="${cat}" data-search="${searchStr}"><span class="extra-name">${obj.name||'–'}</span></div>`);
+        const safeName = escapeHtml(obj.name || '-');
+        const div = $(`<div class="extras-item ${inactiveCls} ${noImagesCls} ${isSelected?'selected-e':''}" data-index="${idx}" data-cat="${cat}" data-search="${searchStr}"><span class="extra-name">${safeName}</span></div>`);
         list.append(div);
     });
 
@@ -552,27 +737,33 @@ function showExtrasEdit() {
     
     const catKey = activeExtrasKey === 'all' ? editExtrasCat : activeExtrasKey;
     const obj = extrasData[catKey][selectedExtraIndex];
+    const safeName = escapeHtml(obj.name||'');
+    const safeManufacturer = escapeHtml(obj.manufacturer||'');
+    const safeModel = escapeHtml(obj.model||'');
+    const safeVariant = escapeHtml(obj.variant||'');
+    const safeDescription = escapeHtml(obj.description||'');
+    const safeDelivery = escapeHtml(obj.delivery||'');
     $('#extras-edit-section').html(`
         <h2>Redigera post</h2>
         <label>Namn</label>
-        <input type="text" id="extra-name" value="${obj.name||''}" />
+        <input type="text" id="extra-name" value="${safeName}" />
         <div style="display:flex;flex-direction:column;gap:0rem;"> 
             <span style="color:#0a2342;font-weight:bold;">Publicerad</span>
             <label class="switch" style="align-self:flex-start;"><input type="checkbox" id="extra-published" ${obj.published!==false?'checked':''}><span class="slider"></span></label>
         </div>
         <label>Tillverkare</label>
-        <input type="text" id="extra-manu" value="${obj.manufacturer||''}" />
+        <input type="text" id="extra-manu" value="${safeManufacturer}" />
         <label>Modell</label>
-        <input type="text" id="extra-model" value="${obj.model||''}" />
+        <input type="text" id="extra-model" value="${safeModel}" />
         <label>Variant</label>
-        <input type="text" id="extra-variant" value="${obj.variant||''}" />
+        <input type="text" id="extra-variant" value="${safeVariant}" />
         <label>Beskrivning</label>
-        <textarea id="extra-desc" rows="3">${obj.description||''}</textarea>
+        <textarea id="extra-desc" rows="3">${safeDescription}</textarea>
         <label>Leveransinfo</label>
-        <textarea id="extra-delivery" rows="2">${obj.delivery||''}</textarea>
+        <textarea id="extra-delivery" rows="2">${safeDelivery}</textarea>
         <label>Bilder</label>
         <div id="extra-images-list" class="img-thumb-list">
-            ${(obj.images||[]).map((img,idx)=>`<div class="img-thumb" data-idx="${idx}" style="${idx===0?'border:2px solid #28a745;':''}"><img src="${img}" alt=""/><button class="set-thumb-btn" title="Gör thumbnail" data-idx="${idx}" style="background:#28a745;color:#fff;position:absolute;top:2px;left:2px;border:none;border-radius:3px;padding:0 4px;cursor:pointer;">★</button><button class="del-img-btn" data-idx="${idx}" style="position:absolute;top:2px;right:2px;">&times;</button></div>`).join('')}
+            ${(obj.images||[]).map((img,idx)=>`<div class="img-thumb" data-idx="${idx}" style="${idx===0?'border:2px solid #28a745;':''}"><img src="${escapeHtml(img)}" alt=""/><button class="set-thumb-btn" title="Gör thumbnail" data-idx="${idx}" style="background:#28a745;color:#fff;position:absolute;top:2px;left:2px;border:none;border-radius:3px;padding:0 4px;cursor:pointer;">★</button><button class="del-img-btn" data-idx="${idx}" style="position:absolute;top:2px;right:2px;">&times;</button></div>`).join('')}
         </div>
         <input type="file" id="upload-extra-img" accept="image/*" />
         <button class="btn" id="save-extra-btn">Spara</button>
@@ -581,7 +772,10 @@ function showExtrasEdit() {
         <div id="extras-msg"></div>
     `);
 
-    function extrasMsg(t, cls){ $('#extras-msg').html(`<div class="${cls}">${t}</div>`); setTimeout(()=>$('#extras-msg').empty(),2000); }
+    function extrasMsg(t, cls){
+        $('#extras-msg').empty().append($('<div>').addClass(cls).text(t));
+        setTimeout(()=>$('#extras-msg').empty(),2000);
+    }
 
     // Reset unsaved indicator and bind change
     setUnsaved('extras', false);
@@ -608,8 +802,8 @@ function showExtrasEdit() {
             setUnsaved('extras', false);
             // Uppdatera endast listans synlighet och namn utan att förstöra selektionen
             const updatedObj = extrasData[catKey][selectedExtraIndex];
-            $(`.extras-item.selected-e .extra-name`).text(updatedObj.name || '–');
-            // Behåll formuläret som det är – användaren ser sina ändringar direkt
+            $(`.extras-item.selected-e .extra-name`).text(updatedObj.name || '?');
+            // Behåll formuläret som det är ? användaren ser sina ändringar direkt
         });
     });
     $('#delete-extra-btn').on('click', function(){
@@ -645,7 +839,7 @@ function showExtrasEdit() {
             const fileName = `${slug}_${String(nextIdx).padStart(2,'0')}.${fileExt}`;
             const relPath = `${folder}/${slug}/${fileName}`;
 
-            fetch(`${API_BASE}/api/upload_image`, {
+            adminFetch(`${API_BASE}/api/upload_image`, {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({data:e.target.result, rel_path:relPath})
@@ -693,7 +887,7 @@ function saveExtras(cb){
         arr.forEach(obj => {
             const slug = obj.slug || (obj.name||'').toLowerCase().replace(/[^a-z0-9]+/gi,'-').replace(/(^-|-$)/g,'');
             const relImgs = (obj.images||[]).map(p => {
-                if(p.startsWith('data:')) return p; // behåll inline
+                if(p.startsWith('data:')) return p;
                 return p.replace(/^henricssons_bilder\//,'').replace(/\//g,'\\');
             });
             newMeta[slug] = {
@@ -710,30 +904,30 @@ function saveExtras(cb){
         });
     });
 
-    // Skicka till Python-server
-    fetch(`${API_BASE}/api/save_models_meta`, {
+    adminFetch(`${API_BASE}/api/save_models_meta`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(newMeta)
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             showEditMsg('Extras sparade!', 'success');
             setUnsaved('extras', false);
-            // Ingen ombyggnad av listan behövs – lokala ändringar är redan gjorda.
-            // selectedExtraIndex och editExtrasCat behålls som de är.
         } else {
-            showEditMsg('Kunde inte spara till fil: ' + (data.error || 'Okänt fel'), 'error');
+            showEditMsg('Kunde inte spara till fil: ' + (data.error || 'Okant fel'), 'error');
         }
+        cb && cb();
     })
-    .catch(error => {
-        showEditMsg('Kunde inte ansluta till server. Kör admin_server.py i en separat terminal.', 'error');
+    .catch(() => {
+        showEditMsg('Kunde inte ansluta till server. Kontrollera admin-nyckel och server.', 'error');
+        cb && cb();
     });
-    
-    cb && cb();
 }
 
 function bindExtraImageDelete(){
@@ -742,7 +936,11 @@ function bindExtraImageDelete(){
         if(!confirm('Ta bort denna bild?')) return;
         const catKey = activeExtrasKey==='all' ? (editExtrasCat||'motorboats') : activeExtrasKey;
         extrasData[catKey][selectedExtraIndex].images.splice(imgIdx,1);
-        saveExtras(()=>{ $('#extras-msg').html('<div class="success">Bild borttagen</div>'); setTimeout(()=>$('#extras-msg').empty(),2000); showExtrasEdit(); });
+        saveExtras(()=>{
+            $('#extras-msg').empty().append($('<div>').addClass('success').text('Bild borttagen'));
+            setTimeout(()=>$('#extras-msg').empty(),2000);
+            showExtrasEdit();
+        });
     });
 }
 
@@ -754,7 +952,11 @@ function bindSetThumbnail(){
         const imgs = extrasData[catKey][selectedExtraIndex].images;
         const [chosen] = imgs.splice(imgIdx,1);
         imgs.unshift(chosen);
-        saveExtras(()=>{ $('#extras-msg').html('<div class="success">Thumbnail uppdaterad</div>'); setTimeout(()=>$('#extras-msg').empty(),2000); showExtrasEdit(); });
+        saveExtras(()=>{
+            $('#extras-msg').empty().append($('<div>').addClass('success').text('Thumbnail uppdaterad'));
+            setTimeout(()=>$('#extras-msg').empty(),2000);
+            showExtrasEdit();
+        });
     });
 }
 
@@ -769,6 +971,7 @@ function initDashboard() {
     }
     updateSortButton();
     loadChatbotPrompt();
+    initFormFilters();
 }
 
 function initCalendar() {
@@ -826,6 +1029,21 @@ function getStatusColor(status) {
     return colors[status] || '#666';
 }
 
+function initFormFilters() {
+    $('.form-filter-btn').off('click').on('click', function() {
+        $('.form-filter-btn').removeClass('active').css({
+            'background': 'white',
+            'color': '#1976d2'
+        });
+        $(this).addClass('active').css({
+            'background': '#1976d2',
+            'color': 'white'
+        });
+        currentFormFilter = $(this).data('filter');
+        renderStatusFolders();
+    });
+}
+
 function initChatbot() {
     $('#chatbot-send-btn').off('click').on('click', sendChatMessage);
     $('#chatbot-input').off('keypress').on('keypress', function(e) {
@@ -833,10 +1051,6 @@ function initChatbot() {
             sendChatMessage();
         }
     });
-    $('#chatbot-settings-btn').off('click').on('click', function() {
-        $('#chatbot-settings').toggle();
-    });
-    $('#save-prompt-btn').off('click').on('click', saveChatbotPrompt);
 }
 
 function sendChatMessage() {
@@ -858,7 +1072,7 @@ function sendChatMessage() {
     console.log('Chat URL:', chatUrl);
     
     // Call OpenAI API
-    fetch(chatUrl, {
+    adminFetch(chatUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -899,11 +1113,11 @@ function addChatMessage(role, text, id) {
     if (role === 'assistant' && typeof marked !== 'undefined') {
         // Use marked.js to render markdown to HTML
         const html = marked.parse(text);
-        textDiv.html(html);
+        textDiv.html(sanitizeHtml(html));
     } else if (role === 'assistant') {
         // Fallback: simple markdown parsing if marked.js not available
         const html = simpleMarkdownToHtml(text);
-        textDiv.html(html);
+        textDiv.html(sanitizeHtml(html));
     } else {
         // User messages: escape HTML for security
         textDiv.text(text);
@@ -919,7 +1133,7 @@ function addChatMessage(role, text, id) {
 function simpleMarkdownToHtml(text) {
     if (!text) return '';
     
-    let html = text;
+    let html = escapeHtml(text);
     
     // Convert **bold** to <strong>bold</strong>
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -951,71 +1165,361 @@ function simpleMarkdownToHtml(text) {
 }
 
 function loadChatbotPrompt() {
-    try {
-        const saved = localStorage.getItem('chatbotPrompt');
-        if (saved) {
-            chatbotPrompt = saved;
-            $('#chatbot-prompt').val(chatbotPrompt);
+    return loadAiSettings();
+}
+
+function bindAdvancedSettings() {
+    $('#save-ai-settings-btn').off('click').on('click', saveAiSettings);
+    $('#reload-ai-settings-btn').off('click').on('click', loadAiSettings);
+}
+
+function loadAiSettings() {
+    return adminFetch(`${API_BASE}/api/ai_settings`)
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(data => {
+            if (data && typeof data === 'object') {
+                chatbotPrompt = String(data.admin_chat_prompt || chatbotPrompt);
+                $('#admin-chatbot-prompt').val(chatbotPrompt);
+                $('#assistant-system-prompt').val(String(data.assistant_system_prompt || ''));
+
+                const formPrompts = data.form_prompts || {};
+                $('#prompt-kapell').val(String(formPrompts['Kapellförfrågan'] || ''));
+                $('#prompt-fender').val(String(formPrompts['Fenderförfrågan'] || ''));
+                $('#prompt-kontakt').val(String(formPrompts['Kontakt'] || ''));
+            }
+        })
+        .catch(err => {
+            console.error('Kunde inte ladda AI-inställningar', err);
+            $('#prompts-edit-error').text('Kunde inte ladda AI-inställningar: ' + err.message).show();
+            $('#prompts-edit-success').hide();
+        });
+}
+
+function saveAiSettings() {
+    const nextChatPrompt = ($('#admin-chatbot-prompt').val() || '').trim();
+    const payload = {
+        admin_chat_prompt: nextChatPrompt || chatbotPrompt,
+        assistant_system_prompt: ($('#assistant-system-prompt').val() || '').trim(),
+        form_prompts: {
+            'Kapellförfrågan': $('#prompt-kapell').val(),
+            'Fenderförfrågan': $('#prompt-fender').val(),
+            'Kontakt': $('#prompt-kontakt').val()
         }
-    } catch(e) {
-        console.error('Kunde inte ladda prompt', e);
+    };
+
+    adminFetch(`${API_BASE}/api/ai_settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
+    .then(res => {
+        if (res.success) {
+            chatbotPrompt = payload.admin_chat_prompt;
+            $('#prompts-edit-success').text('AI-inställningar sparade!').show();
+            $('#prompts-edit-error').hide();
+        } else {
+            $('#prompts-edit-error').text('Kunde inte spara AI-inställningar: ' + (res.error || 'Okänt fel')).show();
+            $('#prompts-edit-success').hide();
+        }
+    })
+    .catch(err => {
+        console.error('Error saving ai settings:', err);
+        $('#prompts-edit-error').text('Nätverksfel vid sparning.').show();
+        $('#prompts-edit-success').hide();
+    });
+}
+
+function buildAdvancedSummaryItems() {
+    const intent = advancedChatState.intent;
+    const order = ADVANCED_SUMMARY_FIELD_ORDER[intent] || [];
+    const lang = advancedChatState.language === 'en' ? 'en' : 'sv';
+    const labels = ADVANCED_SUMMARY_FIELD_LABELS[lang];
+    const emptyValue = lang === 'en' ? 'Not provided' : 'Ej angivet';
+    const draft = advancedChatState.draft || {};
+    return order.map((key) => {
+        const value = String(draft[key] || '').trim();
+        return {
+            label: labels[key] || key,
+            value: value || emptyValue
+        };
+    });
+}
+
+function renderAdvancedSummaryPanel() {
+    const summaryEl = $('#advanced-chat-summary');
+    const summaryTextEl = $('#advanced-chat-summary-text');
+    const shouldShow = Boolean(advancedChatState.readyToSubmit || advancedChatState.needsConfirmation);
+
+    if (!shouldShow) {
+        summaryTextEl.empty();
+        summaryEl.hide();
+        return;
+    }
+
+    summaryEl.show();
+    summaryTextEl.empty();
+
+    const heading = advancedChatState.language === 'en' ? 'Summary' : 'Sammanfattning';
+    summaryTextEl.append($('<div>').addClass('advanced-summary-heading').text(heading));
+
+    const items = buildAdvancedSummaryItems();
+    if (items.length) {
+        const list = $('<ul>').addClass('advanced-summary-list');
+        items.forEach((item) => {
+            list.append($('<li>').text(`${item.label}: ${item.value}`));
+        });
+        summaryTextEl.append(list);
+        return;
+    }
+
+    summaryTextEl.append(
+        $('<div>')
+            .addClass('advanced-summary-empty')
+            .text(advancedChatState.summary || (advancedChatState.language === 'en' ? 'Summary unavailable.' : 'Sammanfattning saknas.'))
+    );
+}
+
+function renderAdvancedChat() {
+    const messagesDiv = $('#advanced-chat-messages');
+    messagesDiv.empty();
+    advancedChatState.history.forEach(msg => {
+        const messageDiv = $('<div>').addClass('chat-message ' + (msg.role === 'user' ? 'user' : 'assistant'));
+        const textDiv = $('<div>').addClass('message-text');
+        if (msg.role === 'assistant' && typeof marked !== 'undefined') {
+            textDiv.html(sanitizeHtml(marked.parse(msg.content || '')));
+        } else if (msg.role === 'assistant') {
+            textDiv.html(sanitizeHtml(simpleMarkdownToHtml(msg.content || '')));
+        } else {
+            textDiv.text(msg.content || '');
+        }
+        const timeDiv = $('<div>').addClass('message-time').text(new Date().toLocaleTimeString('sv-SE'));
+        messageDiv.append(textDiv).append(timeDiv);
+        messagesDiv.append(messageDiv);
+    });
+    if (advancedChatState.isTyping) {
+        const typingMessage = $('<div>').addClass('chat-message assistant typing');
+        const textDiv = $('<div>').addClass('message-text');
+        const dots = $('<span>').addClass('typing-dots');
+        dots.append('<span></span><span></span><span></span>');
+        textDiv.append(dots);
+        typingMessage.append(textDiv);
+        messagesDiv.append(typingMessage);
+    }
+
+    const submitBtn = $('#advanced-chat-submit-btn');
+    renderAdvancedSummaryPanel();
+    submitBtn.toggle(advancedChatState.readyToSubmit);
+    submitBtn.prop('disabled', advancedChatState.isSubmitting);
+    submitBtn.text(
+        advancedChatState.isSubmitting
+            ? (advancedChatState.language === 'en' ? 'Sending...' : 'Skickar...')
+            : (advancedChatState.language === 'en' ? 'Send' : 'Skicka')
+    );
+
+    const nativeMessages = $('#advanced-chat-messages');
+    if (nativeMessages.length && nativeMessages[0]) {
+        nativeMessages[0].scrollTop = nativeMessages[0].scrollHeight;
     }
 }
 
-function saveChatbotPrompt() {
-    chatbotPrompt = $('#chatbot-prompt').val().trim() || chatbotPrompt;
+async function sendAdvancedChatMessage() {
+    const input = $('#advanced-chat-input');
+    const sendBtn = $('#advanced-chat-send-btn');
+    const message = (input.val() || '').trim();
+    if (!message) return;
+
+    advancedChatState.history.push({ role: 'user', content: message });
+    advancedChatState.confirmed = false;
+    advancedChatState.isTyping = true;
+    renderAdvancedChat();
+    input.val('');
+    sendBtn.prop('disabled', true);
+    input.prop('disabled', true);
+
     try {
-        localStorage.setItem('chatbotPrompt', chatbotPrompt);
-        alert('Prompt sparad!');
-    } catch(e) {
-        alert('Kunde inte spara prompt');
+        const response = await fetch(`${API_BASE}/api/assistant_chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message,
+                history: advancedChatState.history,
+                draft: advancedChatState.draft,
+                intent: advancedChatState.intent,
+                confirmed: advancedChatState.confirmed,
+                language: advancedChatState.language
+            })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        advancedChatState.intent = typeof data.intent === 'string' ? data.intent : advancedChatState.intent;
+        advancedChatState.draft = data.draft || advancedChatState.draft;
+        advancedChatState.readyToSubmit = Boolean(data.ready_to_submit);
+        advancedChatState.needsConfirmation = Boolean(data.needs_confirmation);
+        advancedChatState.summary = data.summary || '';
+        advancedChatState.confirmed = Boolean(data.confirmed);
+        advancedChatState.language = data.language || advancedChatState.language;
+        if (String(data.reply || '').trim()) {
+            advancedChatState.history.push({
+                role: 'assistant',
+                content: String(data.reply)
+            });
+        }
+    } catch (err) {
+        advancedChatState.history.push({
+            role: 'assistant',
+            content: advancedChatState.language === 'en'
+                ? `I could not answer right now: ${err.message}`
+                : `Jag kunde inte svara just nu: ${err.message}`
+        });
+    } finally {
+        advancedChatState.isTyping = false;
+        sendBtn.prop('disabled', false);
+        input.prop('disabled', false).focus();
+        renderAdvancedChat();
     }
+}
+
+async function submitAdvancedChat() {
+    if (advancedChatState.isSubmitting || !advancedChatState.readyToSubmit) return;
+    advancedChatState.isSubmitting = true;
+    renderAdvancedChat();
+    try {
+        const response = await fetch(`${API_BASE}/api/assistant_submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                intent: advancedChatState.intent,
+                draft: advancedChatState.draft,
+                confirmed: true
+            })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        const lang = advancedChatState.language || 'sv';
+        advancedChatState = createAdvancedChatState(lang);
+        advancedChatState.history.push({
+            role: 'assistant',
+            content: lang === 'en'
+                ? 'Thanks! Your request has been sent. Do you want to create a new request?'
+                : 'Tack! Din förfrågan är skickad. Vill du skapa en ny förfrågan?'
+        });
+    } catch (err) {
+        advancedChatState.history.push({
+            role: 'assistant',
+            content: advancedChatState.language === 'en'
+                ? `Could not send: ${err.message}`
+                : `Kunde inte skicka: ${err.message}`
+        });
+    } finally {
+        advancedChatState.isSubmitting = false;
+        renderAdvancedChat();
+    }
+}
+
+function resetAdvancedChat() {
+    advancedChatState = createAdvancedChatState(advancedChatState.language || 'sv');
+    renderAdvancedChat();
+}
+
+function initAdvancedTestChat() {
+    $('#advanced-chat-send-btn').off('click').on('click', sendAdvancedChatMessage);
+    $('#advanced-chat-input').off('keypress').on('keypress', function(e) {
+        if (e.which === 13) {
+            sendAdvancedChatMessage();
+        }
+    });
+    $('#advanced-chat-submit-btn').off('click').on('click', submitAdvancedChat);
+    $('#advanced-chat-reset-btn').off('click').on('click', resetAdvancedChat);
+    renderAdvancedChat();
 }
 
 function loadStatusItems() {
+    const defaultStatusItems = {
+        'nya-inskick': [],
+        'vantar-pa-svar': [],
+        'i-produktion': [],
+        'redo-for-leverans': []
+    };
+
+    const normalizeStatus = (value) => STATUS_FLOW.includes(value) ? value : 'nya-inskick';
+    const ensureStatusBuckets = (source) => {
+        const next = { ...defaultStatusItems };
+        if (!source || typeof source !== 'object') return next;
+        STATUS_FLOW.forEach(status => {
+            const items = source[status];
+            next[status] = Array.isArray(items) ? items : [];
+        });
+        return next;
+    };
+
     try {
         const saved = localStorage.getItem('statusItems');
         if (saved) {
-            statusItems = JSON.parse(saved);
+            statusItems = ensureStatusBuckets(JSON.parse(saved));
         }
     } catch(e) {
         console.error('Kunde inte ladda status items', e);
+        statusItems = ensureStatusBuckets(statusItems);
     }
+
+    // Keep local non-form entries and let backend be source of truth for form submissions.
+    const localNonFormByStatus = ensureStatusBuckets(statusItems);
+    STATUS_FLOW.forEach(status => {
+        localNonFormByStatus[status] = localNonFormByStatus[status].filter(item => !(item && item.is_form_submission));
+    });
     
     // Load form submissions from API
-    fetch(`${API_BASE}/api/get_form_submissions`)
-        .then(r => r.json())
+    adminFetch(`${API_BASE}/api/get_form_submissions`)
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(submissions => {
+            const formItemsByStatus = ensureStatusBuckets({});
             if (Array.isArray(submissions)) {
-                // Convert form submissions to status items format
                 submissions.forEach(submission => {
-                    if (submission.status === 'nya-inskick' && !submission.read) {
-                        // Check if this submission already exists
-                        const exists = statusItems['nya-inskick'].some(item => item.form_id === submission.id);
-                        if (!exists) {
-                            statusItems['nya-inskick'].push({
-                                form_id: submission.id,
-                                title: submission.title,
-                                description: submission.form_summary,
-                                date: submission.timestamp,
-                                category: submission.category,
-                                form_type: submission.form_type,
-                                fields: submission.fields,
-                                proposed_response: submission.proposed_response,
-                                is_form_submission: true
-                            });
-                        }
-                    }
+                    const status = normalizeStatus(submission.status);
+                    formItemsByStatus[status].push({
+                        form_id: submission.id,
+                        title: submission.title,
+                        description: submission.form_summary,
+                        date: submission.timestamp,
+                        timestamp: submission.timestamp,
+                        category: submission.category,
+                        form_type: submission.form_type,
+                        fields: submission.fields,
+                        proposed_response: submission.proposed_response,
+                        read: Boolean(submission.read),
+                        submitted_via: submission.submitted_via || 'web_form',
+                        is_form_submission: true
+                    });
                 });
-                // Sort by date (category sorting removed, only date sorting)
-                sortNyaInskick();
-                saveStatusItems();
             }
+
+            statusItems = ensureStatusBuckets({});
+            STATUS_FLOW.forEach(status => {
+                statusItems[status] = [...formItemsByStatus[status], ...localNonFormByStatus[status]];
+            });
+
+            sortNyaInskick();
+            saveStatusItems();
             renderStatusFolders();
             updateSortButton();
         })
         .catch(err => {
             console.error('Kunde inte ladda form submissions', err);
+            statusItems = ensureStatusBuckets(statusItems);
             renderStatusFolders();
             updateSortButton();
         });
@@ -1074,84 +1578,278 @@ function renderStatusFolders() {
     Object.keys(statusItems).forEach(status => {
         const folderDiv = $(`#folder-${status}`);
         folderDiv.empty();
-        statusItems[status].forEach((item, index) => {
-            const itemDiv = $('<div>').addClass('folder-item').attr('data-index', index);
-            if (item.is_form_submission) {
-                itemDiv.addClass('form-submission-item');
-            }
-            const header = $('<div>').addClass('folder-item-header');
-            const titleDiv = $('<div>').addClass('folder-item-title');
-            
-            // For form submissions, show simplified info
-            if (item.is_form_submission && item.fields) {
-                const formType = item.form_type || 'Formulär';
-                const manufacturer = item.fields['Tillverkare'] || item.fields['4. Tillverkare'] || '';
-                const model = item.fields['Modell'] || item.fields['5. Modell'] || '';
-                
-                // Build display text
-                let displayText = formType;
-                if (manufacturer || model) {
-                    const boatInfo = [manufacturer, model].filter(Boolean).join(' ');
-                    if (boatInfo) {
-                        displayText += ' - ' + boatInfo;
-                    }
-                }
-                titleDiv.text(displayText);
-                
-                // Add date and time for form submissions
-                if (item.date || item.timestamp) {
-                    const date = new Date(item.date || item.timestamp);
-                    if (!isNaN(date.getTime())) {
-                        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                        const month = months[date.getMonth()];
-                        const day = date.getDate();
-                        const hours = String(date.getHours()).padStart(2, '0');
-                        const minutes = String(date.getMinutes()).padStart(2, '0');
-                        const dateTimeDiv = $('<div>').addClass('folder-item-content').text(`${month} ${day} ${hours}:${minutes}`);
-                        itemDiv.append(dateTimeDiv);
-                    }
-                }
-            } else {
-                // For regular items, show title
-                titleDiv.text(item.title || 'Ingen titel');
-            }
-            
-            header.append(titleDiv);
-            header.append($('<button>').addClass('folder-item-delete').text('×').on('click', function(e) {
-                e.stopPropagation();
-                if (confirm('Ta bort detta objekt?')) {
-                    statusItems[status].splice(index, 1);
-                    saveStatusItems();
-                    renderStatusFolders();
-                }
-            }));
-            itemDiv.append(header);
-            
-            // Don't show description or date for form submissions in the list
-            if (!item.is_form_submission) {
-                if (item.description) {
-                    const desc = $('<div>').addClass('folder-item-content');
-                    const shortDesc = item.description.length > 150 ? item.description.substring(0, 150) + '...' : item.description;
-                    desc.text(shortDesc);
-                    itemDiv.append(desc);
-                }
-                if (item.date) {
-                    itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + new Date(item.date).toLocaleDateString('sv-SE')));
-                }
-            }
-            
-            itemDiv.on('click', function() {
+
+        // Make folders droppable
+        folderDiv.attr('data-status', status).addClass('droppable-folder');
+
+        // Filter items based on current form filter for ALL folders
+        let itemsToShow = statusItems[status];
+        if (currentFormFilter !== 'all') {
+            itemsToShow = statusItems[status].filter(item => {
                 if (item.is_form_submission) {
-                    viewFormSubmission(status, index);
-                } else {
-                    editStatusItem(status, index);
+                    return item.form_type === currentFormFilter;
                 }
+                return true; // Show non-form items always
             });
-            folderDiv.append(itemDiv);
-        });
+        }
+
+        if (itemsToShow.length === 0) {
+            // Show empty state message
+            const emptyDiv = $('<div>').addClass('folder-item folder-item-empty').css({
+                'text-align': 'center',
+                'color': '#666',
+                'font-style': 'italic',
+                'padding': '2rem 1rem'
+            });
+
+            if (currentFormFilter === 'all') {
+                const statusNames = {
+                    'nya-inskick': 'nya inskick',
+                    'vantar-pa-svar': 'väntar på svar',
+                    'i-produktion': 'är i produktion',
+                    'redo-for-leverans': 'är redo för leverans'
+                };
+                emptyDiv.text(`Inga ${statusNames[status] || 'objekt'} att visa`);
+            } else {
+                const statusNames = {
+                    'nya-inskick': 'nya inskick',
+                    'vantar-pa-svar': 'väntar på svar',
+                    'i-produktion': 'är i produktion',
+                    'redo-for-leverans': 'är redo för leverans'
+                };
+                emptyDiv.text(`Inga ${currentFormFilter.toLowerCase()} ${statusNames[status] || 'objekt'} att visa`);
+            }
+            folderDiv.append(emptyDiv);
+        } else {
+            itemsToShow.forEach((item, originalIndex) => {
+                // Find the original index in the full array for correct operations
+                const index = statusItems[status].indexOf(item);
+
+                const itemDiv = $('<div>')
+                    .addClass('folder-item')
+                    .attr({
+                        'data-index': index,
+                        'data-status': status,
+                        'draggable': 'true'
+                    });
+
+                if (item.is_form_submission) {
+                    itemDiv.addClass('form-submission-item');
+                }
+                const header = $('<div>').addClass('folder-item-header');
+                const titleDiv = $('<div>').addClass('folder-item-title');
+
+                // For form submissions, show compact info
+                if (item.is_form_submission && item.fields) {
+                    const personName = item.fields['Namn'] || item.fields['1. Namn'] || item.fields['Name'] || 'Okänd';
+                    const formType = item.form_type || 'Formulär';
+                    const manufacturer = item.fields['Tillverkare'] || item.fields['4. Tillverkare'] || '';
+                    const model = item.fields['Modell'] || item.fields['5. Modell'] || '';
+
+                    titleDiv.append($('<div>').addClass('person-name').text(personName));
+                    titleDiv.append($('<div>').addClass('form-type-line').text(formType));
+                    if (item.submitted_via === 'ai_chatbot') {
+                        titleDiv.append($('<div>').addClass('ai-source-badge').text('AI'));
+                    }
+
+                    if (formType === 'Kontakt') {
+                        const subject = item.fields['Ämne'] || item.fields['ämne'] || item.fields['Subject'] || '';
+                        if (subject) {
+                            titleDiv.append($('<div>').addClass('contact-subject').text(subject));
+                        }
+                    }
+
+                    if (manufacturer || model) {
+                        const boatInfo = [manufacturer, model].filter(Boolean).join(' ');
+                        if (boatInfo) {
+                            titleDiv.append($('<div>').addClass('boat-model-line').text(boatInfo));
+                        }
+                    }
+
+                    // Add date and time for form submissions
+                    if (item.date || item.timestamp) {
+                        const date = new Date(item.date || item.timestamp);
+                        if (!isNaN(date.getTime())) {
+                            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const month = months[date.getMonth()];
+                            const day = date.getDate();
+                            const hours = String(date.getHours()).padStart(2, '0');
+                            const minutes = String(date.getMinutes()).padStart(2, '0');
+                            const dateTimeDiv = $('<div>').addClass('folder-item-content').text(`${month} ${day} ${hours}:${minutes}`);
+                            itemDiv.append(dateTimeDiv);
+                        }
+                    }
+                } else {
+                    // For regular items, show title
+                    titleDiv.append($('<div>').addClass('person-name').text(item.title || 'Ingen titel'));
+                }
+
+                header.append(titleDiv);
+                header.append($('<button>').addClass('folder-item-delete').text('×').on('click', async function(e) {
+                    e.stopPropagation();
+                    if (confirm('Ta bort detta objekt?')) {
+                        if (item.is_form_submission && item.form_id) {
+                            const deleted = await deleteSubmissionOnServer(item);
+                            if (!deleted) {
+                                alert('Kunde inte ta bort från servern.');
+                                return;
+                            }
+                            removeSubmissionFromAllStatuses(item.form_id);
+                        } else {
+                            statusItems[status].splice(index, 1);
+                        }
+                        saveStatusItems();
+                        renderStatusFolders();
+                    }
+                }));
+                itemDiv.append(header);
+
+                // Don't show description or date for form submissions in the list
+                if (!item.is_form_submission) {
+                    if (item.description) {
+                        const desc = $('<div>').addClass('folder-item-content');
+                        const shortDesc = item.description.length > 150 ? item.description.substring(0, 150) + '...' : item.description;
+                        desc.text(shortDesc);
+                        itemDiv.append(desc);
+                    }
+                    if (item.date) {
+                        itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + new Date(item.date).toLocaleDateString('sv-SE')));
+                    }
+                }
+
+                itemDiv.on('click', function() {
+                    if (item.is_form_submission) {
+                        viewFormSubmission(status, index);
+                    } else {
+                        editStatusItem(status, index);
+                    }
+                });
+
+                // Add drag and drop event handlers
+                itemDiv.on('dragstart', handleDragStart);
+                itemDiv.on('dragend', handleDragEnd);
+
+                folderDiv.append(itemDiv);
+            });
+        }
+
+        // Add drop event handlers to folders
+        folderDiv.off('dragover dragleave drop').on('dragover', handleDragOver).on('dragleave', handleDragLeave).on('drop', handleDrop);
     });
     // Update sort button after rendering
     updateSortButton();
+}
+
+// Drag and drop functionality
+let draggedItem = null;
+let draggedFromStatus = null;
+let draggedItemIndex = null;
+
+function handleDragStart(e) {
+    draggedItem = this;
+    draggedFromStatus = $(this).attr('data-status');
+    draggedItemIndex = parseInt($(this).attr('data-index'));
+
+    // Add visual feedback
+    $(this).addClass('dragging');
+
+    // Set drag data
+    e.originalEvent.dataTransfer.setData('text/plain', draggedItemIndex);
+    e.originalEvent.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+    $(this).removeClass('dragging');
+    draggedItem = null;
+    draggedFromStatus = null;
+    draggedItemIndex = null;
+
+    // Remove drag over classes from all folders
+    $('.droppable-folder').removeClass('drag-over');
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.originalEvent.dataTransfer.dropEffect = 'move';
+
+    // Add visual feedback to drop target
+    $(this).addClass('drag-over');
+}
+
+function handleDragLeave(e) {
+    // Remove visual feedback when leaving drop target
+    $(this).removeClass('drag-over');
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    $(this).removeClass('drag-over');
+
+    const targetStatus = $(this).attr('data-status');
+
+    // Don't move to the same status
+    if (targetStatus === draggedFromStatus) {
+        return;
+    }
+
+    // Get the item being dragged
+    const item = statusItems[draggedFromStatus][draggedItemIndex];
+    if (!item) return;
+
+    // Remove from source status
+    statusItems[draggedFromStatus].splice(draggedItemIndex, 1);
+
+    // Add to target status
+    if (!statusItems[targetStatus]) {
+        statusItems[targetStatus] = [];
+    }
+    statusItems[targetStatus].push(item);
+    if (item && item.is_form_submission) {
+        updateSubmissionStatusOnServer(item, targetStatus, item.read === true);
+    }
+
+    // Save and re-render
+    saveStatusItems();
+    renderStatusFolders();
+
+    // Show success message
+    showStatusMessage(`Objekt flyttat till "${getStatusDisplayName(targetStatus)}"`);
+}
+
+function getStatusDisplayName(status) {
+    const names = {
+        'nya-inskick': 'Nya Inskick',
+        'vantar-pa-svar': 'Väntar på svar',
+        'i-produktion': 'I produktion',
+        'redo-for-leverans': 'Redo för leverans'
+    };
+    return names[status] || status;
+}
+
+
+function showStatusMessage(message) {
+    // Create a temporary status message
+    const messageDiv = $('<div>')
+        .addClass('status-message')
+        .text(message)
+        .css({
+            'position': 'fixed',
+            'top': '20px',
+            'right': '20px',
+            'background': '#4caf50',
+            'color': 'white',
+            'padding': '10px 20px',
+            'border-radius': '4px',
+            'z-index': '10000',
+            'font-weight': 'bold'
+        });
+
+    $('body').append(messageDiv);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+        messageDiv.fadeOut(() => messageDiv.remove());
+    }, 3000);
 }
 
 function viewFormSubmission(status, index) {
@@ -1161,18 +1859,25 @@ function viewFormSubmission(status, index) {
     // Mark as read
     item.read = true;
     saveStatusItems();
+    updateSubmissionStatusOnServer(item, status, true);
     
     // Create or update form submission modal
     let modal = $('#form-submission-modal');
     if (modal.length === 0) {
         modal = $('<div>').attr('id', 'form-submission-modal').addClass('modal');
         modal.html(`
-            <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-content form-submission-modal-content">
                 <div class="modal-header">
                     <h2 id="form-modal-title">Formulärinlägg</h2>
                     <button class="modal-close">×</button>
                 </div>
                 <div class="modal-body" id="form-modal-body">
+                    <div class="form-modal-columns">
+                        <div class="form-info-column" id="form-info-column">
+                        </div>
+                        <div class="ai-response-column" id="ai-response-column">
+                        </div>
+                    </div>
                 </div>
             </div>
         `);
@@ -1189,50 +1894,92 @@ function viewFormSubmission(status, index) {
     }
     
     // Populate modal
-    $('#form-modal-title').text(item.title || 'Formulärinlägg');
-    const body = $('#form-modal-body');
-    body.empty();
-    
-    // Form details section
+    const modalTitle = item.title || 'Formulärinlägg';
+    $('#form-modal-title').text(item.submitted_via === 'ai_chatbot' ? `${modalTitle} [AI]` : modalTitle);
+
+    const infoColumn = $('#form-info-column');
+    const responseColumn = $('#ai-response-column');
+
+    infoColumn.empty();
+    responseColumn.empty();
+
+    // Form details section (LEFT COLUMN) - Simplified
     const formSection = $('<div>').addClass('form-section');
-    formSection.append($('<h3>').text('Formulärinformation'));
-    if (item.form_type) {
-        formSection.append($('<p>').html(`<strong>Typ:</strong> ${item.form_type}`));
-    }
-    if (item.category) {
-        formSection.append($('<p>').html(`<strong>Kategori:</strong> ${item.category}`));
-    }
+
+    // Just show date/time in small text at the top
     if (item.date) {
-        formSection.append($('<p>').html(`<strong>Datum:</strong> ${new Date(item.date).toLocaleString('sv-SE')}`));
+        formSection.append($('<div>').addClass('submission-date').text(`Inskickad: ${new Date(item.date).toLocaleString('sv-SE')}`));
     }
-    
-    // Form fields
+
+    // Form fields - the main content
     if (item.fields) {
-        formSection.append($('<h4>').text('Formulärfält:'));
         const fieldsList = $('<div>').addClass('form-fields');
         Object.keys(item.fields).forEach(key => {
-            if (item.fields[key]) {
-                fieldsList.append($('<div>').addClass('form-field').html(`<strong>${key}:</strong> ${item.fields[key]}`));
+            if (!key.startsWith('__') && item.fields[key]) {
+                fieldsList.append($('<div>').addClass('form-field').text(`${key}: ${item.fields[key]}`));
             }
         });
         formSection.append(fieldsList);
     }
-    
-    body.append(formSection);
-    
-    // AI Proposed Response section
+
+    infoColumn.append(formSection);
+
+    // AI Proposed Response section (RIGHT COLUMN)
     if (item.proposed_response) {
         const responseSection = $('<div>').addClass('form-section');
         responseSection.append($('<h3>').text('Föreslaget svar (AI-genererat)'));
         const responseDiv = $('<div>').addClass('proposed-response');
         // Use marked.js if available to render markdown
         if (typeof marked !== 'undefined') {
-            responseDiv.html(marked.parse(item.proposed_response));
+            responseDiv.html(sanitizeHtml(marked.parse(item.proposed_response)));
         } else {
             responseDiv.text(item.proposed_response);
         }
         responseSection.append(responseDiv);
-        body.append(responseSection);
+
+        // Add action buttons for the AI response
+        const actionButtons = $('<div>').addClass('response-actions').css('margin-top', '1rem');
+        actionButtons.append($('<button>').addClass('btn').text('Kopiera svar').on('click', function() {
+            navigator.clipboard.writeText(item.proposed_response).then(() => {
+                $(this).text('Kopierat!').css('background', '#28a745');
+                setTimeout(() => {
+                    $(this).text('Kopiera svar').css('background', '');
+                }, 2000);
+            });
+        }));
+        actionButtons.append($('<button>').addClass('btn btn-secondary').css('margin-left', '0.5rem').text('Redigera').on('click', function() {
+            // Make the response editable
+            if (responseDiv.attr('contenteditable') === 'true') {
+                responseDiv.attr('contenteditable', 'false');
+                $(this).text('Redigera');
+                // Save changes if needed
+            } else {
+                responseDiv.attr('contenteditable', 'true').focus();
+                $(this).text('Spara');
+            }
+        }));
+        const nextStatus = getNextStatus(status);
+        if (nextStatus) {
+            actionButtons.append($('<button>').addClass('btn').css('margin-left', '0.5rem').text(`Flytta till ${getStatusDisplayName(nextStatus)}`).on('click', async function() {
+                statusItems[status].splice(index, 1);
+                if (!statusItems[nextStatus]) statusItems[nextStatus] = [];
+                statusItems[nextStatus].push(item);
+                item.read = true;
+                saveStatusItems();
+                renderStatusFolders();
+                await updateSubmissionStatusOnServer(item, nextStatus, true);
+                modal.removeClass('active');
+            }));
+        }
+        responseSection.append(actionButtons);
+
+        responseColumn.append(responseSection);
+    } else {
+        // No AI response available
+        const noResponseDiv = $('<div>').addClass('form-section');
+        noResponseDiv.append($('<h3>').text('AI-svar'));
+        noResponseDiv.append($('<p>').text('Inget föreslaget svar tillgängligt.').css('color', '#666'));
+        responseColumn.append(noResponseDiv);
     }
     
     modal.addClass('active');
@@ -1298,6 +2045,8 @@ $(document).ready(function() {
             switchTab('dashboard');
         } else if(prim==='texts'){
             switchTab('texts');
+        } else if(prim==='advanced'){
+            switchTab('advanced');
         } else if(prim==='calendar'){
             switchTab('calendar');
         } else if(prim==='boats'){
@@ -1314,6 +2063,7 @@ $(document).ready(function() {
         $('#admin-tabs').hide(); // sekundära flikar dolda initialt
         $('#extras-search').hide();
     });
+    bindAdvancedSettings();
 
     // Tab buttons
     $(document).on('click', '.tab-btn', function(){
@@ -1419,7 +2169,7 @@ function parseMarkdownForPreview(md) {
             if (marked.setOptions) {
                 marked.setOptions({ breaks: true });
             }
-            return marked.parse(md);
+            return sanitizeHtml(marked.parse(md));
         } catch(e) {
             console.warn('marked.js parse error, using fallback:', e);
         }
@@ -1527,17 +2277,20 @@ function saveAnnouncementText() {
         }
     };
     
-    fetch(`${API_BASE}/api/page_texts`, {
+    adminFetch(`${API_BASE}/api/page_texts`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(data)
     })
-    .then(r => r.json())
+    .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
     .then(result => {
         if (result.success) {
-            $('#announcement-edit-success').text('Text sparad! Kom ihåg att committa ändringarna till GitHub.').show();
+            $('#announcement-edit-success').text('Text sparad!').show();
             $('#announcement-edit-error').hide();
         } else {
             $('#announcement-edit-error').text('Fel vid sparande: ' + (result.error || 'Okänt fel')).show();
@@ -1552,53 +2305,11 @@ function saveAnnouncementText() {
 
 // Functions for editing form prompts
 function loadFormPrompts() {
-    fetch(`${API_BASE}/api/form_prompts`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.Kapellförfrågan) {
-                $('#prompt-kapell').val(data.Kapellförfrågan);
-            }
-            if (data.Fenderförfrågan) {
-                $('#prompt-fender').val(data.Fenderförfrågan);
-            }
-            if (data.Kontakt) {
-                $('#prompt-kontakt').val(data.Kontakt);
-            }
-        })
-        .catch(err => {
-            console.error('Error loading form prompts:', err);
-        });
+    return loadAiSettings();
 }
 
 function saveFormPrompts() {
-    const data = {
-        'Kapellförfrågan': $('#prompt-kapell').val(),
-        'Fenderförfrågan': $('#prompt-fender').val(),
-        'Kontakt': $('#prompt-kontakt').val()
-    };
-    
-    fetch(`${API_BASE}/api/form_prompts`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            $('#prompts-edit-success').text('Prompts sparade!').show();
-            $('#prompts-edit-error').hide();
-        } else {
-            $('#prompts-edit-error').text('Kunde inte spara prompts: ' + (res.error || 'Okänt fel')).show();
-            $('#prompts-edit-success').hide();
-        }
-    })
-    .catch(err => {
-        console.error('Error saving form prompts:', err);
-        $('#prompts-edit-error').text('Nätverksfel vid sparning.').show();
-        $('#prompts-edit-success').hide();
-    });
+    return saveAiSettings();
 }
 
 // Debounce-funktion

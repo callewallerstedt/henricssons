@@ -12,6 +12,7 @@
     <link rel="icon" href="logo.png">
     <script src="script.js"></script>
     <script src="kapellforfragan_full.js"></script>
+<script src="chat_widget.js?v=20260208a"></script>
     <link rel="canonical" href="https://henricssonsbatkapell.se/bilder-och-exempel.html"/>
     <!-- Open Graph -->
     <meta property="og:title" content="Bilder & exempel | Henricssons Båtkapell"/>
@@ -185,7 +186,18 @@
 var bilderexData = [];
 var extrasData = {};
 
-const API_BASE = location.hostname==='localhost' ? 'http://localhost:8001' : 'https://henricssons-api.onrender.com';
+const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? `${location.protocol}//${location.hostname}:25565`
+    : 'https://henricssons-api.onrender.com';
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 function buildData() {
     bilderexData = [];
@@ -290,15 +302,19 @@ function bilderexRenderGallery(items) {
         const div = document.createElement('div');
         div.className = 'bilderex-gallery-item';
         const thumb = (item.images&&item.images.length)? item.images[0] : 'logo.png';
+        const safeThumb = escapeHtml(thumb);
+        const safeNamn = escapeHtml(item.namn);
+        const safeTillverkare = escapeHtml(item.tillverkare);
+        const safeKategori = escapeHtml(item.kategori || '');
         div.innerHTML = `
             <a href="#" class="bilderex-thumb" data-idx="${item._idx}" tabindex="0">
-                <img src="${thumb}" alt="${item.namn}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+                <img src="${safeThumb}" alt="${safeNamn}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
                 <div class="bilderex-no-image" style="display:none; width:100%; aspect-ratio:3/2; background:#f8f8f8; align-items:center; justify-content:center; color:#999; font-size:0.9rem; font-weight:500;">Bild saknas</div>
             </a>
             <div class="bilderex-gallery-caption">
-                <div class="bilderex-cat">${item.kategori || ''}</div>
-                <h3>${item.tillverkare}</h3>
-                <p class="model">${item.namn}</p>
+                <div class="bilderex-cat">${safeKategori}</div>
+                <h3>${safeTillverkare}</h3>
+                <p class="model">${safeNamn}</p>
                 <a href="#" class="bilderex-link bilderex-thumb" data-idx="${item._idx}">Visa</a>
             </div>
         `;
@@ -416,11 +432,11 @@ function openModal(dataIndex){
     modal.querySelector('.modal-model').textContent=item.namn;
     modal.querySelector('.modal-text').innerHTML = `
         <h4>Beskrivning</h4>
-        <p>${item.beskrivning || '-'}</p>
+        <p>${escapeHtml(item.beskrivning || '-')}</p>
         <h4>Variant</h4>
-        <p>${item.variant || '-'}</p>
+        <p>${escapeHtml(item.variant || '-')}</p>
         <h4>Leveransinfo</h4>
-        <p>${item.leverans || '-'}</p>
+        <p>${escapeHtml(item.leverans || '-')}</p>
     `;
     const reqBtn=modal.querySelector('#modal-request-btn');
     reqBtn.onclick=function(e){
@@ -476,3 +492,10 @@ function loadExtrasData() {
     </script>
 </body>
 </html> 
+
+
+
+
+
+
+

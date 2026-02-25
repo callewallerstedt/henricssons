@@ -2,10 +2,10 @@
 <html lang="sv">
 <head>
   <meta charset="UTF-8" />
-  <title>EmailJS Test – Enkel mall</title>
+  <title>EmailJS Test - Enkel mall</title>
 </head>
 <body>
-  <h1>EmailJS Test – Enkel mall</h1>
+  <h1>EmailJS Test - Enkel mall</h1>
   <form id="testForm">
     <label>Ämne:<br><input name="title" value="Kapellförfrågan" required></label><br><br>
     <label>Namn:<br><input name="name" value="Henricssons Dev" required></label><br><br>
@@ -22,13 +22,13 @@
       const data = Object.fromEntries(new FormData(this));
       emailjs.send('service_1u5gpw4', 'template_iijd5v4', data)
         .then(() => {
-          document.getElementById('result').textContent = '✅ Testmejl skickat! Kontrollera din inkorg.';
+          document.getElementById('result').textContent = 'Testmejl skickat! Kontrollera din inkorg.';
         })
         .catch(err => {
-          document.getElementById('result').textContent = '❌ Kunde inte skicka: ' + err.text;
+          document.getElementById('result').textContent = 'Kunde inte skicka: ' + err.text;
           console.error(err);
         });
     });
   </script>
 </body>
-</html> 
+</html>

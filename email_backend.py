@@ -33,11 +33,13 @@ app.config['MAIL_PASSWORD'] = os.environ.get('EMAIL_PASS')
 mail = Mail(app)
 
 # Admin authentication
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin"
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
 def check_auth(username, password):
     """Simple authentication check"""
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+        return False
     return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
 
 def parse_js_file():

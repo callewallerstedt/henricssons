@@ -5,7 +5,11 @@ if (!window.boatData || typeof window.boatData !== 'object') {
 const getBoatData = () => window.boatData;
 
 // API-bas beroende på miljö
-const DATA_BASE = location.hostname === 'localhost' ? 'http://localhost:8001' : 'https://henricssons-api.onrender.com';
+// Use current port from the page URL, or default to 25565
+const port = '25565';
+const DATA_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1' 
+    ? `${location.protocol}//${location.hostname}:${port}` 
+    : 'https://henricssons-api.onrender.com';
 
 // Initialize when document is ready
 $(document).ready(function() {
@@ -139,7 +143,11 @@ function setupEventListeners() {
     // Quick search functionality
     var qsRegex;
     var $quicksearch = $('.quicksearch').keyup(debounce(function() {
-        qsRegex = new RegExp($quicksearch.val(), 'gi');
+        try {
+            qsRegex = new RegExp($quicksearch.val(), 'gi');
+        } catch (_) {
+            qsRegex = null;
+        }
 
         if ($quicksearch.val() == "") {
             $grid1.isotope({ filter: '*' });
@@ -299,13 +307,9 @@ function refreshBoatData() {
         .then(json => {
             if (json && typeof json === 'object') {
                 // Jämför med befintlig data för att se om något ändrats
-                const currentKeys = Object.keys(window.boatData || {});
-                const newKeys = Object.keys(json);
-                
-                // Om antal tillverkare ändrats eller nya tillverkare tillagts
-                if (currentKeys.length !== newKeys.length || 
-                    !currentKeys.every(key => newKeys.includes(key))) {
-                    
+                const currentSerialized = JSON.stringify(window.boatData || {});
+                const nextSerialized = JSON.stringify(json);
+                if (currentSerialized !== nextSerialized) {
                     console.log('Boat data uppdaterad - laddar om grid');
                     window.boatData = json;
                     initializeGrids();

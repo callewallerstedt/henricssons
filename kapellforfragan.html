@@ -204,6 +204,7 @@
     <script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js"></script>
     <script src="kapellforfragan.js?v=20250701"></script>
     <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<script src="chat_widget.js?v=20260208a"></script>
     <script>
       emailjs.init('pzhOOOVxBi01cMxCm');
       $(function(){
@@ -222,7 +223,7 @@
 
           // Send to new API endpoint
           const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1' 
-              ? `http://localhost:${location.port || '8001'}` 
+              ? `${location.protocol}//${location.hostname}:25565` 
               : 'https://henricssons-api.onrender.com';
 
           fetch(`${API_BASE}/api/submit_form`, {
@@ -285,3 +286,10 @@
     </script>
 </body>
 </html> 
+
+
+
+
+
+
+
