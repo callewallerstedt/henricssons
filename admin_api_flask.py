@@ -40,6 +40,7 @@ MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN", "").strip()
 MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY", "").strip()
 MAILGUN_FROM = os.getenv("MAILGUN_FROM", "").strip()
 MAILGUN_TO_RAW = os.getenv("MAILGUN_TO", "").strip()
+MAILGUN_API_BASE = os.getenv("MAILGUN_API_BASE", "https://api.mailgun.net").strip().rstrip("/")
 
 DEFAULT_ALLOWED_ORIGINS = ",".join(
     [
@@ -796,11 +797,38 @@ def build_notification_html(form_type: str, fields: Dict[str, str], submission_i
     )
 
 
+def send_mailgun_email(*, recipients: List[str], subject: str, text_body: str, html_body: str) -> Tuple[bool, str]:
+    if not MAILGUN_DOMAIN:
+        return False, "MAILGUN_DOMAIN missing"
+    if not MAILGUN_API_KEY:
+        return False, "MAILGUN_API_KEY missing"
+    if not MAILGUN_FROM:
+        return False, "MAILGUN_FROM missing"
+    if not recipients:
+        return False, "MAILGUN_TO missing/empty"
+
+    try:
+        response = requests.post(
+            f"{MAILGUN_API_BASE}/v3/{MAILGUN_DOMAIN}/messages",
+            auth=("api", MAILGUN_API_KEY),
+            data={
+                "from": MAILGUN_FROM,
+                "to": recipients,
+                "subject": subject,
+                "text": text_body,
+                "html": html_body,
+            },
+            timeout=15,
+        )
+        if response.status_code >= 400:
+            return False, f"HTTP {response.status_code}: {response.text}"
+        return True, response.text.strip()
+    except Exception as exc:
+        return False, str(exc)
+
+
 def send_mailgun_submission_notification(submission: Dict[str, Any]) -> None:
     recipients = get_mailgun_recipients()
-    if not (MAILGUN_DOMAIN and MAILGUN_API_KEY and MAILGUN_FROM and recipients):
-        return
-
     form_type = str(submission.get("form_type", "Kontakt"))
     fields = submission.get("fields", {})
     if not isinstance(fields, dict):
@@ -816,22 +844,9 @@ def send_mailgun_submission_notification(submission: Dict[str, Any]) -> None:
         f"Sammanfattning:\n{submission.get('form_summary', '')}"
     )
     html_body = build_notification_html(form_type, fields, submission_id, timestamp_iso)
-
-    try:
-        requests.post(
-            f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
-            auth=("api", MAILGUN_API_KEY),
-            data={
-                "from": MAILGUN_FROM,
-                "to": recipients,
-                "subject": subject,
-                "text": text_body,
-                "html": html_body,
-            },
-            timeout=15,
-        ).raise_for_status()
-    except Exception as exc:
-        print(f"Mailgun notification failed: {exc}")
+    ok, info = send_mailgun_email(recipients=recipients, subject=subject, text_body=text_body, html_body=html_body)
+    if not ok:
+        print(f"Mailgun notification failed: {info}")
 
 
 def process_form_submission(form_type: str, fields: Dict[str, Any], submitted_via: str = "web_form") -> str:
@@ -1473,6 +1488,23 @@ def upload_image():
         handle.write(raw)
 
     return jsonify(success=True, saved_path=safe_rel_path.replace("/", "\\"))
+
+
+@app.route("/api/mailgun_test", methods=["POST"])
+@admin_required
+def mailgun_test():
+    payload = request.get_json(silent=True) or {}
+    recipients = get_mailgun_recipients()
+    override_to = payload.get("to")
+    if isinstance(override_to, str) and override_to.strip():
+        recipients = [item.strip() for item in override_to.split(",") if item.strip()]
+    subject = str(payload.get("subject", "Henricssons Mailgun test")).strip() or "Henricssons Mailgun test"
+    text_body = str(payload.get("text", "Testmail från Henricssons backend.")).strip() or "Testmail från Henricssons backend."
+    html_body = f"<p>{html.escape(text_body)}</p>"
+    ok, info = send_mailgun_email(recipients=recipients, subject=subject, text_body=text_body, html_body=html_body)
+    if not ok:
+        return jsonify(success=False, error=info), 400
+    return jsonify(success=True, provider_response=info)
 
 
 @app.route("/boat_data.json")
