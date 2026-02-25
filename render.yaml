@@ -1,0 +1,32 @@
+databases:
+  - name: henricssons-db
+    plan: starter
+
+services:
+  - type: web
+    name: henricssons-app
+    runtime: python
+    plan: starter
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn admin_api_flask:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: DATABASE_URL
+        fromDatabase:
+          name: henricssons-db
+          property: connectionString
+      - key: ADMIN_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CHAT_MODEL
+        value: gpt-5-mini
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+      - key: OPENAI_REASONING_EFFORT
+        value: minimal
+      - key: ALLOWED_ORIGINS
+        value: https://henricssons.se,https://www.henricssons.se

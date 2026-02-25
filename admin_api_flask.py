@@ -1717,6 +1717,11 @@ def assistant_submit():
         return jsonify(error=f"Could not submit form: {exc}"), 500
 
 
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    return jsonify(status="ok"), 200
+
+
 @app.route("/", methods=["GET"])
 def root():
     if (BASE_DIR / "index.html").exists():
