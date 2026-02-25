@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-from flask import Flask, abort, jsonify, request, send_from_directory
+from flask import Flask, abort, jsonify, redirect, request, send_from_directory
 from sqlalchemy import Boolean, Column, DateTime, Integer, JSON as SQLJSON, String, Text, create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -1733,11 +1733,28 @@ def root():
 def serve_static(filename: str):
     if filename.startswith("api/"):
         abort(404)
-    target = (BASE_DIR / filename).resolve()
-    if BASE_DIR not in target.parents:
-        abort(404)
-    if target.exists() and target.is_file():
+
+    clean_name = filename.rstrip("/")
+    if not clean_name:
+        return redirect("/", code=301)
+
+    # Keep legacy .html links working but canonicalize to extensionless URLs.
+    if clean_name.endswith(".html"):
+        page_slug = clean_name[:-5]
+        target = (BASE_DIR / clean_name).resolve()
+        if BASE_DIR in target.parents and target.exists() and target.is_file():
+            if page_slug == "index":
+                return redirect("/", code=301)
+            return redirect(f"/{page_slug}", code=301)
+
+    target = (BASE_DIR / clean_name).resolve()
+    if BASE_DIR in target.parents and target.exists() and target.is_file():
         return send_from_directory(str(target.parent), target.name)
+
+    html_target = (BASE_DIR / f"{clean_name}.html").resolve()
+    if BASE_DIR in html_target.parents and html_target.exists() and html_target.is_file():
+        return send_from_directory(str(html_target.parent), html_target.name)
+
     abort(404)
 
 

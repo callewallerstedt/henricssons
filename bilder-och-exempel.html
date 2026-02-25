@@ -13,13 +13,13 @@
     <script src="script.js"></script>
     <script src="kapellforfragan_full.js"></script>
 <script src="chat_widget.js?v=20260208a"></script>
-    <link rel="canonical" href="https://henricssonsbatkapell.se/bilder-och-exempel.html"/>
+    <link rel="canonical" href="https://www.henricssonsbatkapell.se/bilder-och-exempel"/>
     <!-- Open Graph -->
     <meta property="og:title" content="Bilder & exempel | Henricssons Båtkapell"/>
     <meta property="og:description" content="Bläddra bland hundratals kundbilder och exempel på kapell från Henricssons Båtkapell – motorbåtar, segelbåtar och skräddarsydda lösningar."/>
     <meta property="og:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <meta property="og:type" content="website"/>
-    <meta property="og:url" content="https://henricssonsbatkapell.se/bilder-och-exempel.html"/>
+    <meta property="og:url" content="https://www.henricssonsbatkapell.se/bilder-och-exempel"/>
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="Bilder & exempel | Henricssons Båtkapell"/>
@@ -100,7 +100,7 @@
 <body>
     <header class="header">
         <nav class="navbar">
-            <a href="index.html" class="nav-logo">
+            <a href="/" class="nav-logo">
                 <img src="logo.png" alt="Henricssons Båtkapell Logo"/>
             </a>
             <button class="menu-btn" aria-label="Toggle menu">
@@ -109,11 +109,11 @@
                 <span class="menu-line"></span>
             </button>
             <div class="nav-menu">
-                <a href="om-oss.html" class="nav-link">Om oss</a>
-                <a href="kapellforfragan.html" class="nav-link">Kapellförfrågan</a>
-                <a href="bilder-och-exempel.html" class="nav-link active">Bilder & exempel</a>
-                <a href="tillbehor.html" class="nav-link">Fenderstrumpor</a>
-                <a href="kontakt.html" class="nav-link">Kontakt</a>
+                <a href="/om-oss" class="nav-link">Om oss</a>
+                <a href="/kapellforfragan" class="nav-link">Kapellförfrågan</a>
+                <a href="/bilder-och-exempel" class="nav-link active">Bilder & exempel</a>
+                <a href="/tillbehor" class="nav-link">Fenderstrumpor</a>
+                <a href="/kontakt" class="nav-link">Kontakt</a>
             </div>
         </nav>
     </header>
@@ -139,7 +139,7 @@
             <div class="cta-inner">
                 <h2>Behöver du ett nytt kapell?</h2>
                 <p>Kontakta oss för en kostnadsfri offert eller besök vår verkstad i Kungsbacka.</p>
-                <a href="kapellforfragan.html" class="btn btn-primary btn-large">Gör en kapellförfrågan</a>
+                <a href="/kapellforfragan" class="btn btn-primary btn-large">Gör en kapellförfrågan</a>
             </div>
         </section>
         <div class="cta-line"></div>
@@ -443,7 +443,7 @@ function openModal(dataIndex){
         e.preventDefault();
         localStorage.setItem('preselectManufacturer',item.tillverkare);
         localStorage.setItem('preselectModel',item.namn);
-        window.location.href='kontakt.html';
+        window.location.href='/kontakt';
     };
     modal.classList.add('open');
 }
@@ -492,6 +492,7 @@ function loadExtrasData() {
     </script>
 </body>
 </html> 
+
 
 
 
