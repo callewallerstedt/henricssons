@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import base64
+import html
 import ipaddress
 import json
 import os
@@ -35,6 +36,10 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gpt-5-mini").strip() or "gpt-5-mini"
 OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "minimal").strip().lower() or "minimal"
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "").strip()
+MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN", "").strip()
+MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY", "").strip()
+MAILGUN_FROM = os.getenv("MAILGUN_FROM", "").strip()
+MAILGUN_TO_RAW = os.getenv("MAILGUN_TO", "").strip()
 
 DEFAULT_ALLOWED_ORIGINS = ",".join(
     [
@@ -762,6 +767,73 @@ def save_submission_record(submission: Dict[str, Any]) -> None:
     write_json_file(FORM_SUBMISSIONS_FILE, records)
 
 
+def get_mailgun_recipients() -> List[str]:
+    if not MAILGUN_TO_RAW:
+        return []
+    recipients = [item.strip() for item in MAILGUN_TO_RAW.split(",")]
+    return [item for item in recipients if item]
+
+
+def build_notification_html(form_type: str, fields: Dict[str, str], submission_id: str, timestamp_iso: str) -> str:
+    rows = []
+    for key, value in fields.items():
+        if key == "__submitted_via":
+            continue
+        safe_key = html.escape(str(key))
+        safe_val = html.escape(str(value or ""))
+        rows.append(f"<tr><td style='padding:6px 10px;border:1px solid #ddd;'><strong>{safe_key}</strong></td><td style='padding:6px 10px;border:1px solid #ddd;'>{safe_val}</td></tr>")
+    rows_html = "".join(rows) if rows else "<tr><td style='padding:6px 10px;border:1px solid #ddd;' colspan='2'><em>Inga fält hittades</em></td></tr>"
+    return (
+        "<div style='font-family:Arial,sans-serif;'>"
+        "<h2>Ny formulärförfrågan</h2>"
+        f"<p><strong>Formulär:</strong> {html.escape(form_type)}<br/>"
+        f"<strong>ID:</strong> {html.escape(submission_id)}<br/>"
+        f"<strong>Tid (UTC):</strong> {html.escape(timestamp_iso)}</p>"
+        "<table style='border-collapse:collapse;width:100%;max-width:900px;'>"
+        f"{rows_html}"
+        "</table>"
+        "</div>"
+    )
+
+
+def send_mailgun_submission_notification(submission: Dict[str, Any]) -> None:
+    recipients = get_mailgun_recipients()
+    if not (MAILGUN_DOMAIN and MAILGUN_API_KEY and MAILGUN_FROM and recipients):
+        return
+
+    form_type = str(submission.get("form_type", "Kontakt"))
+    fields = submission.get("fields", {})
+    if not isinstance(fields, dict):
+        fields = {}
+    submission_id = str(submission.get("id", ""))
+    timestamp_iso = str(submission.get("timestamp", ""))
+    subject = f"Ny förfrågan: {form_type}"
+    text_body = (
+        f"Ny formulärförfrågan\n\n"
+        f"Formulär: {form_type}\n"
+        f"ID: {submission_id}\n"
+        f"Tid (UTC): {timestamp_iso}\n\n"
+        f"Sammanfattning:\n{submission.get('form_summary', '')}"
+    )
+    html_body = build_notification_html(form_type, fields, submission_id, timestamp_iso)
+
+    try:
+        requests.post(
+            f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
+            auth=("api", MAILGUN_API_KEY),
+            data={
+                "from": MAILGUN_FROM,
+                "to": recipients,
+                "subject": subject,
+                "text": text_body,
+                "html": html_body,
+            },
+            timeout=15,
+        ).raise_for_status()
+    except Exception as exc:
+        print(f"Mailgun notification failed: {exc}")
+
+
 def process_form_submission(form_type: str, fields: Dict[str, Any], submitted_via: str = "web_form") -> str:
     normalized_form_type = display_form_type(form_type)
     safe_fields = sanitize_fields(fields, submitted_via=submitted_via)
@@ -782,6 +854,7 @@ def process_form_submission(form_type: str, fields: Dict[str, Any], submitted_vi
         "submitted_via": submitted_via,
     }
     save_submission_record(submission)
+    send_mailgun_submission_notification(submission)
     return submission_id
 
 
