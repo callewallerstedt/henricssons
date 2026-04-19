@@ -1357,3 +1357,190 @@
     flex-wrap: wrap;
     gap: 1rem;
 }
+
+/* ==========================================================
+   Mobile refinements — desktop layout left untouched.
+   Scoped so anything ≥769px is unaffected.
+   ========================================================== */
+@media (max-width: 768px) {
+    /* Section / wrap padding */
+    .hb-premium .wrap { padding: 0 1.1rem; }
+    .hb-section { padding: 3.25rem 0; }
+    .hb-section--tight { padding: 2.5rem 0; }
+
+    /* Top / nav */
+    .hb-top { font-size: 0.72rem; }
+    .hb-top .wrap { height: 30px; }
+    .hb-nav { height: 64px; }
+    .hb-logo img { height: 38px; }
+    .hb-burger { padding: 0.4rem; }
+    .hb-nav-links { top: 64px; padding: 1rem 1.1rem; gap: 0.9rem; }
+    .hb-nav-links a { font-size: 0.95rem; padding: 0.4rem 0; width: 100%; }
+    .hb-nav-cta { width: 100%; text-align: center; padding: 0.85rem 1rem; }
+
+    /* Announcement */
+    .hb-announcement { padding: 0.75rem 0; }
+    .hb-announcement .wrap { font-size: 0.82rem; gap: 0.6rem; flex-wrap: wrap; }
+    .hb-announcement .tag { font-size: 0.62rem; padding: 0.25rem 0.55rem; }
+
+    /* Hero (home) */
+    .hb-hero { min-height: 0; }
+    .hb-hero .wrap { padding-top: 3rem; padding-bottom: 8.5rem; }
+    .hb-hero h1 { font-size: clamp(2rem, 8vw, 2.6rem); margin-top: 0.6rem; }
+    .hb-hero .lead { font-size: 0.98rem; margin-top: 1rem; line-height: 1.6; }
+    .hb-hero .rule { margin: 1rem 0; }
+    .hb-ctas { gap: 0.6rem; margin-top: 1.4rem; }
+    .hb-hero-meta .wrap { padding: 0.85rem 1.1rem; gap: 0.5rem; }
+    .hb-hero-meta .k { font-size: 1.2rem; }
+    .hb-hero-meta .v { font-size: 0.6rem; letter-spacing: 0.14em; margin-top: 0.2rem; }
+
+    /* Buttons */
+    .hb-btn { padding: 0.85rem 1.3rem; font-size: 0.78rem; letter-spacing: 0.12em; }
+    .hb-btn-primary { padding: 0.95rem 1.5rem; font-size: 0.92rem; }
+    .hb-ctas .hb-btn,
+    .hb-ctas .hb-btn-primary { flex: 1 1 100%; justify-content: center; text-align: center; }
+    .hb-finalcta .hb-ctas .hb-btn,
+    .hb-finalcta .hb-ctas .hb-btn-primary { flex: 0 1 auto; }
+
+    /* Page hero (sub-pages) */
+    .hb-pagehero { padding: 2.75rem 0 2.5rem; }
+    .hb-pagehero h1 { font-size: clamp(1.7rem, 7vw, 2.2rem); line-height: 1.18; margin-top: 0.6rem; }
+    .hb-pagehero .lead { font-size: 0.95rem; margin-top: 1rem; line-height: 1.6; }
+
+    /* Intro */
+    .hb-intro .wrap,
+    .wrap.hb-intro { gap: 1.75rem; }
+    .hb-intro .image .badge { right: 0; font-size: 0.78rem; padding: 0.65rem 0.95rem; bottom: 18px; }
+
+    /* Service cards */
+    .hb-services .head,
+    .hb-process .head,
+    .hb-gallery .head,
+    .hb-finalcta .head { margin-bottom: 2rem; }
+    .hb-card .body { padding: 1.4rem 1.25rem 1.6rem; }
+    .hb-card h3 { font-size: 1.25rem; }
+    .hb-card p { font-size: 0.92rem; margin-top: 0.7rem; }
+    .hb-card .more { margin-top: 1rem; }
+
+    /* Process steps */
+    .hb-step .num { font-size: 1.85rem; margin-bottom: 0.6rem; }
+    .hb-step h4 { font-size: 1.05rem; }
+
+    /* Partners */
+    .hb-partners { padding: 2.5rem 0; }
+    .hb-partners-row { gap: 1.5rem 2rem; }
+    .hb-partners-row img { max-height: 40px; }
+
+    /* Gallery (home) */
+    .hb-gallery .head { margin-bottom: 1.5rem; }
+    .hb-gallery .head h2 { font-size: 1.6rem; }
+    .hb-gallery-grid { gap: 0.5rem; }
+
+    /* Final CTA */
+    .hb-finalcta h2 { font-size: clamp(1.6rem, 6.5vw, 2.1rem); }
+    .hb-finalcta p { font-size: 0.95rem; margin-top: 1rem; }
+    .hb-finalcta .phone { font-size: 1.05rem; margin-top: 1.5rem; }
+
+    /* Prose / about */
+    .hb-prose { font-size: 0.98rem; line-height: 1.7; }
+    .hb-prose h2 { font-size: 1.4rem; margin-top: 2rem; }
+    .hb-prose h3 { font-size: 1.1rem; margin-top: 1.5rem; }
+
+    /* Content split (about etc) */
+    .hb-content-split .wrap { gap: 1.75rem; }
+    .hb-content-split .side-image { position: static; aspect-ratio: 16 / 11; max-height: 320px; }
+
+    /* Forms — bump font to 16px to stop iOS auto-zoom, give comfy tap targets */
+    .hb-form-card { padding: 1.25rem 1.1rem; }
+    .hb-form-card h2 { font-size: 1.3rem; }
+    .hb-form-card .subtitle { font-size: 0.9rem; margin-bottom: 1.25rem; }
+    .hb-form-row input,
+    .hb-form-row textarea,
+    .hb-form-row select,
+    .hb-form-card .form-group input,
+    .hb-form-card .form-group textarea,
+    .hb-form-card .form-group select {
+        font-size: 16px;
+        padding: 0.95rem 0.9rem;
+    }
+    .hb-form-row label,
+    .hb-form-card .form-group label {
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        margin-bottom: 0.4rem;
+    }
+    .hb-form-row,
+    .hb-form-card .form-group { margin-bottom: 0.95rem; }
+    .hb-form-row textarea,
+    .hb-form-card .form-group textarea { min-height: 110px; }
+    .hb-form-note { font-size: 0.78rem; }
+
+    /* Selector cards (kapellforfragan) */
+    .hb-selector-card { padding: 1.25rem 1.1rem; }
+    .hb-selector-card + .hb-selector-card { margin-top: 0.9rem; }
+    .hb-selector-card h2,
+    .hb-selector-card h3 { font-size: 1.15rem; }
+    .hb-selector-card p { font-size: 0.9rem; margin-bottom: 0.85rem; }
+    .tillverkare-wrapper,
+    .modeller-wrapper { max-height: 240px; padding: 0.45rem; }
+    .grid1-item,
+    .grid2-item { padding: 0.75rem 0.8rem; font-size: 0.9rem; min-height: 44px; }
+    .grid2-item { min-height: 48px; }
+
+    /* Contact info card */
+    .hb-contact-info { padding: 1.5rem 1.25rem; }
+    .hb-contact-info h2 { font-size: 1.3rem; margin-bottom: 1rem; }
+    .hb-contact-info .row { margin-bottom: 1.1rem; }
+    .hb-contact-info .row p { font-size: 0.95rem; }
+    .hb-contact-grid { gap: 1.5rem; }
+
+    /* Gallery (bilder & exempel) */
+    .hb-search-bar { gap: 0.4rem; margin-bottom: 1.25rem; }
+    .hb-search-bar input { padding: 0.85rem 0.9rem; font-size: 16px; }
+    .hb-search-bar button { padding: 0 1rem; font-size: 0.74rem; letter-spacing: 0.1em; }
+    .hb-filters { gap: 0.4rem; margin-bottom: 1.5rem; }
+    .hb-filter-btn { padding: 0.5rem 0.9rem; font-size: 0.74rem; letter-spacing: 0.06em; }
+    .hb-item-grid { grid-template-columns: repeat(2, 1fr); gap: 0.65rem; }
+    .hb-item .caption { padding: 0.7rem 0.75rem 0.85rem; }
+    .hb-item .caption h3 { font-size: 0.9rem; }
+    .hb-item .caption .model { font-size: 0.78rem; margin-bottom: 0.55rem; }
+    .hb-item .caption .read-more { padding: 0.42rem 0.75rem; font-size: 0.62rem; letter-spacing: 0.1em; }
+    .hb-item .cat { font-size: 0.58rem; margin-bottom: 0.35rem; }
+
+    /* Map */
+    .hb-map iframe { height: 280px; }
+
+    /* Footer */
+    .hb-footer { padding: 2.75rem 0 1.25rem; }
+    .hb-footer .grid { gap: 1.5rem; }
+    .hb-footer .brand img { height: 40px; margin-bottom: 0.85rem; }
+    .hb-footer h5 { margin-bottom: 0.75rem; font-size: 0.9rem; }
+    .hb-footer-bottom {
+        margin-top: 2rem;
+        justify-content: center;
+        text-align: center;
+        font-size: 0.72rem;
+    }
+
+    /* Image modal (gallery page) */
+    .hb-premium #bildModal .modal-content { max-width: 96%; padding: 1rem 0.85rem 1.25rem; }
+    .hb-premium #bildModal .slider { height: 260px; }
+    .hb-premium #bildModal .slide-left,
+    .hb-premium #bildModal .slide-right { width: 40px; height: 40px; font-size: 1.4rem; }
+    .hb-premium #bildModal .modal-heading { font-size: 1.2rem; margin-top: 0.85rem; }
+    .hb-premium #bildModal .modal-model { font-size: 0.9rem; }
+    .hb-premium #bildModal .thumb-row img { width: 56px; height: 42px; }
+    .hb-premium #bildModal .modal-meta span { font-size: 0.72rem; padding: 0.4rem 0.6rem; }
+    .hb-premium #bildModal .modal-btn { padding: 0.75rem 1.3rem; font-size: 0.74rem; }
+    .hb-premium #fullscreenModal .fullscreen-close { width: 44px; height: 44px; font-size: 24px; top: 12px; right: 12px; }
+}
+
+@media (max-width: 420px) {
+    .hb-premium .wrap { padding: 0 0.95rem; }
+    .hb-item-grid { grid-template-columns: 1fr; }
+    .hb-hero h1 { font-size: 1.85rem; }
+    .hb-pagehero h1 { font-size: 1.55rem; }
+    .hb-hero-meta .wrap { grid-template-columns: 1fr 1fr; gap: 0.4rem; padding: 0.7rem 0.95rem; }
+    .hb-hero-meta .k { font-size: 1.05rem; }
+    .hb-finalcta .phone { font-size: 0.98rem; }
+}

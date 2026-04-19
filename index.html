@@ -549,6 +549,79 @@
         font-size: 0.78rem; color: #6b7788;
         display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
     }
+
+    /* ===== Mobile refinements (≤768px) — desktop layout untouched ===== */
+    @media (max-width: 768px) {
+        .hb-premium .wrap { padding: 0 1.1rem; }
+        .hb-section { padding: 3.25rem 0; }
+
+        .hb-top { font-size: 0.72rem; }
+        .hb-top .wrap { height: 30px; }
+        .hb-nav { height: 64px; }
+        .hb-logo img { height: 38px; }
+        .hb-nav-links { top: 64px; padding: 1rem 1.1rem; gap: 0.9rem; }
+        .hb-nav-links a { font-size: 0.95rem; padding: 0.4rem 0; width: 100%; }
+        .hb-nav-cta { width: 100%; text-align: center; padding: 0.85rem 1rem; }
+
+        .hb-announcement { padding: 0.75rem 0; }
+        .hb-announcement .wrap { font-size: 0.82rem; gap: 0.6rem; flex-wrap: wrap; }
+        .hb-announcement .tag { font-size: 0.62rem; padding: 0.25rem 0.55rem; }
+
+        .hb-hero { min-height: 0; }
+        .hb-hero .wrap { padding-top: 3rem; padding-bottom: 8.5rem; }
+        .hb-hero h1 { font-size: clamp(2rem, 8vw, 2.6rem); margin-top: 0.6rem; }
+        .hb-hero .lead { font-size: 0.98rem; margin-top: 1rem; line-height: 1.6; }
+        .hb-hero .rule { margin: 1rem 0; }
+        .hb-ctas { gap: 0.6rem; margin-top: 1.4rem; }
+        .hb-ctas .hb-btn,
+        .hb-ctas .hb-btn-primary { flex: 1 1 100%; justify-content: center; text-align: center; }
+        .hb-finalcta .hb-ctas .hb-btn,
+        .hb-finalcta .hb-ctas .hb-btn-primary { flex: 0 1 auto; }
+        .hb-hero-meta .wrap { padding: 0.85rem 1.1rem; gap: 0.5rem; }
+        .hb-hero-meta .k { font-size: 1.2rem; }
+        .hb-hero-meta .v { font-size: 0.6rem; letter-spacing: 0.14em; margin-top: 0.2rem; }
+
+        .hb-btn { padding: 0.85rem 1.3rem; font-size: 0.78rem; letter-spacing: 0.12em; }
+        .hb-btn-primary { padding: 0.95rem 1.5rem; font-size: 0.92rem; }
+
+        .hb-intro .wrap, .wrap.hb-intro { gap: 1.75rem; }
+        .hb-intro .image .badge { right: 0; font-size: 0.78rem; padding: 0.65rem 0.95rem; bottom: 18px; }
+
+        .hb-services .head, .hb-process .head, .hb-gallery .head { margin-bottom: 2rem; }
+        .hb-card .body { padding: 1.4rem 1.25rem 1.6rem; }
+        .hb-card h3 { font-size: 1.25rem; }
+        .hb-card p { font-size: 0.92rem; margin-top: 0.7rem; }
+        .hb-card .more { margin-top: 1rem; }
+
+        .hb-step .num { font-size: 1.85rem; margin-bottom: 0.6rem; }
+        .hb-step h4 { font-size: 1.05rem; }
+
+        .hb-partners { padding: 2.5rem 0; }
+        .hb-partners-row { gap: 1.5rem 2rem; }
+        .hb-partners-row img { max-height: 40px; }
+
+        .hb-gallery .head { margin-bottom: 1.5rem; }
+        .hb-gallery .head h2 { font-size: 1.6rem; }
+        .hb-gallery-grid { gap: 0.5rem; }
+
+        .hb-finalcta h2 { font-size: clamp(1.6rem, 6.5vw, 2.1rem); }
+        .hb-finalcta p { font-size: 0.95rem; margin-top: 1rem; }
+        .hb-finalcta .phone { font-size: 1.05rem; margin-top: 1.5rem; }
+
+        .hb-footer { padding: 2.75rem 0 1.25rem; }
+        .hb-footer .grid { gap: 1.5rem; }
+        .hb-footer .brand img { height: 40px; margin-bottom: 0.85rem; }
+        .hb-footer h5 { margin-bottom: 0.75rem; font-size: 0.9rem; }
+        .hb-footer-bottom { margin-top: 2rem; justify-content: center; text-align: center; font-size: 0.72rem; }
+    }
+
+    @media (max-width: 420px) {
+        .hb-premium .wrap { padding: 0 0.95rem; }
+        .hb-hero h1 { font-size: 1.85rem; }
+        .hb-hero-meta .wrap { grid-template-columns: 1fr 1fr; gap: 0.4rem; padding: 0.7rem 0.95rem; }
+        .hb-hero-meta .k { font-size: 1.05rem; }
+        .hb-finalcta .phone { font-size: 0.98rem; }
+    }
     </style>
 </head>
 <body class="hb-premium">
