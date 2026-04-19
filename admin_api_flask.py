@@ -1321,6 +1321,51 @@ def build_notification_html(
 </html>"""
 
 
+def build_customer_confirmation_html(
+    form_type: str,
+    customer_name: str,
+) -> str:
+    form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
+    safe_name = html.escape((customer_name or "").strip())
+    greeting = f"Hej {safe_name}," if safe_name else "Hej,"
+    return f"""<!DOCTYPE html>
+<html lang="sv">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#eef2f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#17212f;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;padding:32px 16px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border:1px solid #d9e1ea;border-radius:14px;overflow:hidden;">
+  <tr>
+    <td style="background:#10263f;padding:28px 32px;text-align:center;">
+      <div style="display:inline-block;background:#ffffff;border-radius:10px;padding:10px 16px;margin-bottom:14px;border:1px solid #d9e1ea;">
+        <img src="cid:henricssons-logo" alt="Henricssons Båtkapell" width="148" style="display:block;width:148px;height:auto;border:0;outline:none;text-decoration:none;">
+      </div>
+      <div style="color:#ffffff;font-size:22px;font-weight:700;margin-bottom:4px;">Tack för din förfrågan</div>
+      <div style="color:#c4cfdb;font-size:13px;">{form_label}</div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:28px 32px 18px;background:#ffffff;">
+      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">{greeting}</p>
+      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Tack för att du kontaktade oss på Henricssons Båtkapell.</p>
+      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Vi har tagit emot din förfrågan och återkommer så snart vi kan med information eller eventuella följdfrågor.</p>
+      <p style="margin:0;font-size:15px;line-height:1.7;color:#17212f;">Vänliga hälsningar<br>Henricssons Båtkapell</p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f7f9fc;padding:18px 32px;border-top:1px solid #e6ebf2;">
+      <p style="margin:0;color:#7d8796;font-size:12px;text-align:center;line-height:1.6;">
+        Detta är en automatisk bekräftelse på att vi tagit emot ditt formulär.
+      </p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
+
 def send_mailgun_email(
     *,
     recipients: List[str],
@@ -1558,6 +1603,43 @@ def send_mailgun_submission_notification(
         print(f"Mailgun notification failed: {info}")
 
 
+def send_mailgun_customer_confirmation(submission: Dict[str, Any]) -> None:
+    form_type = str(submission.get("form_type", "Kontakt"))
+    fields = submission.get("fields", {})
+    if not isinstance(fields, dict):
+        return
+
+    customer_email = str(fields.get("email", "") or "").strip()
+    if not customer_email or "@" not in customer_email:
+        return
+
+    customer_name = str(fields.get("name", "") or "").strip()
+    form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
+    subject = f"Tack för att du kontaktade oss - {form_label}"
+    text_body = (
+        f"Tack för att du kontaktade oss på Henricssons Båtkapell.\n\n"
+        f"Vi har tagit emot din {form_label.lower()} och återkommer så snart vi kan "
+        f"med information eller eventuella frågor.\n\n"
+        f"Vänliga hälsningar\n"
+        f"Henricssons Båtkapell\n"
+    )
+    html_body = build_customer_confirmation_html(form_type, customer_name)
+    inline_files: List[Tuple[str, bytes, str]] = []
+    try:
+        inline_files.append(("henricssons-logo", LOGO_FILE.read_bytes(), "image/png"))
+    except Exception as exc:
+        print(f"Could not attach confirmation logo: {exc}")
+    ok, info = send_mailgun_email(
+        recipients=[customer_email],
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        inline_attachments=inline_files,
+    )
+    if not ok:
+        print(f"Customer confirmation failed: {info}")
+
+
 def process_form_submission(
     form_type: str,
     fields: Dict[str, Any],
@@ -1585,6 +1667,7 @@ def process_form_submission(
     save_submission_record(submission)
     saved_attachments = save_submission_attachments(submission_id, upload_files or [])
     send_mailgun_submission_notification(submission, attachments=saved_attachments)
+    send_mailgun_customer_confirmation(submission)
     return submission_id
 
 
