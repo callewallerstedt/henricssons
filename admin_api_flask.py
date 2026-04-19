@@ -1418,14 +1418,14 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
 
     summary_html = (
         '<div style="margin:18px 0 16px;padding:16px 18px;background:#fcfbf7;border:1px solid #e6ebf2;border-radius:10px;">'
-        '<div style="font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Din inskickade sammanfattning</div>'
+        '<div style="font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Sammanfattning</div>'
         + "".join(
             f'<div style="font-size:14px;line-height:1.75;color:#17212f;"><strong>{html.escape(label)}:</strong> {html.escape(value)}</div>'
             for label, value in rows
         )
         + '</div>'
     )
-    summary_text = "Din inskickade sammanfattning:\n" + "\n".join(
+    summary_text = "Sammanfattning:\n" + "\n".join(
         f"- {label}: {value}" for label, value in rows
     ) + "\n\n"
     return summary_html, summary_text
