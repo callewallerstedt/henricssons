@@ -2,92 +2,1061 @@
 <html lang="sv">
 <head>
     <meta charset="utf-8" />
-    <title>Admin - Henricssons Båtkapell</title>
+    <title>Admin · Henricssons Båtkapell</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" href="logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.css" />
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css" rel="stylesheet" />
-    <link rel="icon" href="logo.png">
     <style>
-        body { padding: 0.5rem 5px; max-width: 1600px; margin:0 auto; font-family: Montserrat, Arial, sans-serif; color: #111; }
-        h1, h2, h3, h4, h5, h6, label, p, span, div, input, textarea { color: #111 !important; }
-        .tab-btn, .primary-tab-btn, .btn, .btn-secondary, .add-btn, .grid1-item, .grid2-item, .extras-item {
-            color: #111 !important;
+        /* ================ DESIGN TOKENS ================ */
+        :root {
+            --bg: #f6f8fb;
+            --surface: #ffffff;
+            --surface-2: #f0f4f9;
+            --border: #e2e8f0;
+            --border-strong: #cbd5e1;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --text-soft: #475569;
+            --brand: #0a1d33;
+            --brand-2: #0b3b65;
+            --accent: #d4a24a;
+            --accent-soft: #fff4dc;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #10b981;
+            --success-soft: #d1fae5;
+            --danger: #ef4444;
+            --danger-soft: #fee2e2;
+            --warning: #f59e0b;
+            --warning-soft: #fef3c7;
+            --info: #0ea5e9;
+            --info-soft: #e0f2fe;
+            --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+            --shadow: 0 2px 8px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+            --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.10), 0 4px 10px rgba(15, 23, 42, 0.06);
+            --radius: 10px;
+            --radius-lg: 14px;
+            --radius-sm: 6px;
         }
-        .btn, .btn-secondary, .tab-btn, .primary-tab-btn, .add-btn, .add-item-btn, .form-filter-btn {
-            min-height: 40px;
-            touch-action: manipulation;
+
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            line-height: 1.55;
+            color: var(--text);
+            background: var(--bg);
+            -webkit-font-smoothing: antialiased;
         }
-        h1 { margin-bottom: 1.5rem; color: #0a2342; }
-        .admin-grid-container { display: flex; gap: 1rem; flex-wrap: wrap; }
-        .admin-grid-col { flex: 1 1 350px; min-width: 300px; }
-        .grid1, .grid2 { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 1.5rem; }
-        /* Enhetlig knappstil för alla listobjekt */
-        .grid1-item, .grid2-item, .extras-item { background: #f5f5f5; border: 1px solid #1976d2; border-radius: 6px; padding: 0.2rem 0.6rem; margin: 3px; cursor: pointer; transition: background 0.2s, border 0.2s; font-size: 0.9rem; font-weight: 600; line-height: 1.3; color:#0a2342; }
-        .grid1-item.selected-t, .grid2-item.selected-m { background: #64b5f6; border-color: #1976d2; color:#0a2342; }
-        .grid1-item:hover, .grid2-item:hover { background: #f0f7fa; }
-        /* Behåll gul markering även när man hovrar den valda */
-        .grid1-item.selected-t:hover { background: #64b5f6; }
-        .grid2-item.selected-m:hover { background: #64b5f6; }
-        .quicksearch { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border-radius: 4px; border: 1px solid #ccc; }
-        .edit-section {
-            background: #fffbe6;
-            border: 1.5px solid #1976d2;
+
+        /* ================ LAYOUT SHELL ================ */
+        .app {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            min-height: 100vh;
+        }
+        .sidebar {
+            background: var(--brand);
+            color: #e2e8f0;
+            padding: 1.25rem 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.5rem 0.6rem 1.2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            margin-bottom: 0.75rem;
+        }
+        .sidebar-brand img {
+            width: 34px;
+            height: 34px;
+            object-fit: contain;
+            background: #fff;
             border-radius: 8px;
-            padding: 1rem;
-            margin-top: 1rem;
-            position: relative;
-            z-index: 100;
+            padding: 4px;
         }
-        .edit-section h2 { margin-top: 0; color: #1976d2; }
-        .edit-section label { font-weight: bold; margin-top: 0.5rem; display: block; color: #0a2342; }
-        .edit-section input, .edit-section textarea { width: 100%; padding: 0.5rem; margin-bottom: 0.5rem; border-radius: 4px; border: 1px solid #ccc; }
-        .edit-section .btn { background: #1976d2; color: #fff; border: none; border-radius: 4px; padding: 0.35rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; margin: 0.25rem 0.5rem 0.25rem 0; }
-        .edit-section .btn-danger { background: #dc3545; }
-        .edit-section .btn:hover { background: #a08500; }
-        .edit-section .btn-danger:hover { background: #c82333; }
-        .edit-section .success { color: #155724; background: #d4edda; padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; }
-        .edit-section .error { color: #dc3545; background: #f8d7da; padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; }
-        /* Preview styling to match announcement box exactly */
+        .sidebar-brand-text {
+            font-weight: 700;
+            font-size: 0.92rem;
+            letter-spacing: 0.01em;
+            color: #fff;
+            line-height: 1.2;
+        }
+        .sidebar-brand-text small {
+            display: block;
+            font-weight: 400;
+            font-size: 0.72rem;
+            color: rgba(255,255,255,0.58);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+        .sidebar-label {
+            text-transform: uppercase;
+            font-size: 0.68rem;
+            letter-spacing: 0.12em;
+            color: rgba(255,255,255,0.4);
+            padding: 0.85rem 0.7rem 0.35rem;
+            font-weight: 600;
+        }
+        .primary-tab-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            width: 100%;
+            background: transparent;
+            color: rgba(255,255,255,0.72);
+            border: none;
+            padding: 0.58rem 0.7rem;
+            border-radius: 8px;
+            font: inherit;
+            font-weight: 500;
+            font-size: 0.88rem;
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .primary-tab-btn:hover {
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+        }
+        .primary-tab-btn.active {
+            background: rgba(212, 162, 74, 0.18);
+            color: #fff;
+            box-shadow: inset 2px 0 0 var(--accent);
+        }
+        .primary-tab-btn .icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            opacity: 0.85;
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 0.8rem 0.7rem;
+            font-size: 0.72rem;
+            color: rgba(255,255,255,0.45);
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .sidebar-footer a { color: rgba(255,255,255,0.7); text-decoration: none; }
+        .sidebar-footer a:hover { color: #fff; }
+
+        .main {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.9rem 1.5rem;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .topbar-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
+            margin: 0;
+        }
+        .topbar-title small {
+            display: block;
+            font-weight: 400;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+        .topbar-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.45rem 0.75rem;
+            font: inherit;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-soft);
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .topbar-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.4rem;
+            cursor: pointer;
+            color: var(--text);
+            padding: 0.2rem 0.45rem;
+        }
+
+        .content {
+            padding: 1.5rem;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* ================ CARDS ================ */
+        .card, .dashboard-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .card + .card, .dashboard-card + .dashboard-card { margin-top: 1rem; }
+        .card h2, .dashboard-card h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text);
+            margin: 0 0 1rem 0;
+            padding-bottom: 0.6rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .card h3, .dashboard-card h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text);
+            margin: 0 0 0.6rem 0;
+        }
+        h1 { font-size: 1.3rem; font-weight: 700; margin: 0 0 1rem 0; }
+
+        /* ================ STAT CARDS ================ */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem 1.1rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: var(--primary);
+        }
+        .stat-card.is-warning::before { background: var(--warning); }
+        .stat-card.is-success::before { background: var(--success); }
+        .stat-card.is-info::before { background: var(--info); }
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+        }
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.1;
+        }
+        .stat-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* ================ BUTTONS ================ */
+        .btn, .btn-secondary, .add-btn, .add-item-btn, .tab-btn, .form-filter-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            font: inherit;
+            font-weight: 500;
+            font-size: 0.85rem;
+            padding: 0.5rem 0.9rem;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+            min-height: 36px;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .btn {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+        .btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+        .btn:active { transform: translateY(1px); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text-soft);
+            border: 1px solid var(--border-strong);
+        }
+        .btn-secondary:hover { background: var(--surface-2); color: var(--text); }
+        .btn-danger {
+            background: var(--danger) !important;
+            color: #fff !important;
+            border-color: var(--danger) !important;
+        }
+        .btn-danger:hover { background: #dc2626 !important; border-color: #dc2626 !important; }
+        .btn-success {
+            background: var(--success) !important;
+            color: #fff !important;
+            border-color: var(--success) !important;
+        }
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-soft);
+            border: 1px solid transparent;
+        }
+        .btn-ghost:hover { background: var(--surface-2); }
+
+        .add-btn {
+            background: var(--brand);
+            color: #fff !important;
+            border: none;
+            border-radius: 8px;
+            min-width: 36px;
+            min-height: 36px;
+            padding: 0;
+            font-size: 1.2rem;
+            font-weight: 400;
+        }
+        .add-btn:hover { background: var(--brand-2); }
+
+        .add-item-btn {
+            width: 100%;
+            background: transparent;
+            color: var(--primary);
+            border: 1px dashed var(--border-strong);
+            font-weight: 500;
+        }
+        .add-item-btn:hover { background: var(--info-soft); border-color: var(--primary); }
+
+        /* ================ INPUTS ================ */
+        input[type="text"], input[type="date"], input[type="email"], textarea, select {
+            width: 100%;
+            font: inherit;
+            font-size: 0.88rem;
+            padding: 0.55rem 0.75rem;
+            border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            background: var(--surface);
+            color: var(--text);
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+        label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-soft);
+            margin-bottom: 0.3rem;
+            margin-top: 0.75rem;
+        }
+        label:first-child { margin-top: 0; }
+        .hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+        .quicksearch {
+            padding: 0.55rem 0.75rem 0.55rem 2.2rem;
+            background: var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>") 0.7rem center no-repeat;
+            margin-bottom: 0.85rem;
+        }
+
+        /* ================ SECTION VISIBILITY ================ */
+        .dashboard-container { display: none; }
+        .dashboard-container.active { display: block; }
+        #calendar-section { display: none; }
+        #calendar-section.active { display: block; }
+
+        /* ================ DASHBOARD GRID ================ */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.25rem;
+        }
+        @media (max-width: 1100px) { .dashboard-grid { grid-template-columns: 1fr; } }
+
+        /* ================ STATUS FOLDERS (KANBAN) ================ */
+        .statusmappar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .statusmappar-title {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .form-type-filters {
+            display: flex;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+        .form-filter-btn {
+            background: var(--surface);
+            color: var(--text-soft);
+            border: 1px solid var(--border);
+            padding: 0.4rem 0.85rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            min-height: 32px;
+        }
+        .form-filter-btn:hover { background: var(--surface-2); }
+        .form-filter-btn.active {
+            background: var(--brand);
+            color: #fff !important;
+            border-color: var(--brand);
+        }
+
+        .status-folders {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.85rem;
+        }
+        .status-folder {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            min-height: 260px;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .status-folder[data-status="nya-inskick"] { border-top: 3px solid var(--primary); }
+        .status-folder[data-status="vantar-pa-svar"] { border-top: 3px solid var(--warning); }
+        .status-folder[data-status="i-produktion"] { border-top: 3px solid var(--info); }
+        .status-folder[data-status="redo-for-leverans"] { border-top: 3px solid var(--success); }
+        .status-folder[data-status="todo"] { border-top: 3px solid #0f766e; }
+        .status-folder.drag-over { background: var(--info-soft); border-color: var(--primary); }
+        .status-folder h3 {
+            margin: 0 0 0.6rem 0;
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-soft);
+        }
+        .folder-items {
+            flex: 1;
+            min-height: 140px;
+            max-height: 420px;
+            overflow-y: auto;
+            margin-bottom: 0.7rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            padding: 2px;
+        }
+        .folder-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.6rem 0.7rem;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.15s, border-color 0.15s;
+            box-shadow: var(--shadow-sm);
+        }
+        .folder-item:hover {
+            border-color: var(--primary);
+            box-shadow: var(--shadow);
+            transform: translateY(-1px);
+        }
+        .folder-item.dragging { opacity: 0.5; }
+        .folder-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.4rem;
+            margin-bottom: 0.3rem;
+        }
+        .folder-item-title { display: block; font-weight: 600; color: var(--text); font-size: 0.88rem; }
+        .folder-item-title .person-name {
+            display: block;
+            font-weight: 600;
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+        .folder-item-title .form-type-line {
+            display: inline-block;
+            margin-top: 4px;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            border-radius: 999px;
+            background: var(--info-soft);
+            color: var(--brand-2);
+            letter-spacing: 0.02em;
+        }
+        .folder-item-title .boat-model-line {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.76rem;
+            font-style: italic;
+            margin-top: 4px;
+        }
+        .folder-item-title .contact-subject {
+            display: block;
+            color: var(--warning);
+            font-size: 0.76rem;
+            margin-top: 4px;
+        }
+        .folder-item-title .ai-source-badge {
+            display: inline-block;
+            margin-top: 4px;
+            padding: 1px 6px;
+            font-size: 0.66rem;
+            font-weight: 600;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            background: var(--accent-soft);
+            border-radius: 3px;
+        }
+        .folder-item-delete {
+            background: transparent;
+            color: var(--danger);
+            border: none;
+            border-radius: 6px;
+            padding: 2px 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            opacity: 0.6;
+            transition: opacity 0.15s, background 0.15s;
+        }
+        .folder-item-delete:hover { opacity: 1; background: var(--danger-soft); }
+        .folder-item-content { color: var(--text-muted); font-size: 0.78rem; margin-top: 0.25rem; }
+        .form-submission-item { border-left: 3px solid var(--accent); }
+
+        /* ================ CHATBOT ================ */
+        .chatbot-card {
+            display: flex;
+            flex-direction: column;
+            min-height: 500px;
+        }
+        .chatbot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chatbot-messages {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 420px;
+            min-height: 240px;
+            padding: 0.85rem;
+            background: var(--surface-2);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            margin-bottom: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+        .chat-message {
+            max-width: 85%;
+            padding: 0.55rem 0.75rem;
+            border-radius: 12px;
+            line-height: 1.5;
+        }
+        .chat-message.user {
+            align-self: flex-end;
+            background: var(--primary);
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .chat-message.user .message-text, .chat-message.user .message-time { color: #fff; }
+        .chat-message.assistant {
+            align-self: flex-start;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+        }
+        .chat-message .message-text { margin: 0; font-size: 0.88rem; color: var(--text); }
+        .chat-message .message-time {
+            display: block;
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+            opacity: 0.85;
+        }
+        .chat-message .message-text strong { font-weight: 600; }
+        .chat-message .message-text em { font-style: italic; }
+        .chat-message .message-text code {
+            background: rgba(15,23,42,0.08);
+            padding: 0.12rem 0.35rem;
+            border-radius: 3px;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 0.85em;
+        }
+        .chat-message .message-text pre {
+            background: rgba(15,23,42,0.06);
+            padding: 0.6rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 0.4rem 0;
+        }
+        .chat-message .message-text pre code { background: none; padding: 0; }
+        .chat-message .message-text ul, .chat-message .message-text ol { margin: 0.4rem 0; padding-left: 1.35rem; }
+        .chat-message .message-text li { margin: 0.2rem 0; }
+        .chat-message .message-text a { color: var(--primary); text-decoration: underline; }
+        .chat-message .message-text p { margin: 0.4rem 0; }
+        .chat-message .message-text p:first-child { margin-top: 0; }
+        .chat-message .message-text p:last-child { margin-bottom: 0; }
+
+        .chat-message.typing .message-text { display: inline-flex; align-items: center; gap: 0.3rem; }
+        .typing-dots { display: inline-flex; gap: 0.25rem; }
+        .typing-dots span {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--text-muted);
+            animation: typing-dot-pulse 1.2s infinite ease-in-out;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing-dot-pulse {
+            0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
+            40% { opacity: 1; transform: translateY(-3px); }
+        }
+
+        .chatbot-input-container {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .chatbot-input-container input { flex: 1; }
+        #advanced-chat-summary {
+            display: none;
+            margin-bottom: 0.6rem;
+            background: var(--info-soft);
+            border: 1px solid var(--info);
+            border-radius: 8px;
+            padding: 0.7rem 0.85rem;
+            font-size: 0.85rem;
+            color: var(--text);
+        }
+        .advanced-summary-heading { font-weight: 600; margin-bottom: 0.35rem; }
+        .advanced-summary-list { margin: 0; padding-left: 1rem; }
+        .advanced-summary-list li { margin: 0 0 0.15rem 0; }
+        .advanced-summary-empty { color: var(--text-muted); }
+        #advanced-chat-submit-btn {
+            display: none;
+            width: 100%;
+            margin-top: 0.6rem;
+            background: var(--success);
+            border-color: var(--success);
+        }
+        #advanced-chat-submit-btn:hover { background: #059669; border-color: #059669; }
+
+        /* ================ LIST GRIDS (Tillverkare/Modeller/Extras) ================ */
+        .admin-grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+        .admin-grid-col { min-width: 0; }
+        .admin-grid-col > h2, .card > h2 {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .tillverkare-heading, .modeller-heading, #extras-heading {
+            color: var(--text) !important;
+        }
+        .grid1, .grid2, .grid-extras {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-bottom: 1rem;
+            max-height: 60vh;
+            overflow-y: auto;
+            padding: 2px;
+        }
+        .grid1-item, .grid2-item, .extras-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.4rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.83rem;
+            font-weight: 500;
+            color: var(--text-soft);
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+            box-shadow: none;
+        }
+        .grid1-item:hover, .grid2-item:hover, .extras-item:hover {
+            background: var(--surface-2);
+            border-color: var(--border-strong);
+            color: var(--text);
+        }
+        .grid1-item.selected-t,
+        .grid2-item.selected-m,
+        .extras-item.selected-e {
+            background: var(--brand);
+            color: #fff !important;
+            border-color: var(--brand);
+        }
+
+        .models-wrapper { display: flex; gap: 1rem; align-items: flex-start; }
+        .models-wrapper .grid2 { flex: 1 1 0; min-width: 0; }
+        .extras-wrapper { display: flex; gap: 1rem; align-items: flex-start; }
+        .extras-wrapper .grid-extras { flex: 1 1 0; min-width: 0; }
+
+        /* ================ EDIT SECTION (side panel) ================ */
+        .edit-section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--primary);
+            border-radius: var(--radius);
+            padding: 1rem;
+            margin-top: 0.5rem;
+            position: relative;
+            z-index: 50;
+            box-shadow: var(--shadow);
+        }
+        .edit-section h2 {
+            margin: 0 0 0.8rem 0;
+            color: var(--text);
+            font-size: 1rem;
+            font-weight: 600;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        .edit-section label {
+            margin-top: 0.6rem;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-soft);
+        }
+        .edit-section input, .edit-section textarea {
+            margin-top: 0.15rem;
+            margin-bottom: 0;
+        }
+        .edit-section .btn,
+        .edit-section .btn-secondary,
+        .edit-section .btn-danger {
+            margin: 0.3rem 0.25rem 0 0;
+        }
+        .edit-section .success {
+            background: var(--success-soft);
+            color: #065f46;
+            padding: 0.55rem 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+        }
+        .edit-section .error {
+            background: var(--danger-soft);
+            color: #991b1b;
+            padding: 0.55rem 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+        }
+        .success, .error { border-radius: 8px; padding: 0.6rem 0.85rem; font-size: 0.85rem; margin-bottom: 0.75rem; }
+        .success { background: var(--success-soft); color: #065f46; border: 1px solid rgba(16,185,129,0.3); }
+        .error { background: var(--danger-soft); color: #991b1b; border: 1px solid rgba(239,68,68,0.3); }
+
+        @media (min-width: 901px) {
+            #edit-section.editing {
+                position: sticky;
+                top: 1rem;
+                flex: 0 0 340px;
+                width: auto;
+            }
+            #extras-edit-section.editing {
+                position: sticky;
+                top: 1rem;
+                flex: 0 0 340px;
+                width: auto;
+            }
+        }
+
+        /* ================ IMAGE THUMBS ================ */
+        .img-thumb-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0.5rem 0 0.75rem; }
+        .edit-section .img-thumb { position: relative; display: inline-block; }
+        .edit-section .img-thumb img {
+            width: 70px; height: 52px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+        .edit-section .del-img-btn {
+            position: absolute; top: -6px; right: -6px;
+            background: var(--danger); color: #fff;
+            border: 2px solid var(--surface);
+            border-radius: 50%;
+            width: 20px; height: 20px;
+            font-size: 11px;
+            line-height: 1;
+            padding: 0;
+            cursor: pointer;
+        }
+        .edit-section .del-img-btn:hover { background: #dc2626; }
+        .no-images { outline: 2px dashed var(--danger) !important; }
+
+        /* ================ MODAL ================ */
+        .modal, .item-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            padding: 1.5rem;
+            overflow-y: auto;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        .modal.active, .item-modal.active { display: flex; }
+        .modal-content, .item-modal-content {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            margin: auto;
+            max-width: 520px;
+            width: 100%;
+            box-shadow: var(--shadow-lg);
+        }
+        .item-modal-content h3 { margin-top: 0; color: var(--text); }
+        .item-modal-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; justify-content: flex-end; }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.85rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .modal-header h2 { margin: 0; font-size: 1.1rem; color: var(--text); border: none; padding: 0; }
+        .modal-close {
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            line-height: 1;
+            transition: background 0.15s, color 0.15s;
+        }
+        .modal-close:hover { background: var(--surface-2); color: var(--text); }
+
+        /* Form Submission Modal (wide) */
+        .form-submission-modal-content {
+            background: var(--surface);
+            width: 95vw !important;
+            height: 90vh !important;
+            max-width: 1400px !important;
+            margin: auto;
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0;
+        }
+        .form-submission-modal-content .modal-header {
+            background: var(--brand);
+            color: #fff;
+            margin: 0;
+            padding: 1rem 1.5rem;
+            border-bottom: none;
+        }
+        .form-submission-modal-content .modal-header h2 { color: #fff; font-size: 1.1rem; }
+        .form-submission-modal-content .modal-close { background: rgba(255,255,255,0.12); color: #fff; }
+        .form-submission-modal-content .modal-close:hover { background: rgba(255,255,255,0.24); }
+        .form-submission-modal-content .modal-body {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            padding: 0;
+        }
+        .form-modal-columns {
+            display: flex;
+            flex: 1;
+            gap: 0;
+            overflow: hidden;
+            min-height: 0;
+        }
+        .form-info-column {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.25rem 1.5rem;
+            border-right: 1px solid var(--border);
+            min-height: 0;
+        }
+        .ai-response-column {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.25rem 1.5rem;
+            background: var(--surface-2);
+            min-height: 0;
+        }
+        .ai-response-column .form-section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.15rem;
+        }
+        .response-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+        .submission-date { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 0.85rem; }
+        .form-section { margin-bottom: 1.25rem; }
+        .form-section h3 { color: var(--text); margin-bottom: 0.7rem; font-size: 0.95rem; font-weight: 600; }
+        .form-section h4 { color: var(--text-soft); margin: 0.85rem 0 0.45rem; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-fields { background: var(--surface-2); padding: 0.9rem 1rem; border-radius: var(--radius); border: 1px solid var(--border); }
+        .form-field { margin-bottom: 0.55rem; padding-bottom: 0.55rem; border-bottom: 1px solid var(--border); font-size: 0.87rem; }
+        .form-field:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .form-field strong { color: var(--text-soft); display: inline-block; min-width: 140px; font-weight: 500; }
+        .submission-notes {
+            width: 100%;
+            min-height: 170px;
+            resize: vertical;
+            padding: 0.85rem 0.95rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            color: var(--text);
+            font: inherit;
+            line-height: 1.55;
+        }
+        .submission-notes:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+        }
+        .notes-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 0.8rem;
+            flex-wrap: wrap;
+        }
+        .notes-status {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+        }
+        .proposed-response { background: var(--accent-soft); padding: 1rem 1.15rem; border-radius: var(--radius); border-left: 3px solid var(--accent); line-height: 1.65; }
+        .proposed-response p { margin-bottom: 0.7rem; }
+        .proposed-response p:last-child { margin-bottom: 0; }
+
+        .category-badge, .form-type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+        .category-badge { background: var(--info-soft); color: var(--brand-2); }
+        .form-type-badge { background: var(--warning-soft); color: #78350f; }
+
+        /* ================ SWITCH ================ */
+        .switch { position: relative; display: inline-block; width: 36px; height: 20px; vertical-align: middle; margin-right: 6px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer;
+            inset: 0;
+            background: var(--border-strong);
+            transition: 0.2s;
+            border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute; content: "";
+            height: 16px; width: 16px;
+            left: 2px; bottom: 2px;
+            background: #fff;
+            transition: 0.2s;
+            border-radius: 50%;
+        }
+        .switch input:checked + .slider { background: var(--success); }
+        .switch input:checked + .slider:before { transform: translateX(16px); }
+        .inactive { opacity: 0.5; filter: grayscale(40%); }
+
+        .unsaved-indicator { color: var(--danger) !important; font-size: 0.88rem; font-weight: 600; margin-left: 0.35rem; }
+
+        /* ================ ANNOUNCEMENT PREVIEW ================ */
         #announcement-preview {
+            background: rgba(249, 250, 251, 0.85);
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.08);
+            padding: 3.4rem 3.75rem;
+            max-width: 720px;
+            margin: 0 auto;
+            min-height: 100px;
             text-align: left;
             position: relative;
+            border-radius: 0;
+            z-index: 0;
         }
         #announcement-preview::after {
             content: '';
             position: absolute;
             inset: 11px;
-            border: 3px solid #0b3b65; /* var(--secondary-color) */
+            border: 3px solid var(--brand-2);
             z-index: 1;
             pointer-events: none;
         }
+        #announcement-preview h1,
+        #announcement-preview h2,
         #announcement-preview h3 {
             font-family: 'Libre Baskerville', serif;
-            color: #0a1d33; /* var(--navy) */
+            color: var(--brand);
             margin-bottom: 0.5rem;
-            font-size: 1.15rem;
             font-weight: 600;
+            text-decoration: none;
+            border: none;
+            padding: 0;
+        }
+        #announcement-preview h3 {
+            font-size: 1.15rem;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            text-decoration: none;
-            border-bottom: none;
         }
-        #announcement-preview h1,
-        #announcement-preview h2 {
-            font-family: 'Libre Baskerville', serif;
-            color: #0a1d33; /* var(--navy) */
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            text-decoration: none;
-            border-bottom: none;
-        }
-        #announcement-preview h1 {
-            font-size: 1.6rem;
-            margin-top: 0;
-        }
-        #announcement-preview h2 {
-            font-size: 1.4rem;
-        }
+        #announcement-preview h1 { font-size: 1.6rem; margin-top: 0; }
+        #announcement-preview h2 { font-size: 1.4rem; }
         #announcement-preview p {
             font-family: 'Libre Baskerville', serif;
             color: rgba(10, 29, 51, 0.9);
@@ -95,1377 +1064,507 @@
             margin-bottom: 1rem;
             line-height: 1.7;
         }
-        #announcement-preview p:first-of-type {
+        #announcement-preview p:first-of-type { font-weight: 500; }
+
+        /* ================ ADMIN SUB-TABS (for Bilder & exempel) ================ */
+        #admin-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-bottom: 1rem;
+            padding: 0.4rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+        .tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-soft);
+            padding: 0.45rem 0.85rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
             font-weight: 500;
         }
-        #announcement-preview strong {
-            font-weight: 600;
-        }
-        #announcement-preview em {
-            font-style: italic;
-        }
-        /* Form submission modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 10000;
-            overflow-y: auto;
-            padding: 2rem;
-        }
-        .modal.active {
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-        }
-        .modal-content {
-            background: white;
-            border-radius: 8px;
-            padding: 2rem;
-            margin: auto;
-            max-width: 90%;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid #eee;
-        }
-
-        .form-submission-modal-content .modal-header {
-            background: linear-gradient(135deg, #1976d2, #1565c0);
-            color: white;
-            margin: 0;
-            padding: 1.5rem 2rem;
-            border-radius: 8px 8px 0 0;
-        }
-
-        .form-submission-modal-content .modal-header h2 {
-            color: white;
-            margin: 0;
-            font-size: 1.5rem;
-        }
-
-        .form-submission-modal-content .modal-close {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            border: none;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            font-size: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .form-submission-modal-content .modal-close:hover {
-            background: rgba(255,255,255,0.3);
-        }
-
-        .form-submission-modal-content .modal-body {
-            flex: 1;
-            overflow: hidden;
-            display: flex;
-        }
-        .modal-header h2 {
-            margin: 0;
-            color: #0a2342;
-        }
-        .modal-close {
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            font-size: 20px;
-            cursor: pointer;
-            line-height: 1;
-        }
-        .modal-close:hover {
-            background: #c82333;
-        }
-        .form-section {
-            margin-bottom: 2rem;
-        }
-        .form-section h3 {
-            color: #0a2342;
-            margin-bottom: 1rem;
-            font-size: 1.3rem;
-        }
-        .form-section h4 {
-            color: #0a2342;
-            margin-top: 1rem;
-            margin-bottom: 0.5rem;
-            font-size: 1.1rem;
-        }
-        .form-fields {
-            background: #f9f9f9;
-            padding: 1rem;
-            border-radius: 4px;
-        }
-        .form-field {
-            margin-bottom: 0.75rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 1px solid #eee;
-        }
-        .form-field:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-        .form-field strong {
-            color: #0a2342;
-            display: inline-block;
-            min-width: 150px;
-        }
-        .proposed-response {
-            background: #fffbe6;
-            padding: 1.5rem;
-            border-radius: 4px;
-            border-left: 4px solid #f7c45b;
-            line-height: 1.6;
-        }
-        .proposed-response p {
-            margin-bottom: 1rem;
-        }
-        .proposed-response p:last-child {
-            margin-bottom: 0;
-        }
-        /* Category and form type badges */
-        .category-badge, .form-type-badge {
-            display: inline-block;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-left: 0.5rem;
-            vertical-align: middle;
-        }
-        .category-badge {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-        .form-type-badge {
-            background: #fff3e0;
-            color: #f57c00;
-        }
-        .form-submission-item {
-            border-left: 4px solid #f7c45b;
-        }
-        .folder-item-title {
-            display: block;
-        }
-        .add-btn {
-            background: #b89300;
+        .tab-btn:hover { background: var(--surface-2); color: var(--text); }
+        .tab-btn.active {
+            background: var(--brand);
             color: #fff !important;
-            border: none;
-            border-radius: 4px;
-            width: 2.2rem;
-            height: 2.2rem;
-            font-size: 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            cursor: pointer;
+            border-color: var(--brand);
         }
-        .add-btn:hover { background: #a08500; }
-        h2 { display: flex; align-items: center; gap: 0.5rem; }
-        .btn-secondary { background: #6c757d !important; }
-        .btn-secondary:hover { background: #5a6268 !important; }
-        .img-thumb-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
-        .edit-section .img-thumb { position: relative; display: inline-block; margin: 0; }
-        .edit-section .img-thumb img { width: 80px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc; }
-        .edit-section .del-img-btn { position:absolute; top:-5px; right:-5px; background:#dc3545; color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:12px; line-height:18px; padding:0; cursor:pointer; }
-        .tab-btn { background:#f5f5f5; border:1px solid #1976d2; border-radius:5px; padding:0.35rem 0.8rem; font-weight:600; cursor:pointer; }
-        .tab-btn.active { background:#64b5f6; }
-        .grid-extras { display:flex; flex-wrap:wrap; gap:0; margin-bottom:1.5rem; }
-        .extras-item:hover { background:#f0f7fa; }
-        .extras-item { box-shadow: 0 1.5px 5px rgba(0,0,0,0.08); background: linear-gradient(135deg, #ffffff, #fefefc); }
-        .extras-item.selected-e { background: linear-gradient(135deg, #64b5f6, #e3f2fd); border-color:#1976d2; color:#0a2342; opacity:1 !important; filter:none !important; box-shadow: 0 4px 12px rgba(25,118,210,0.45); }
-        .extras-item.selected-e:hover { background:#64b5f6; }
-        /* Desktop layout: side-by-side */
-        .models-wrapper {
-            display: flex;
-            gap: 1.5rem;
-            align-items: flex-start;
-        }
-        .models-wrapper .grid2 {
-            flex: 1 1 0;
-            max-height: none;
-            overflow-y: auto;
-        }
-        .extras-wrapper {
-            display: flex;
-            gap: 1.5rem;
-            align-items: flex-start;
-        }
-        .extras-wrapper .grid-extras {
-            flex: 1 1 0;
-            max-height: none;
-            overflow-y: auto;
-        }
-        /* Toggle-switch */
-        .switch { position:relative; display:inline-block; width:36px; height:20px; vertical-align:middle; margin-right:6px; }
-        .switch input { opacity:0; width:0; height:0; }
-        .slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#ccc; transition:.2s; border-radius:20px; }
-        .slider:before { position:absolute; content:""; height:16px; width:16px; left:2px; bottom:2px; background:#fff; transition:.2s; border-radius:50%; }
-        .switch input:focus + .slider { box-shadow: 0 0 1px #2196F3; }
-        .switch input:checked + .slider { background: #28a745; }
-        .switch input:checked + .slider:before { transform: translateX(16px); }
-        .inactive { opacity:0.45; filter: grayscale(30%); }
-        .no-images {
-            /* Använd outline istället för border så elementets storlek behålls */
-            outline: 3px solid #dc3545 !important;
-        }
-        .unsaved-indicator { color: #dc3545 !important; font-size: 0.9rem; font-weight: 700; }
-        /* ---- Mobile admin layout ---- */
-        /* Desktop >=601px - sticky editing */
-        @media (min-width: 601px) {
-            #edit-section.editing {
-                position: sticky;
-                top: 0;
-                flex: 0 0 350px;
-                width: auto;
-                z-index: 100;
-            }
-            #extras-edit-section.editing {
-                position: sticky;
-                top: 0;
-                flex: 0 0 350px;
-                width: auto;
-                z-index: 100;
-            }
-        }
-        /* Mobil <=600px - static editing */
-        @media (max-width: 600px) {
-            .admin-grid-container { flex-direction: column; }
-            .admin-grid-col { flex: 1 1 100%; }
 
-            /* Tillverkare/Modell/Bilder-listor ska inte ha intern scroll på mobil */
-            .grid1, .grid2, .grid-extras {
-                max-height: none;
-                overflow-y: visible;
-            }
+        /* ================ CALENDAR ================ */
+        #calendar-section .dashboard-card { padding: 1.25rem 1.5rem; }
+        #calendar { margin-top: 0.5rem; }
+        .fc-header-toolbar { margin-bottom: 1rem !important; }
+        .fc-button {
+            background: var(--surface) !important;
+            color: var(--text) !important;
+            border: 1px solid var(--border-strong) !important;
+            box-shadow: none !important;
+        }
+        .fc-button-active, .fc-button-primary:not(:disabled).fc-button-active {
+            background: var(--brand) !important;
+            color: #fff !important;
+            border-color: var(--brand) !important;
+        }
 
-            /* Stack models + edit vertically on mobile - stäng av flex helt */
-            .models-wrapper {
-                display: flex;
-                flex-direction: column; /* stapla barnen */
+        /* ================ RESPONSIVE ================ */
+        @media (max-width: 960px) {
+            .app { grid-template-columns: 1fr; }
+            .sidebar {
+                position: fixed;
+                left: 0; top: 0; bottom: 0;
+                width: 260px;
+                height: 100vh;
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+                z-index: 200;
+                box-shadow: var(--shadow-lg);
             }
-            .grid1 { width: 100%; }
-            
-            /* modell-listan alltid överst */
-            .models-wrapper .grid2 { 
-                order: 1; /* först i stapeln */
-                min-height: 48px; /* behåller plats även om listan töms */
-                width: 100%;
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-backdrop {
+                display: none;
+                position: fixed; inset: 0;
+                background: rgba(15,23,42,0.5);
+                z-index: 150;
             }
-            
-            /* edit-rutan alltid under listan, aldrig sticky */
-            .models-wrapper #edit-section {
-                order: 2; /* sist i stapeln */
+            .sidebar-backdrop.show { display: block; }
+            .mobile-menu-btn { display: inline-flex; }
+            .content { padding: 1rem; }
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .admin-grid-container { grid-template-columns: 1fr; }
+            .models-wrapper, .extras-wrapper { flex-direction: column; }
+            #edit-section.editing, #extras-edit-section.editing {
                 position: static !important;
                 width: 100% !important;
-                margin-top: 1rem;
+                flex: 1 1 auto;
             }
-
-            /* Extras wrapper vertical on mobile */
-            .extras-wrapper {
-                flex-direction: column;
-            }
-            #extras-edit-section.editing {
-                position: static !important; /* aldrig sticky */
-                width: 100% !important;
-                margin-top: 1rem;
-            }
-
-            /* Gör allt 20% mindre genom att minska root-fontstorlek */
-            html { font-size: 100%; }
-        }
-        h2.tillverkare-heading, h2.modeller-heading, #extras-heading {
-            color: #fff !important;
-        }
-        /* Admin header */
-        .admin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 1rem;
-            padding: 0.65rem 0.95rem;
-            border-radius: 14px;
-            background: linear-gradient(135deg, rgba(244, 248, 255, 0.92), rgba(234, 243, 255, 0.88));
-            border: 1px solid rgba(25, 118, 210, 0.24);
-            box-shadow: 0 8px 20px rgba(10, 35, 66, 0.08);
-        }
-        .logo-wrapper {
-            display: flex;
-            align-items: center;
-        }
-        .logo-wrapper img {
-            max-height: 48px;
-            width: auto;
-        }
-        .primary-tabs {
-            display: flex;
-            gap: 0.4rem;
-            flex-wrap: wrap;
-            padding: 0.25rem;
-            border-radius: 12px;
-            border: 1px solid rgba(25, 118, 210, 0.16);
-            background: rgba(255, 255, 255, 0.76);
-        }
-        .primary-tab-btn {
-            border: 1px solid rgba(25, 118, 210, 0.45);
-            background: #ffffff;
-            color: #0a2342;
-            font-weight: 700;
-            padding: 0.42rem 1rem;
-            border-radius: 999px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 6px rgba(10, 35, 66, 0.06);
-        }
-        .primary-tab-btn:hover {
-            transform: translateY(-1px);
-            border-color: rgba(25, 118, 210, 0.65);
-            box-shadow: 0 5px 12px rgba(10, 35, 66, 0.12);
-        }
-        .primary-tab-btn.active {
-            background: linear-gradient(135deg, #1e7fe0, #1569c7);
-            color: #fff;
-            border-color: #1569c7;
-            box-shadow: 0 6px 14px rgba(25, 118, 210, 0.34);
-        }
-        @media (max-width: 640px) {
-            .admin-header {
-                flex-direction: column;
-                align-items: center;
-            }
-            .logo-wrapper {
-                width: 100%;
-                justify-content: center;
-            }
-            .primary-tabs {
-                width: 100%;
-                justify-content: center;
-            }
-            .primary-tab-btn {
-                flex: 1;
-                text-align: center;
-            }
-        }
-        /* Dashboard Styles */
-        .dashboard-container {
-            display: none;
-        }
-        .dashboard-container.active {
-            display: block;
-        }
-        #calendar-section {
-            display: none;
-        }
-        #calendar-section.active {
-            display: block;
-        }
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .chatbot-card {
-            grid-column: 1 / -1; /* Span across all columns */
-        }
-        @media (max-width: 1200px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-            .chatbot-card {
-                grid-column: 1; /* Reset on mobile */
-            }
-        }
-        .dashboard-card {
-            background: #fff;
-            border: 1.5px solid #1976d2;
-            border-radius: 8px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .dashboard-card h2 {
-            margin-top: 0;
-            color: #0a2342;
-            border-bottom: 2px solid #1976d2;
-            padding-bottom: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        .dashboard-card h3 {
-            color: #0a2342;
-            font-size: 1.1rem;
-            margin-top: 0;
-        }
-        /* Calendar Styles */
-        .calendar-card {
-            min-height: 500px;
-        }
-        #calendar {
-            margin-top: 1rem;
-        }
-        .fc-header-toolbar {
-            margin-bottom: 1rem !important;
-        }
-        /* Chatbot Styles */
-        .chatbot-card {
-            min-height: 500px;
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-        }
-        .chatbot-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .settings-btn {
-            background: #6c757d;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            padding: 0.3rem 0.6rem;
-            cursor: pointer;
-            font-size: 1rem;
-        }
-        .settings-btn:hover {
-            background: #5a6268;
-        }
-        .chatbot-settings {
-            margin: 1rem 0;
-            padding: 1rem;
-            background: #f5f5f5;
-            border-radius: 4px;
-        }
-        .chatbot-settings label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: bold;
-            color: #0a2342;
-        }
-        .chatbot-settings textarea {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-family: inherit;
-            margin-bottom: 0.5rem;
-        }
-        .chatbot-messages {
-            flex: 1;
-            overflow-y: auto;
-            max-height: 350px;
-            margin: 1rem 0;
-            padding: 1rem;
-            background: #f9f9f9;
-            border-radius: 4px;
-            border: 1px solid #ddd;
-        }
-        .chat-message {
-            margin-bottom: 1rem;
-            padding: 0.75rem;
-            border-radius: 6px;
-        }
-        .chat-message.user {
-            background: #e3f2fd;
-            text-align: right;
-        }
-        .chat-message.assistant {
-            background: #f5f5f5;
-        }
-        .chat-message.typing .message-text {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            min-height: 1rem;
-        }
-        .typing-dots {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.3rem;
-        }
-        .typing-dots span {
-            width: 7px;
-            height: 7px;
-            border-radius: 999px;
-            background: #60758a;
-            opacity: 0.35;
-            animation: typing-dot-pulse 1.2s infinite ease-in-out;
-        }
-        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typing-dot-pulse {
-            0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
-            40% { opacity: 1; transform: translateY(-2px); }
-        }
-        .chat-message .message-text {
-            color: #0a2342;
-            margin: 0;
-            line-height: 1.6;
-        }
-        .chat-message .message-text strong {
-            font-weight: bold;
-            color: #0a2342;
-        }
-        .chat-message .message-text em {
-            font-style: italic;
-        }
-        .chat-message .message-text code {
-            background: #f0f0f0;
-            padding: 0.2rem 0.4rem;
-            border-radius: 3px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-        }
-        .chat-message .message-text pre {
-            background: #f0f0f0;
-            padding: 0.5rem;
-            border-radius: 4px;
-            overflow-x: auto;
-            margin: 0.5rem 0;
-        }
-        .chat-message .message-text pre code {
-            background: none;
-            padding: 0;
-        }
-        .chat-message .message-text ul, .chat-message .message-text ol {
-            margin: 0.5rem 0;
-            padding-left: 1.5rem;
-        }
-        .chat-message .message-text li {
-            margin: 0.25rem 0;
-        }
-        .chat-message .message-text a {
-            color: #1976d2;
-            text-decoration: underline;
-        }
-        .chat-message .message-text a:hover {
-            color: #0d47a1;
-        }
-        .chat-message .message-text p {
-            margin: 0.5rem 0;
-        }
-        .chat-message .message-text p:first-child {
-            margin-top: 0;
-        }
-        .chat-message .message-text p:last-child {
-            margin-bottom: 0;
-        }
-        .chat-message .message-time {
-            font-size: 0.75rem;
-            color: #666;
-            margin-top: 0.25rem;
-        }
-        .chatbot-input-container {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 1rem;
-        }
-        .chatbot-input-container input {
-            flex: 1;
-            padding: 0.5rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .chatbot-input-container button {
-            padding: 0.5rem 1rem;
-        }
-        #advanced-chat-summary {
-            display: none;
-            margin: 0 0 0.75rem 0;
-            border: 1px solid #c9d5e5;
-            background: #f1f6fd;
-            padding: 0.75rem;
-            white-space: normal;
-            font-size: 0.9rem;
-        }
-        #advanced-chat-summary-text {
-            color: #0a2342;
-        }
-        .advanced-summary-heading {
-            font-weight: 700;
-            margin-bottom: 0.4rem;
-        }
-        .advanced-summary-list {
-            margin: 0;
-            padding-left: 1.1rem;
-        }
-        .advanced-summary-list li {
-            margin: 0 0 0.2rem 0;
-        }
-        .advanced-summary-empty {
-            color: #27476f;
-        }
-        #advanced-chat-submit-btn {
-            display: none;
-            width: 100%;
-            margin-top: 0.75rem;
-            background: #0e7a2f;
-        }
-        #advanced-chat-submit-btn[disabled] {
-            opacity: 0.75;
-            cursor: wait;
-        }
-        /* Status Folders Styles */
-        .status-folders-card {
-            grid-column: 1 / -1;
-        }
-        .status-folders {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        .status-folder {
-            background: #f5f5f5;
-            border: 2px solid #1976d2;
-            border-radius: 6px;
-            padding: 1rem;
-            min-height: 300px;
-            display: flex;
-            flex-direction: column;
-        }
-        .status-folder h3 {
-            margin-top: 0;
-            color: #1976d2;
-            border-bottom: 1px solid #1976d2;
-            padding-bottom: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        .folder-items {
-            flex: 1;
-            min-height: 200px;
-            max-height: 400px;
-            overflow-y: auto;
-            margin-bottom: 1rem;
-        }
-        .folder-item {
-            background: #fff;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 0.35rem 0.45rem;
-            margin-bottom: 0.25rem;
-            cursor: pointer;
-            transition: background 0.2s, opacity 0.2s, transform 0.2s;
-            line-height: 1.3;
-        }
-        .folder-item:hover {
-            background: #e3f2fd;
-        }
-        .folder-item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 0.15rem;
-            gap: 8px;
-        }
-        .folder-item-title {
-            display: block !important;
-            font-weight: bold;
-            color: #0a2342;
-        }
-        .folder-item-delete {
-            background: #dc3545;
-            color: #fff;
-            border: none;
-            border-radius: 3px;
-            padding: 0.2rem 0.5rem;
-            cursor: pointer;
-            font-size: 0.8rem;
-        }
-        .folder-item-delete:hover {
-            background: #c82333;
-        }
-        .folder-item-title .person-name {
-            font-size: 0.95rem;
-            color: #0a2342;
-            font-weight: bold;
-            display: block;
-            width: 100%;
-            clear: both;
-        }
-        .folder-item-title .form-type-line {
-            color: #1976d2;
-            font-weight: 500;
-            font-size: 0.75rem;
-            display: block;
-            width: 100%;
-            clear: both;
-            line-height: 1.2;
-            margin-top: 2px;
-        }
-        .folder-item-title .boat-model-line {
-            color: #666;
-            font-style: italic;
-            font-size: 0.7rem;
-            display: block;
-            width: 100%;
-            clear: both;
-            line-height: 1.2;
-            margin-top: 1px;
-        }
-        .folder-item-title .contact-subject {
-            color: #f57c00;
-            font-size: 0.7rem;
-            font-weight: 500;
-            display: block;
-            width: 100%;
-            clear: both;
-            line-height: 1.2;
-            margin-top: 1px;
-        }
-        .folder-item-content {
-            color: #666;
-            font-size: 0.75rem;
-            margin-top: 0.2rem;
-        }
-        .add-item-btn {
-            width: 100%;
-            padding: 0.5rem;
-            background: #28a745;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        .add-item-btn:hover {
-            background: #218838;
-        }
-        /* Item Modal */
-        .item-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        .item-modal.active {
-            display: flex;
-        }
-        .item-modal-content {
-            background: #fff;
-            padding: 2rem;
-            border-radius: 8px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
+            .form-modal-columns { flex-direction: column; }
+            .form-info-column { border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
+            .ai-response-column { max-height: 50vh; }
         }
 
-        /* Form Submission Modal - Large and Fullscreen */
-        .form-submission-modal-content {
-            background: #fff;
-            width: 95vw !important;
-            height: 90vh !important;
-            max-width: none !important;
-            margin: 2vh auto;
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+        @media (max-width: 600px) {
+            .topbar { padding: 0.7rem 1rem; }
+            .content { padding: 0.85rem; }
+            .stats-row { grid-template-columns: 1fr 1fr; }
+            .stat-value { font-size: 1.4rem; }
+            .status-folders { grid-template-columns: 1fr; }
+            .statusmappar-header { flex-direction: column; align-items: stretch; }
+            .form-type-filters { width: 100%; }
+            .form-type-filters .form-filter-btn { flex: 1 1 calc(50% - 0.35rem); }
+            input, textarea, select { font-size: 16px; }
+            #announcement-preview { padding: 2rem 1.5rem; }
+            .form-submission-modal-content { width: 100vw !important; height: 100vh !important; border-radius: 0; }
+            .modal, .item-modal { padding: 0.5rem; }
         }
 
-        .form-modal-columns {
-            display: flex;
-            flex: 1;
-            gap: 2rem;
-            overflow: hidden;
-            min-height: 0; /* Important for flex scrolling */
-        }
-
-        .form-info-column {
-            flex: 1;
-            overflow-y: auto;
-            padding: 1rem;
-            border-right: 1px solid #eee;
-            min-height: 0; /* Important for flex scrolling */
-        }
-
-        .ai-response-column {
-            flex: 1;
-            overflow-y: auto;
-            padding: 1rem;
-            background: #fafafa;
-            min-height: 0; /* Important for flex scrolling */
-        }
-
-        .ai-response-column .form-section {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            padding: 1.5rem;
-        }
-
-        .response-actions {
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-        }
-
-        .submission-date {
-            color: #666;
-            font-size: 0.85rem;
-            margin-bottom: 1rem;
-            font-style: italic;
-        }
-
-        /* Mobile responsiveness for form modal */
-        @media (max-width: 768px) {
-            .form-submission-modal-content {
-                width: 98vw !important;
-                height: 95vh !important;
-                margin: 1vh auto;
-            }
-
-            .form-modal-columns {
-                flex-direction: column;
-                gap: 1rem;
-            }
-
-            .form-info-column {
-                border-right: none;
-                border-bottom: 1px solid #eee;
-                max-height: 50vh;
-            }
-
-            .ai-response-column {
-                max-height: 50vh;
-            }
-        }
-        .item-modal-content h3 {
-            margin-top: 0;
-            color: #0a2342;
-        }
-        .item-modal-content label {
-            display: block;
-            margin-top: 1rem;
-            margin-bottom: 0.5rem;
-            font-weight: bold;
-            color: #0a2342;
-        }
-        .item-modal-content input,
-        .item-modal-content textarea {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-family: inherit;
-        }
-        .item-modal-content textarea {
-            min-height: 100px;
-        }
-        .item-modal-actions {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 1.5rem;
-        }
-        @media (max-width: 768px) {
-            body {
-                padding: 0.45rem 0.35rem;
-                max-width: 100%;
-            }
-            h1 {
-                font-size: 1.35rem;
-                margin-bottom: 0.9rem;
-            }
-            .admin-header {
-                gap: 0.6rem;
-                padding: 0.55rem 0.65rem;
-                border-radius: 10px;
-                align-items: center;
-            }
-            .logo-wrapper {
-                width: 100%;
-                justify-content: center;
-            }
-            .logo-wrapper img {
-                max-height: 40px;
-            }
-            .primary-tabs {
-                flex-wrap: nowrap;
-                overflow-x: auto;
-                width: 100%;
-                gap: 0.35rem;
-                padding-bottom: 0.25rem;
-                justify-content: flex-start;
-            }
-            .primary-tab-btn {
-                flex: 0 0 auto;
-                white-space: nowrap;
-                font-size: 0.84rem;
-                padding: 0.45rem 0.8rem;
-                border-radius: 999px;
-            }
-            .dashboard-grid {
-                gap: 0.8rem;
-                margin-bottom: 0.9rem;
-            }
-            .dashboard-card {
-                padding: 0.85rem;
-                border-radius: 10px;
-            }
-            .dashboard-card h2 {
-                font-size: 1.04rem;
-                margin-bottom: 0.7rem;
-                padding-bottom: 0.35rem;
-            }
-            .dashboard-card h3 {
-                font-size: 0.94rem;
-            }
-            .quicksearch {
-                padding: 0.45rem 0.55rem;
-                font-size: 0.9rem;
-                margin-bottom: 0.7rem;
-            }
-            .grid1-item, .grid2-item, .extras-item {
-                font-size: 0.82rem;
-                padding: 0.3rem 0.5rem;
-                margin: 2px;
-                border-radius: 8px;
-            }
-            .add-btn {
-                width: 2rem;
-                height: 2rem;
-                font-size: 1.2rem;
-            }
-            .btn, .btn-secondary, .tab-btn, .add-item-btn, .form-filter-btn {
-                font-size: 0.83rem;
-                padding: 0.45rem 0.7rem !important;
-                border-radius: 8px;
-            }
-            .form-type-filters {
-                width: 100%;
-                gap: 0.35rem !important;
-            }
-            .statusmappar-header {
-                flex-direction: column !important;
-                align-items: stretch !important;
-                gap: 0.45rem;
-            }
-            .statusmappar-title {
-                margin-bottom: 0 !important;
-                font-size: 1rem !important;
-                line-height: 1.2;
-            }
-            .form-type-filters .form-filter-btn {
-                flex: 1 1 calc(50% - 0.35rem);
-                text-align: center;
-            }
-            #nya-inskick-sort-btn {
-                font-size: 0.78rem !important;
-                padding: 0.4rem 0.55rem !important;
-            }
-            .status-folders {
-                grid-template-columns: 1fr;
-                gap: 0.75rem;
-            }
-            .status-folder {
-                min-height: 0;
-                padding: 0.75rem;
-            }
-            .status-folder h3 {
-                font-size: 0.96rem;
-            }
-            .folder-items {
-                min-height: 140px;
-                max-height: none;
-                margin-bottom: 0.7rem;
-            }
-            .folder-item {
-                padding: 0.45rem 0.5rem;
-            }
-            .folder-item-title .person-name {
-                font-size: 0.9rem;
-            }
-            .folder-item-delete {
-                min-width: 34px;
-                min-height: 34px;
-                padding: 0;
-                line-height: 1;
-                font-size: 1rem;
-                border-radius: 6px;
-            }
-            .chatbot-card {
-                min-height: 0;
-            }
-            .chatbot-messages {
-                max-height: 280px;
-                padding: 0.7rem;
-                margin: 0.7rem 0;
-            }
-            .chat-message {
-                margin-bottom: 0.65rem;
-                padding: 0.6rem;
-            }
-            .chat-message .message-text {
-                font-size: 0.88rem;
-                line-height: 1.45;
-            }
-            .chat-message .message-time {
-                font-size: 0.7rem;
-            }
-            .chatbot-input-container {
-                gap: 0.4rem;
-                margin-top: 0.65rem;
-            }
-            .chatbot-input-container input {
-                min-height: 42px;
-                padding: 0.52rem 0.6rem;
-                font-size: 16px;
-            }
-            .chatbot-input-container button {
-                min-width: 84px;
-                padding: 0.52rem 0.7rem;
-            }
-            #advanced-chat-summary {
-                padding: 0.65rem;
-                font-size: 0.84rem;
-            }
-            .edit-section {
-                padding: 0.8rem;
-                margin-top: 0.75rem;
-            }
-            .edit-section .btn {
-                width: 100%;
-                margin: 0.25rem 0;
-                padding: 0.55rem 0.7rem;
-            }
-            .edit-section input,
-            .edit-section textarea,
-            .item-modal-content input,
-            .item-modal-content textarea,
-            #announcement-text,
-            #admin-chatbot-prompt,
-            #assistant-system-prompt,
-            #prompt-kapell,
-            #prompt-fender,
-            #prompt-kontakt {
-                font-size: 16px;
-            }
-            .modal {
-                padding: 0.45rem;
-            }
-            .modal-content {
-                max-width: 100%;
-                width: 100%;
-                padding: 0.9rem;
-                border-radius: 10px;
-            }
-            .item-modal-content {
-                max-width: 100%;
-                width: 100%;
-                max-height: 92vh;
-                padding: 1rem;
-            }
-            .item-modal-actions {
-                flex-direction: column;
-                gap: 0.45rem;
-            }
-            .item-modal-actions .btn,
-            .item-modal-actions .btn-secondary {
-                width: 100%;
-            }
-            .form-submission-modal-content .modal-header {
-                padding: 0.85rem 1rem;
-            }
-            .form-submission-modal-content .modal-header h2 {
-                font-size: 1.02rem;
-            }
-            .form-info-column,
-            .ai-response-column {
-                padding: 0.7rem;
-            }
-            .response-actions {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .response-actions .btn {
-                width: 100%;
-                margin-left: 0 !important;
-            }
-        }
+        /* ================ UTIL ================ */
+        .row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .mt-1 { margin-top: 0.5rem; }
+        .mt-2 { margin-top: 1rem; }
+        .mt-3 { margin-top: 1.5rem; }
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .text-muted { color: var(--text-muted); }
+        .empty-state { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <header class="admin-header">
-        <div class="logo-wrapper">
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<div class="app">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
             <img src="logo.png" alt="Henricssons Båtkapell" />
+            <div class="sidebar-brand-text">
+                Henricssons
+                <small>Admin-panel</small>
+            </div>
         </div>
-        <div id="primary-tabs" class="primary-tabs">
-            <button class="primary-tab-btn active" data-primary="dashboard">Dashboard</button>
-            <button class="primary-tab-btn" data-primary="texts">Redigera texter</button>
-            <button class="primary-tab-btn" data-primary="advanced">Advanced</button>
-            <button class="primary-tab-btn" data-primary="calendar">Kalender</button>
-            <button class="primary-tab-btn" data-primary="boats">Tillverkare &amp; Modeller</button>
-            <button class="primary-tab-btn" data-primary="images">Bilder &amp; exempel</button>
+
+        <div class="sidebar-label">Översikt</div>
+        <div id="primary-tabs" style="display:flex; flex-direction:column; gap:0.15rem;">
+            <button class="primary-tab-btn active" data-primary="dashboard">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                Dashboard
+            </button>
+            <button class="primary-tab-btn" data-primary="calendar">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                Kalender
+            </button>
         </div>
-    </header>
-    <!-- Dashboard Section -->
-    <div id="dashboard-section" class="dashboard-container">
-        <div class="dashboard-grid">
-            <!-- Status Folders Section -->
-            <div class="dashboard-card status-folders-card">
-                <div class="statusmappar-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h2 class="statusmappar-title" style="margin: 0;">Statusmappar</h2>
-                    <div class="form-type-filters" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button class="form-filter-btn active" data-filter="all" style="padding: 0.4rem 0.8rem; border: 1px solid #1976d2; background: #1976d2; color: white; border-radius: 4px; cursor: pointer;">Alla</button>
-                        <button class="form-filter-btn" data-filter="Kapellförfrågan" style="padding: 0.4rem 0.8rem; border: 1px solid #1976d2; background: white; color: #1976d2; border-radius: 4px; cursor: pointer;">Kapell</button>
-                        <button class="form-filter-btn" data-filter="Fenderförfrågan" style="padding: 0.4rem 0.8rem; border: 1px solid #1976d2; background: white; color: #1976d2; border-radius: 4px; cursor: pointer;">Fender</button>
-                        <button class="form-filter-btn" data-filter="Kontakt" style="padding: 0.4rem 0.8rem; border: 1px solid #1976d2; background: white; color: #1976d2; border-radius: 4px; cursor: pointer;">Kontakt</button>
+
+        <div class="sidebar-label">Innehåll</div>
+        <div style="display:flex; flex-direction:column; gap:0.15rem;">
+            <button class="primary-tab-btn" data-primary="texts">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                Redigera texter
+            </button>
+            <button class="primary-tab-btn" data-primary="boats">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1 2.4 2.4 0 0 1 2-1 2.4 2.4 0 0 1 2 1 2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1 2.4 2.4 0 0 1 2-1 2.4 2.4 0 0 1 2 1 2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1"/><path d="M4 18 2 8h20l-2 10"/><path d="M10 8V4h4v4"/></svg>
+                Tillverkare &amp; modeller
+            </button>
+            <button class="primary-tab-btn" data-primary="images">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+                Bilder &amp; exempel
+            </button>
+        </div>
+
+        <div class="sidebar-label">AI</div>
+        <div style="display:flex; flex-direction:column; gap:0.15rem;">
+            <button class="primary-tab-btn" data-primary="advanced">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
+                AI-inställningar
+            </button>
+        </div>
+
+        <div class="sidebar-footer">
+            <div>© Henricssons Båtkapell</div>
+            <div><a href="/" target="_blank">Öppna webbplatsen →</a></div>
+        </div>
+    </aside>
+
+    <div class="main">
+        <header class="topbar">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+                <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Öppna meny">☰</button>
+                <div>
+                    <div class="topbar-title" id="page-title">Dashboard</div>
+                    <small id="page-subtitle" style="color:var(--text-muted); font-size:0.78rem;">Översikt över senaste aktiviteten</small>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <button class="topbar-btn" id="refresh-btn" title="Ladda om data">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+                    Uppdatera
+                </button>
+                <a href="/" class="topbar-btn" target="_blank">Visa webbplats ↗</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <!-- DASHBOARD -->
+            <div id="dashboard-section" class="dashboard-container active">
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-label">Nya inskick</div>
+                        <div class="stat-value" id="stat-new">0</div>
+                        <div class="stat-hint">Obesvarade förfrågningar</div>
+                    </div>
+                    <div class="stat-card is-warning">
+                        <div class="stat-label">Väntar på svar</div>
+                        <div class="stat-value" id="stat-waiting">0</div>
+                        <div class="stat-hint">Under uppföljning</div>
+                    </div>
+                    <div class="stat-card is-info">
+                        <div class="stat-label">I produktion</div>
+                        <div class="stat-value" id="stat-production">0</div>
+                        <div class="stat-hint">Aktiva arbeten</div>
+                    </div>
+                    <div class="stat-card is-success">
+                        <div class="stat-label">Redo för leverans</div>
+                        <div class="stat-value" id="stat-ready">0</div>
+                        <div class="stat-hint">Klara att skicka</div>
                     </div>
                 </div>
-                <div class="status-folders">
-                    <div class="status-folder" data-status="nya-inskick">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <h3 style="margin: 0;">Nya Inskick</h3>
-                            <button id="nya-inskick-sort-btn" class="btn" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;" onclick="toggleNyaInskickSort()">Nyaste först</button>
+
+                <div class="dashboard-grid">
+                    <div class="dashboard-card status-folders-card">
+                        <div class="statusmappar-header">
+                            <h2 class="statusmappar-title">Statusmappar</h2>
+                            <div class="form-type-filters">
+                                <button class="form-filter-btn active" data-filter="all">Alla</button>
+                                <button class="form-filter-btn" data-filter="Kapellförfrågan">Kapell</button>
+                                <button class="form-filter-btn" data-filter="Fenderförfrågan">Fender</button>
+                                <button class="form-filter-btn" data-filter="Kontakt">Kontakt</button>
+                            </div>
                         </div>
-                        <div class="folder-items" id="folder-nya-inskick"></div>
-                        <button class="add-item-btn" data-status="nya-inskick">+ Lägg till</button>
+                        <div class="status-folders">
+                            <div class="status-folder droppable-folder" data-status="nya-inskick">
+                                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                                    <h3 style="margin:0;">Nya inskick</h3>
+                                    <button id="nya-inskick-sort-btn" class="btn-ghost" style="font-size:0.72rem; padding:0.25rem 0.5rem; min-height:auto;" onclick="toggleNyaInskickSort()">Nyaste först</button>
+                                </div>
+                                <div class="folder-items" id="folder-nya-inskick"></div>
+                                <button class="add-item-btn" data-status="nya-inskick">+ Lägg till</button>
+                            </div>
+                            <div class="status-folder droppable-folder" data-status="vantar-pa-svar">
+                                <h3>Väntar på svar</h3>
+                                <div class="folder-items" id="folder-vantar-pa-svar"></div>
+                                <button class="add-item-btn" data-status="vantar-pa-svar">+ Lägg till</button>
+                            </div>
+                            <div class="status-folder droppable-folder" data-status="i-produktion">
+                                <h3>I produktion</h3>
+                                <div class="folder-items" id="folder-i-produktion"></div>
+                                <button class="add-item-btn" data-status="i-produktion">+ Lägg till</button>
+                            </div>
+                            <div class="status-folder droppable-folder" data-status="redo-for-leverans">
+                                <h3>Redo för leverans</h3>
+                                <div class="folder-items" id="folder-redo-for-leverans"></div>
+                                <button class="add-item-btn" data-status="redo-for-leverans">+ Lägg till</button>
+                            </div>
+                        </div>
+                        <div style="margin-top:1rem;">
+                            <h2 class="statusmappar-title" style="margin-bottom:0.75rem;">To-do</h2>
+                            <div class="status-folders" style="grid-template-columns:minmax(220px, 1fr);">
+                                <div class="status-folder droppable-folder" data-status="todo">
+                                    <h3>To-do</h3>
+                                    <div class="folder-items" id="folder-todo"></div>
+                                    <button class="add-item-btn" data-status="todo">+ Lägg till</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="status-folder" data-status="vantar-pa-svar">
-                        <h3>Väntar på svar</h3>
-                        <div class="folder-items" id="folder-vantar-pa-svar"></div>
-                        <button class="add-item-btn" data-status="vantar-pa-svar">+ Lägg till</button>
-                    </div>
-                    <div class="status-folder" data-status="i-produktion">
-                        <h3>I produktion</h3>
-                        <div class="folder-items" id="folder-i-produktion"></div>
-                        <button class="add-item-btn" data-status="i-produktion">+ Lägg till</button>
-                    </div>
-                    <div class="status-folder" data-status="redo-for-leverans">
-                        <h3>Redo för leverans</h3>
-                        <div class="folder-items" id="folder-redo-for-leverans"></div>
-                        <button class="add-item-btn" data-status="redo-for-leverans">+ Lägg till</button>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Chatbot Section -->
-            <div class="dashboard-card chatbot-card">
-                <div class="chatbot-header">
-                    <h2>Chatbot</h2>
-                </div>
-                <div id="chatbot-messages" class="chatbot-messages"></div>
-                <div class="chatbot-input-container">
-                    <input type="text" id="chatbot-input" placeholder="Skriv ett meddelande..." />
-                    <button id="chatbot-send-btn" class="btn">Skicka</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="calendar-section" class="calendar-section">
-        <div class="dashboard-card calendar-card">
-            <h2>Kalender</h2>
-            <div id="calendar"></div>
-        </div>
-    </div>
-
-    <!-- Text Editing Section -->
-    <div id="texts-section" class="dashboard-container">
-        <div class="dashboard-card">
-            <h2>Redigera sidtexter</h2>
-            
-            <div class="edit-section" style="margin-top: 1.5rem;">
-                <h3>Info-kort: Ny lokal i Kungsbacka</h3>
-                <div id="announcement-edit-success" class="success" style="display:none;"></div>
-                <div id="announcement-edit-error" class="error" style="display:none;"></div>
-                
-                <label for="announcement-text">Text (Markdown format):</label>
-                <small style="display:block; margin-bottom:0.5rem; color:#666;">
-                    Använd Markdown: **fetstil**, *kursiv*, ## Rubrik, ### Underrubrik. Enkla radbrytningar = ny rad, dubbla radbrytningar = ny paragraf
-                </small>
-                <textarea id="announcement-text" rows="10" placeholder="## Ny lokal i Kungsbacka&#10;&#10;Vi har flyttat till större lokaler i Varla industriområde...&#10;&#10;Vi har kapell på lager..."></textarea>
-                
-                <div style="margin-top: 1.5rem;">
-                    <h4 style="margin-bottom: 0.75rem; color: #0a2342;">Förhandsvisning:</h4>
-                    <div id="announcement-preview" style="
-                        background: rgba(249, 250, 251, 0.8);
-                        border: 1px solid rgba(15, 23, 42, 0.12);
-                        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16);
-                        padding: 3.4rem 3.75rem;
-                        max-width: 720px;
-                        margin: 0 auto;
-                        min-height: 100px;
-                        text-align: left;
-                        position: relative;
-                        border-radius: 0;
-                        z-index: 0;
-                    ">
-                        <p style="color: #666; font-style: italic;">Förhandsvisning visas här när du skriver...</p>
+                    <div class="dashboard-card chatbot-card">
+                        <div class="chatbot-header">
+                            <h2>AI-assistent</h2>
+                            <span class="text-muted" style="font-size:0.78rem;">Intern hjälp</span>
+                        </div>
+                        <div id="chatbot-messages" class="chatbot-messages"></div>
+                        <div class="chatbot-input-container">
+                            <input type="text" id="chatbot-input" placeholder="Skriv ett meddelande..." />
+                            <button id="chatbot-send-btn" class="btn">Skicka</button>
+                        </div>
                     </div>
                 </div>
-                
-                <button class="btn" onclick="saveAnnouncementText()">Spara ändringar</button>
-                <button class="btn btn-secondary" onclick="loadAnnouncementText()">Ladda nuvarande text</button>
+            </div>
+
+            <!-- CALENDAR -->
+            <div id="calendar-section" class="calendar-section">
+                <div class="dashboard-card calendar-card">
+                    <h2>Kalender</h2>
+                    <div id="calendar"></div>
+                </div>
+            </div>
+
+            <!-- TEXTS -->
+            <div id="texts-section" class="dashboard-container">
+                <div class="dashboard-card">
+                    <h2>Redigera sidtexter</h2>
+                    <div class="edit-section" style="margin-top:0.5rem;">
+                        <h3>Info-kort på startsidan</h3>
+                        <div id="announcement-edit-success" class="success" style="display:none;"></div>
+                        <div id="announcement-edit-error" class="error" style="display:none;"></div>
+
+                        <label for="announcement-text">Text (Markdown)</label>
+                        <p class="hint" style="margin-bottom:0.5rem;">
+                            Använd <code>**fet**</code>, <code>*kursiv*</code>, <code>## Rubrik</code>. Enkel radbrytning = ny rad, dubbel = ny paragraf.
+                        </p>
+                        <textarea id="announcement-text" rows="10" placeholder="## Ny lokal i Kungsbacka&#10;&#10;Vi har flyttat..."></textarea>
+
+                        <div class="mt-3">
+                            <h4 style="margin-bottom:0.75rem; color:var(--text); font-size:0.9rem; font-weight:600;">Förhandsvisning</h4>
+                            <div id="announcement-preview">
+                                <p style="color:var(--text-muted); font-style:italic;">Förhandsvisning visas här när du skriver...</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 row">
+                            <button class="btn" onclick="saveAnnouncementText()">Spara ändringar</button>
+                            <button class="btn-secondary" onclick="loadAnnouncementText()">Ladda nuvarande</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADVANCED (AI) -->
+            <div id="advanced-section" class="dashboard-container">
+                <div class="dashboard-grid">
+                    <div class="dashboard-card">
+                        <h2>AI-inställningar</h2>
+                        <p class="text-muted" style="margin:0 0 1rem 0; font-size:0.85rem;">Alla AI-prompts hanteras här. Ändringar påverkar både webbchatten och AI-svaren på inkomna formulär.</p>
+                        <div id="prompts-edit-success" class="success" style="display:none;"></div>
+                        <div id="prompts-edit-error" class="error" style="display:none;"></div>
+
+                        <label for="admin-chatbot-prompt">Prompt för admin-chatbot</label>
+                        <textarea id="admin-chatbot-prompt" rows="6" style="font-family:'SFMono-Regular',Consolas,monospace; font-size:0.82rem;"></textarea>
+
+                        <label for="assistant-system-prompt">Prompt för webbchat (flytande AI)</label>
+                        <textarea id="assistant-system-prompt" rows="10" style="font-family:'SFMono-Regular',Consolas,monospace; font-size:0.82rem;"></textarea>
+
+                        <h3 class="mt-3">Formulärprompts</h3>
+
+                        <label for="prompt-kapell">Kapellförfrågan</label>
+                        <textarea id="prompt-kapell" rows="8" style="font-family:'SFMono-Regular',Consolas,monospace; font-size:0.82rem;"></textarea>
+
+                        <label for="prompt-fender">Fenderförfrågan</label>
+                        <textarea id="prompt-fender" rows="8" style="font-family:'SFMono-Regular',Consolas,monospace; font-size:0.82rem;"></textarea>
+
+                        <label for="prompt-kontakt">Kontakt</label>
+                        <textarea id="prompt-kontakt" rows="8" style="font-family:'SFMono-Regular',Consolas,monospace; font-size:0.82rem;"></textarea>
+
+                        <div class="mt-3 row">
+                            <button class="btn" id="save-ai-settings-btn">Spara AI-inställningar</button>
+                            <button class="btn-secondary" id="reload-ai-settings-btn">Ladda nuvarande</button>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-card chatbot-card">
+                        <div class="chatbot-header">
+                            <h2>Testchat</h2>
+                            <span class="text-muted" style="font-size:0.78rem;">Samma som webbchatten</span>
+                        </div>
+                        <div id="advanced-chat-messages" class="chatbot-messages"></div>
+                        <div id="advanced-chat-summary">
+                            <div id="advanced-chat-summary-text"></div>
+                            <button id="advanced-chat-submit-btn" class="btn">Skicka som formulär</button>
+                        </div>
+                        <div class="chatbot-input-container">
+                            <input type="text" id="advanced-chat-input" placeholder="Skriv ett meddelande..." />
+                            <button id="advanced-chat-send-btn" class="btn">Skicka</button>
+                        </div>
+                        <button id="advanced-chat-reset-btn" class="btn-secondary mt-2" style="width:100%;">Rensa chatten</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOATS -->
+            <div id="boats-section" class="admin-grid-container" style="display:none;">
+                <div class="admin-grid-col">
+                    <div class="card">
+                        <h2 class="tillverkare-heading">
+                            <span>Tillverkare</span>
+                            <button class="add-btn" id="add-manufacturer-btn" title="Lägg till tillverkare">+</button>
+                        </h2>
+                        <input type="text" class="quicksearch" placeholder="Sök tillverkare..." />
+                        <div class="grid1"></div>
+                    </div>
+                </div>
+                <div class="admin-grid-col">
+                    <div class="card">
+                        <h2 class="modeller-heading">
+                            <span>Modeller</span>
+                            <button class="add-btn" id="add-model-btn" title="Lägg till modell">+</button>
+                        </h2>
+                        <div class="models-wrapper">
+                            <div class="grid2"></div>
+                            <div id="edit-section" class="edit-section" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- IMAGES / EXTRAS -->
+            <div id="extras-section" style="display:none;">
+                <div id="admin-tabs">
+                    <button class="tab-btn" data-tab="all">Visa alla</button>
+                    <button class="tab-btn" data-tab="motorboats">Motorbåtar</button>
+                    <button class="tab-btn" data-tab="sailboats">Segelbåtar</button>
+                    <button class="tab-btn" data-tab="boatseats">Båtstolar &amp; dynor</button>
+                    <button class="tab-btn" data-tab="otherfabrics">Vävprover övriga</button>
+                    <button class="tab-btn" data-tab="special">Specialsömnad &amp; skräddarsytt</button>
+                    <button class="tab-btn" data-tab="sunbrella">Sunbrella Plus</button>
+                </div>
+                <div class="card">
+                    <h2 id="extras-heading">
+                        <span>Bilder &amp; exempel</span>
+                        <button class="add-btn" id="add-extra-btn" title="Lägg till">+</button>
+                    </h2>
+                    <input type="text" id="extras-search" class="quicksearch" placeholder="Sök i bilder & exempel..." />
+                    <div class="extras-wrapper">
+                        <div class="grid-extras"></div>
+                        <div id="extras-edit-section" class="edit-section" style="display:none;"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+</div>
 
-    <div id="advanced-section" class="dashboard-container">
-        <div class="dashboard-grid">
-            <div class="dashboard-card">
-                <h2>AI-inställningar</h2>
-                <p style="color:#666; margin-bottom:1rem;">Alla AI-prompts hanteras här.</p>
-                <div id="prompts-edit-success" class="success" style="display:none;"></div>
-                <div id="prompts-edit-error" class="error" style="display:none;"></div>
-
-                <div style="margin-bottom: 1rem;">
-                    <label for="admin-chatbot-prompt">Prompt för admin-chatbot:</label>
-                    <textarea id="admin-chatbot-prompt" rows="6" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; font-family: monospace; font-size: 0.9rem;"></textarea>
-                </div>
-                <div style="margin-bottom: 1.5rem;">
-                    <label for="assistant-system-prompt">Prompt för webbchat (flytande AI):</label>
-                    <textarea id="assistant-system-prompt" rows="10" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; font-family: monospace; font-size: 0.9rem;"></textarea>
-                </div>
-
-                <h3>Formulärprompts</h3>
-                <div style="margin-bottom: 1rem;">
-                    <label for="prompt-kapell">Kapellförfrågan prompt:</label>
-                    <textarea id="prompt-kapell" rows="10" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; font-family: monospace; font-size: 0.9rem;"></textarea>
-                </div>
-                <div style="margin-bottom: 1rem;">
-                    <label for="prompt-fender">Fenderförfrågan prompt:</label>
-                    <textarea id="prompt-fender" rows="10" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; font-family: monospace; font-size: 0.9rem;"></textarea>
-                </div>
-                <div style="margin-bottom: 1rem;">
-                    <label for="prompt-kontakt">Kontakt prompt:</label>
-                    <textarea id="prompt-kontakt" rows="10" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; font-family: monospace; font-size: 0.9rem;"></textarea>
-                </div>
-                <button class="btn" id="save-ai-settings-btn">Spara AI-inställningar</button>
-                <button class="btn btn-secondary" id="reload-ai-settings-btn">Ladda nuvarande</button>
-            </div>
-
-            <div class="dashboard-card chatbot-card">
-                <div class="chatbot-header">
-                    <h2>Testchat (samma som webbchat)</h2>
-                </div>
-                <div id="advanced-chat-messages" class="chatbot-messages"></div>
-                <div id="advanced-chat-summary">
-                    <div id="advanced-chat-summary-text"></div>
-                    <button id="advanced-chat-submit-btn" class="btn">Skicka</button>
-                </div>
-                <div class="chatbot-input-container">
-                    <input type="text" id="advanced-chat-input" placeholder="Skriv ett meddelande..." />
-                    <button id="advanced-chat-send-btn" class="btn">Skicka</button>
-                </div>
-                <button id="advanced-chat-reset-btn" class="btn btn-secondary" style="margin-top:0.75rem;">Rensa chatten</button>
-            </div>
+<!-- ITEM MODAL -->
+<div id="item-modal" class="item-modal">
+    <div class="item-modal-content">
+        <h3 id="item-modal-title">Lägg till objekt</h3>
+        <label for="item-title">Titel</label>
+        <input type="text" id="item-title" />
+        <label for="item-description">Beskrivning</label>
+        <textarea id="item-description"></textarea>
+        <label for="item-date">Datum</label>
+        <input type="date" id="item-date" />
+        <div class="item-modal-actions">
+            <button class="btn-secondary" id="item-cancel-btn">Avbryt</button>
+            <button class="btn" id="item-save-btn">Spara</button>
         </div>
     </div>
+</div>
 
-    <input type="text" class="quicksearch" placeholder="Sök tillverkare..." style="display:none;" />
-    <input type="text" id="extras-search" class="quicksearch" placeholder="Sök i bilder & exempel..." style="display:none;" />
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script src="kapellforfragan_full.js?v=20250628"></script>
+<script src="chat_widget.js?v=20260417a"></script>
+<script src="admin.js?v=20260417b"></script>
+<script>
+(function() {
+    // Mobile sidebar toggle
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const toggleBtn = document.getElementById('mobile-menu-btn');
+    function closeSidebar() {
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('show');
+    }
+    if (toggleBtn && sidebar) {
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            backdrop.classList.toggle('show', sidebar.classList.contains('open'));
+        });
+    }
+    if (backdrop) backdrop.addEventListener('click', closeSidebar);
+    document.querySelectorAll('.primary-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (window.innerWidth <= 960) closeSidebar();
+        });
+    });
 
-    <div id="admin-tabs" style="margin-bottom:1rem; display:none; flex-wrap:wrap; gap:0.5rem;">
-        <!-- Sekundära flikar som visas under "Bilder & exempel" -->
-        <button class="tab-btn" data-tab="all">Visa alla</button>
-        <button class="tab-btn" data-tab="motorboats">Motorbåtar</button>
-        <button class="tab-btn" data-tab="sailboats">Segelbåtar</button>
-        <button class="tab-btn" data-tab="boatseats">Båtstolar &amp; Dynor</button>
-        <button class="tab-btn" data-tab="otherfabrics">Vävprover övriga</button>
-        <button class="tab-btn" data-tab="special">Specialsömnad &amp; Skräddarsytt</button>
-        <button class="tab-btn" data-tab="sunbrella">Sunbrella Plus Kollektion</button>
-    </div>
+    // Page title sync with active tab
+    const titles = {
+        dashboard: { t: 'Dashboard', s: 'Översikt över senaste aktiviteten' },
+        calendar: { t: 'Kalender', s: 'Planering och leveranser' },
+        texts: { t: 'Redigera texter', s: 'Info-kort och sidtexter på webben' },
+        advanced: { t: 'AI-inställningar', s: 'Hantera prompts och testa chatten' },
+        boats: { t: 'Tillverkare & modeller', s: 'Hantera båtdatabasen' },
+        images: { t: 'Bilder & exempel', s: 'Galleri och kategorier' }
+    };
+    function syncTitle(primary) {
+        const t = titles[primary];
+        if (!t) return;
+        const titleEl = document.getElementById('page-title');
+        const subEl = document.getElementById('page-subtitle');
+        if (titleEl) titleEl.textContent = t.t;
+        if (subEl) subEl.textContent = t.s;
+    }
+    document.querySelectorAll('.primary-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => syncTitle(btn.getAttribute('data-primary')));
+    });
 
-    <div id="boats-section" class="admin-grid-container">
-        <div class="admin-grid-col">
-            <h2 class="tillverkare-heading">Tillverkare <button class="add-btn" id="add-manufacturer-btn">+</button></h2>
-            <div class="grid1"></div>
-        </div>
-        <div class="admin-grid-col">
-            <h2 class="modeller-heading">Modeller <button class="add-btn" id="add-model-btn">+</button></h2>
-            <div class="models-wrapper">
-                <div class="grid2"></div>
-                <div id="edit-section" class="edit-section" style="display:none;"></div>
-            </div>
-        </div>
-    </div>
+    // Stats counters fed from folder DOM
+    function updateStats() {
+        const map = [
+            ['folder-nya-inskick', 'stat-new'],
+            ['folder-vantar-pa-svar', 'stat-waiting'],
+            ['folder-i-produktion', 'stat-production'],
+            ['folder-redo-for-leverans', 'stat-ready'],
+        ];
+        map.forEach(([src, dst]) => {
+            const srcEl = document.getElementById(src);
+            const dstEl = document.getElementById(dst);
+            if (srcEl && dstEl) {
+                dstEl.textContent = srcEl.querySelectorAll('.folder-item:not(.folder-item-empty)').length;
+            }
+        });
+    }
+    setInterval(updateStats, 1500);
+    window.addEventListener('load', () => setTimeout(updateStats, 500));
 
-    <!-- Sektion för extras -->
-    <div id="extras-section" style="display:none;">
-        <h2 id="extras-heading">Heading <button class="add-btn" id="add-extra-btn">+</button></h2>
-        <div class="extras-wrapper">
-            <div class="grid-extras"></div>
-            <div id="extras-edit-section" class="edit-section" style="display:none;"></div>
-        </div>
-    </div>
-
-    <!-- Item Modal for Status Folders -->
-    <div id="item-modal" class="item-modal">
-        <div class="item-modal-content">
-            <h3 id="item-modal-title">Lägg till objekt</h3>
-            <label>Titel</label>
-            <input type="text" id="item-title" />
-            <label>Beskrivning</label>
-            <textarea id="item-description"></textarea>
-            <label>Datum</label>
-            <input type="date" id="item-date" />
-            <div class="item-modal-actions">
-                <button class="btn" id="item-save-btn">Spara</button>
-                <button class="btn btn-secondary" id="item-cancel-btn">Avbryt</button>
-            </div>
-        </div>
-    </div>
-
-    <style>
-        .folder-item-title .ai-source-badge {
-            display: inline-block;
-            margin-top: 0.25rem;
-            padding: 0.1rem 0.4rem;
-            font-size: 0.7rem;
-            font-weight: 700;
-            color: #0a2342;
-            border: 1px solid #0a2342;
-            background: #e2f0ff;
-            border-radius: 2px;
-            width: fit-content;
-        }
-    </style>
-
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-    <!-- Cache-bust to force latest JS each deploy -->
-    <script src="kapellforfragan_full.js?v=20250628"></script>
-    <script src="chat_widget.js?v=20260208a"></script>
-    <script src="admin.js?v=20260207c"></script>
+    // Refresh button
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) refreshBtn.addEventListener('click', () => location.reload());
+})();
+</script>
 </body>
-</html> 
-
-
-
-
-
-
-
-
-
+</html>

@@ -17,6 +17,7 @@ console.log('API_BASE initialized to:', API_BASE, 'from location:', location.hre
 
 let ADMIN_API_KEY = localStorage.getItem('adminApiKey') || '';
 const STATUS_FLOW = ['nya-inskick', 'vantar-pa-svar', 'i-produktion', 'redo-for-leverans'];
+const STATUS_BUCKETS = [...STATUS_FLOW, 'todo'];
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -86,6 +87,24 @@ async function deleteSubmissionOnServer(item) {
     }
 }
 
+async function updateSubmissionNotesOnServer(item, notes) {
+    if (!item || !item.is_form_submission || !item.form_id) return false;
+    try {
+        const res = await adminFetch(`${API_BASE}/api/update_submission_notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: item.form_id,
+                notes: notes
+            })
+        });
+        return res.ok;
+    } catch (err) {
+        console.error('Kunde inte spara anteckningar', err);
+        return false;
+    }
+}
+
 function removeSubmissionFromAllStatuses(formId) {
     if (!formId) return false;
     let removed = false;
@@ -128,7 +147,8 @@ let statusItems = {
     'nya-inskick': [],
     'vantar-pa-svar': [],
     'i-produktion': [],
-    'redo-for-leverans': []
+    'redo-for-leverans': [],
+    'todo': []
 };
 let nyaInskickSortOrder = 'newest'; // 'newest' or 'oldest'
 let currentFormFilter = 'all'; // 'all', 'Kapellförfrågan', 'Fenderförfrågan', 'Kontakt'
@@ -230,7 +250,7 @@ function fetchManufacturers() {
             buildGrids();
         })
         .catch(err => {
-            console.warn('Kunde inte hämta boat_data.json från API ? använder ev. localStorage', err);
+            console.warn('Kunde inte hämta boat_data.json från API - använder ev. localStorage', err);
             try {
                 const stored = localStorage.getItem('boatData');
                 if(stored){ manufacturers = JSON.parse(stored); }
@@ -335,7 +355,7 @@ function buildGrids() {
         });
     }
     $grid1 = grid1.isotope({ itemSelector: '.grid1-item', layoutMode: 'fitRows', filter: '*' });
-    // Ingen Isotope på grid2 ? vi behåller vanlig flex-layout så redigeringsrutan inte överlappas
+    // Ingen Isotope på grid2 - vi behåller vanlig flex-layout så redigeringsrutan inte överlappas
     bindGridEvents();
 }
 
@@ -806,7 +826,7 @@ function showExtrasEdit() {
             // Uppdatera endast listans synlighet och namn utan att förstöra selektionen
             const updatedObj = extrasData[catKey][selectedExtraIndex];
             $(`.extras-item.selected-e .extra-name`).text(updatedObj.name || '?');
-            // Behåll formuläret som det är ? användaren ser sina ändringar direkt
+            // Behåll formuläret som det är - användaren ser sina ändringar direkt
         });
     });
     $('#delete-extra-btn').on('click', function(){
@@ -1027,7 +1047,8 @@ function getStatusColor(status) {
         'nya-inskick': '#ff9800',
         'vantar-pa-svar': '#2196f3',
         'i-produktion': '#9c27b0',
-        'redo-for-leverans': '#4caf50'
+        'redo-for-leverans': '#4caf50',
+        'todo': '#0f766e'
     };
     return colors[status] || '#666';
 }
@@ -1452,14 +1473,15 @@ function loadStatusItems() {
         'nya-inskick': [],
         'vantar-pa-svar': [],
         'i-produktion': [],
-        'redo-for-leverans': []
+        'redo-for-leverans': [],
+        'todo': []
     };
 
     const normalizeStatus = (value) => STATUS_FLOW.includes(value) ? value : 'nya-inskick';
     const ensureStatusBuckets = (source) => {
         const next = { ...defaultStatusItems };
         if (!source || typeof source !== 'object') return next;
-        STATUS_FLOW.forEach(status => {
+        STATUS_BUCKETS.forEach(status => {
             const items = source[status];
             next[status] = Array.isArray(items) ? items : [];
         });
@@ -1478,7 +1500,7 @@ function loadStatusItems() {
 
     // Keep local non-form entries and let backend be source of truth for form submissions.
     const localNonFormByStatus = ensureStatusBuckets(statusItems);
-    STATUS_FLOW.forEach(status => {
+    STATUS_BUCKETS.forEach(status => {
         localNonFormByStatus[status] = localNonFormByStatus[status].filter(item => !(item && item.is_form_submission));
     });
     
@@ -1503,6 +1525,7 @@ function loadStatusItems() {
                         form_type: submission.form_type,
                         fields: submission.fields,
                         proposed_response: submission.proposed_response,
+                        notes: submission.notes || '',
                         read: Boolean(submission.read),
                         submitted_via: submission.submitted_via || 'web_form',
                         is_form_submission: true
@@ -1511,7 +1534,7 @@ function loadStatusItems() {
             }
 
             statusItems = ensureStatusBuckets({});
-            STATUS_FLOW.forEach(status => {
+            STATUS_BUCKETS.forEach(status => {
                 statusItems[status] = [...formItemsByStatus[status], ...localNonFormByStatus[status]];
             });
 
@@ -1610,7 +1633,8 @@ function renderStatusFolders() {
                     'nya-inskick': 'nya inskick',
                     'vantar-pa-svar': 'väntar på svar',
                     'i-produktion': 'är i produktion',
-                    'redo-for-leverans': 'är redo för leverans'
+                    'redo-for-leverans': 'är redo för leverans',
+                    'todo': 'to-do'
                 };
                 emptyDiv.text(`Inga ${statusNames[status] || 'objekt'} att visa`);
             } else {
@@ -1618,7 +1642,8 @@ function renderStatusFolders() {
                     'nya-inskick': 'nya inskick',
                     'vantar-pa-svar': 'väntar på svar',
                     'i-produktion': 'är i produktion',
-                    'redo-for-leverans': 'är redo för leverans'
+                    'redo-for-leverans': 'är redo för leverans',
+                    'todo': 'to-do'
                 };
                 emptyDiv.text(`Inga ${currentFormFilter.toLowerCase()} ${statusNames[status] || 'objekt'} att visa`);
             }
@@ -1798,6 +1823,10 @@ function handleDrop(e) {
     // Get the item being dragged
     const item = statusItems[draggedFromStatus][draggedItemIndex];
     if (!item) return;
+    if (item.is_form_submission && !STATUS_FLOW.includes(targetStatus)) {
+        showStatusMessage('Formulärärenden kan inte flyttas till To-do');
+        return;
+    }
 
     // Remove from source status
     statusItems[draggedFromStatus].splice(draggedItemIndex, 1);
@@ -1824,7 +1853,8 @@ function getStatusDisplayName(status) {
         'nya-inskick': 'Nya Inskick',
         'vantar-pa-svar': 'Väntar på svar',
         'i-produktion': 'I produktion',
-        'redo-for-leverans': 'Redo för leverans'
+        'redo-for-leverans': 'Redo för leverans',
+        'todo': 'To-do'
     };
     return names[status] || status;
 }
@@ -1924,6 +1954,33 @@ function viewFormSubmission(status, index) {
         });
         formSection.append(fieldsList);
     }
+
+    const notesSection = $('<div>').addClass('form-section');
+    notesSection.append($('<h3>').text('Anteckningar'));
+    const notesInput = $('<textarea>')
+        .addClass('submission-notes')
+        .attr('placeholder', 'Skriv interna anteckningar för det här ärendet...')
+        .val(item.notes || '');
+    const notesActions = $('<div>').addClass('notes-actions');
+    const notesStatus = $('<span>').addClass('notes-status').text(item.notes ? 'Anteckningar sparade' : '');
+    const notesSaveButton = $('<button>').addClass('btn').text('Spara anteckningar');
+    notesSaveButton.on('click', async function() {
+        const nextNotes = String(notesInput.val() || '').trim();
+        notesSaveButton.prop('disabled', true).text('Sparar...');
+        notesStatus.text('');
+        const ok = await updateSubmissionNotesOnServer(item, nextNotes);
+        if (ok) {
+            item.notes = nextNotes;
+            notesStatus.text(nextNotes ? 'Anteckningar sparade' : 'Anteckningar rensade');
+            showStatusMessage('Anteckningar sparade');
+        } else {
+            notesStatus.text('Kunde inte spara anteckningar');
+        }
+        notesSaveButton.prop('disabled', false).text('Spara anteckningar');
+    });
+    notesActions.append(notesSaveButton, notesStatus);
+    notesSection.append(notesInput, notesActions);
+    formSection.append(notesSection);
 
     infoColumn.append(formSection);
 

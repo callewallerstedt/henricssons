@@ -2,28 +2,28 @@
 <html lang="sv">
 <head>
     <meta charset="utf-8"/>
-    <title>Bilder & exempel - Henricssons Båtkapell</title>
-    <meta name="description" content="Bläddra bland hundratals kundbilder och exempel på kapell från Henricssons Båtkapell – motorbåtar, segelbåtar och skräddarsydda lösningar."/>
+    <title>Bilder och exempel - Henricssons Båtkapell</title>
+    <meta name="description" content="Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260416">
     <link rel="icon" href="logo.png">
     <script src="script.js"></script>
     <script src="kapellforfragan_full.js"></script>
-<script src="chat_widget.js?v=20260208a"></script>
+<script src="chat_widget.js?v=20260416d"></script>
     <link rel="canonical" href="https://www.henricssonsbatkapell.se/bilder-och-exempel"/>
     <!-- Open Graph -->
-    <meta property="og:title" content="Bilder & exempel | Henricssons Båtkapell"/>
-    <meta property="og:description" content="Bläddra bland hundratals kundbilder och exempel på kapell från Henricssons Båtkapell – motorbåtar, segelbåtar och skräddarsydda lösningar."/>
+    <meta property="og:title" content="Bilder och exempel - Henricssons Båtkapell"/>
+    <meta property="og:description" content="Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller"/>
     <meta property="og:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <meta property="og:type" content="website"/>
     <meta property="og:url" content="https://www.henricssonsbatkapell.se/bilder-och-exempel"/>
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image"/>
-    <meta name="twitter:title" content="Bilder & exempel | Henricssons Båtkapell"/>
-    <meta name="twitter:description" content="Bläddra bland hundratals kundbilder och exempel på kapell från Henricssons Båtkapell – motorbåtar, segelbåtar och skräddarsydda lösningar."/>
+    <meta name="twitter:title" content="Bilder och exempel - Henricssons Båtkapell"/>
+    <meta name="twitter:description" content="Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller"/>
     <meta name="twitter:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <style>
         .bilderex-searchbar { max-width: 400px; margin: 0 auto 2rem auto; display: flex; }
@@ -234,11 +234,19 @@ function buildData() {
                 return `${API_BASE}/henricssons_bilder/` + clean;
             });
             const finalImgs = imgs.length ? imgs : ['logo.png'];
+            let detailSlug = slug;
+            if (item.source) {
+                const sourceMatch = String(item.source).match(/\/exempel\/([^/?#]+)/i);
+                if (sourceMatch && sourceMatch[1]) {
+                    detailSlug = sourceMatch[1];
+                }
+            }
             bilderexData.push({
                 namn: item.model,
                 tillverkare: item.manufacturer || '',
                 kategori: map.label,
                 kategoriKey: map.key,
+                slug: detailSlug,
                 images: finalImgs,
                 variant: item.variant || '',
                 leverans: item.delivery || '',
@@ -306,21 +314,21 @@ function bilderexRenderGallery(items) {
         const safeNamn = escapeHtml(item.namn);
         const safeTillverkare = escapeHtml(item.tillverkare);
         const safeKategori = escapeHtml(item.kategori || '');
+        const detailHref = item.slug ? `/exempel/${encodeURIComponent(item.slug)}` : '#';
         div.innerHTML = `
-            <a href="#" class="bilderex-thumb" data-idx="${item._idx}" tabindex="0">
+            <a href="${detailHref}" class="bilderex-detail-link" tabindex="0">
                 <img src="${safeThumb}" alt="${safeNamn}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
                 <div class="bilderex-no-image" style="display:none; width:100%; aspect-ratio:3/2; background:#f8f8f8; align-items:center; justify-content:center; color:#999; font-size:0.9rem; font-weight:500;">Bild saknas</div>
             </a>
             <div class="bilderex-gallery-caption">
                 <div class="bilderex-cat">${safeKategori}</div>
-                <h3>${safeTillverkare}</h3>
-                <p class="model">${safeNamn}</p>
-                <a href="#" class="bilderex-link bilderex-thumb" data-idx="${item._idx}">Visa</a>
+                <h3><a href="${detailHref}" class="bilderex-detail-link" style="color:inherit;text-decoration:none;">${safeTillverkare}</a></h3>
+                <p class="model"><a href="${detailHref}" class="bilderex-detail-link" style="color:inherit;text-decoration:none;">${safeNamn}</a></p>
+                <a href="${detailHref}" class="bilderex-link bilderex-detail-link">Läs mer</a>
             </div>
         `;
         grid.appendChild(div);
     });
-    bindThumbClicks();
 }
 // Modal viewer
 function bindThumbClicks(){
@@ -492,10 +500,6 @@ function loadExtrasData() {
     </script>
 </body>
 </html> 
-
-
-
-
 
 
 

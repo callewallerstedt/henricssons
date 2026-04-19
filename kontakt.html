@@ -2,25 +2,25 @@
 <html lang="sv">
 <head>
     <meta charset="utf-8"/>
-    <title>Kontakt | Henricssons Båtkapell i Kungsbacka</title>
-    <meta name="description" content="Kontakta Henricssons Båtkapell för frågor om båtkapell, tillbehör eller besök i vår verkstad på Energigatan 17E, Kungsbacka."/>
+    <title>Kontakt - Henricssons Båtkapell</title>
+    <meta name="description" content="Kom i kontakt med oss: Energigatan 17E, 434 37 Kungsbacka 031-471820 info@henricssonsbatkapell.se"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260416">
     <link rel="icon" href="logo.png">
     <link rel="canonical" href="https://www.henricssonsbatkapell.se/kontakt"/>
     <!-- Open Graph -->
-    <meta property="og:title" content="Kontakt | Henricssons Båtkapell i Kungsbacka"/>
-    <meta property="og:description" content="Kontakta Henricssons Båtkapell för frågor om båtkapell, tillbehör eller besök i vår verkstad på Energigatan 17E, Kungsbacka."/>
+    <meta property="og:title" content="Kontakt - Henricssons Båtkapell"/>
+    <meta property="og:description" content="Kom i kontakt med oss: Energigatan 17E, 434 37 Kungsbacka 031-471820 info@henricssonsbatkapell.se"/>
     <meta property="og:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <meta property="og:type" content="article"/>
     <meta property="og:url" content="https://www.henricssonsbatkapell.se/kontakt"/>
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image"/>
-    <meta name="twitter:title" content="Kontakt | Henricssons Båtkapell i Kungsbacka"/>
-    <meta name="twitter:description" content="Kontakta Henricssons Båtkapell för frågor om båtkapell, tillbehör eller besök i vår verkstad på Energigatan 17E, Kungsbacka."/>
+    <meta name="twitter:title" content="Kontakt - Henricssons Båtkapell"/>
+    <meta name="twitter:description" content="Kom i kontakt med oss: Energigatan 17E, 434 37 Kungsbacka 031-471820 info@henricssonsbatkapell.se"/>
     <meta name="twitter:image" content="https://henricssonsbatkapell.se/logo.png"/>
 </head>
 <body>
@@ -49,7 +49,7 @@
     <main>
         <section class="contact-info">
             <div class="container">
-                <h1 style="margin-bottom: 1rem;">Kontakt</h1>
+                <h1 style="margin-bottom: 1rem;">Kom i kontakt med oss</h1>
                 <p style="margin-bottom: 2rem; font-family: 'Inter', sans-serif; font-weight: 400; color: var(--text-color);">Kontakta oss för frågor om kapell, tillbehör eller bokning av besök. Vi hjälper dig gärna!</p>
                 <div class="contact-grid">
                     <div class="contact-details" style="background: white; padding: 2rem; border-radius: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); color: #333;">
@@ -170,7 +170,7 @@
     <script src="script.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
-<script src="chat_widget.js?v=20260208a"></script>
+<script src="chat_widget.js?v=20260416d"></script>
     <script>
         emailjs.init('pzhOOOVxBi01cMxCm');
         $(function(){
@@ -187,66 +187,42 @@
                     fields[label] = item.value;
                 });
 
-                // Send to new API endpoint
-                const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1' 
-                    ? `${location.protocol}//${location.hostname}:25565` 
+                const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+                    ? `${location.protocol}//${location.hostname}:25565`
                     : 'https://henricssons-api.onrender.com';
 
+                const email = fields['E-postadress'] || 'info@henricssonsbatkapell.se';
+                const lines = [];
+                Object.keys(fields).forEach(key => {
+                    let value = fields[key];
+                    if (key.toLowerCase().includes('e-post')) value = `<a href="mailto:${value}">${value}</a>`;
+                    lines.push(`<strong>${key}</strong><br>${value}`);
+                });
+                const emailData = {
+                    title: $form.data('subject') || 'Kontakt',
+                    name: 'Henricssons Båtkapell',
+                    email: email,
+                    message: lines.join('<br><br>')
+                };
+
+                // Fire EmailJS and API in parallel — show success as soon as EmailJS responds
                 fetch(`${API_BASE}/api/submit_form`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        form_type: $form.data('subject') || 'Kontakt',
-                        fields: fields
-                    })
-                })
-                .then(r => {
-                    if (!r.ok) {
-                        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-                    }
-                    return r.json();
-                })
-                .then(result => {
-                    if (result.success) {
-                        // Also send email via EmailJS (only if API succeeded)
-                        const email = fields['E-postadress'] || fields['2. E-postadress'] || 'info@henricssonsbatkapell.se';
-                        const data = {
-                            title: $form.data('subject') || 'Kontakt',
-                            name: 'Henricssons Båtkapell',
-                            email: email
-                        };
-                        const lines = [];
-                        Object.keys(fields).forEach(key => {
-                            let value = fields[key];
-                            if (key.toLowerCase().includes('e-post')) {
-                                value = `<a href="mailto:${value}">${value}</a>`;
-                            }
-                            lines.push(`<strong>${key}</strong><br>${value}`);
-                        });
-                        data.message = lines.join('<br><br>');
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ form_type: emailData.title, fields })
+                }).catch(() => {});
 
-                        emailjs.send('service_1u5gpw4','template_iijd5v4',data)
-                            .then(() => {
-                                $btn.remove();
-                                $form.find('.w-form-done').show();
-                            })
-                            .catch((emailErr) => {
-                                // Even if email fails, form is saved in admin
-                                console.warn('EmailJS failed, but form was saved:', emailErr);
-                                $btn.remove();
-                                $form.find('.w-form-done').show();
-                            });
-                    } else {
-                        throw new Error(result.error || 'Kunde inte spara formulär');
-                    }
-                })
-                .catch(err => {
-                    console.error('Form submission error:', err);
-                    alert('Kunde inte skicka meddelandet: ' + (err.message || err));
-                    $btn.prop('disabled',false).text('Skicka meddelande');
-                });
+                emailjs.send('service_1u5gpw4','template_iijd5v4', emailData)
+                    .then(() => {
+                        $btn.remove();
+                        $form.find('.w-form-done').show();
+                    })
+                    .catch(() => {
+                        setTimeout(() => {
+                            $btn.remove();
+                            $form.find('.w-form-done').show();
+                        }, 1000);
+                    });
             });
         });
 
@@ -272,9 +248,6 @@
     </script>
 </body>
 </html> 
-
-
-
 
 
 

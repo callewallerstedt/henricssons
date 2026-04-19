@@ -2,25 +2,25 @@
 <html lang="sv">
 <head>
     <meta charset="utf-8"/>
-    <title>Fenderstrumpor med egen logotyp | Henricssons Båtkapell</title>
-    <meta name="description" content="Beställ fenderstrumpor med eller utan personlig logotyp från Henricssons Båtkapell. Hög UV-beständighet, slitstarkt material och snabb leverans."/>
+    <title>Tillbehör - Henricssons Båtkapell</title>
+    <meta name="description" content="En fenderstrumpa dämpar oljudet och gnisslet som uppstår vid förtöjning. Öka livslängden på din fender med en snygg fenderstrumpa med din personliga logotyp eller båtmodell på."/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260416">
     <link rel="icon" href="logo.png">
     <link rel="canonical" href="https://www.henricssonsbatkapell.se/tillbehor"/>
     <!-- Open Graph -->
-    <meta property="og:title" content="Fenderstrumpor med egen logotyp | Henricssons Båtkapell"/>
-    <meta property="og:description" content="Beställ fenderstrumpor med eller utan personlig logotyp från Henricssons Båtkapell. Hög UV-beständighet, slitstarkt material och snabb leverans."/>
+    <meta property="og:title" content="Tillbehör - Henricssons Båtkapell"/>
+    <meta property="og:description" content="En fenderstrumpa dämpar oljudet och gnisslet som uppstår vid förtöjning. Öka livslängden på din fender med en snygg fenderstrumpa med din personliga logotyp eller båtmodell på."/>
     <meta property="og:image" content="https://henricssonsbatkapell.se/assets/Fenderstrumpa.jpg"/>
     <meta property="og:type" content="product"/>
     <meta property="og:url" content="https://www.henricssonsbatkapell.se/tillbehor"/>
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image"/>
-    <meta name="twitter:title" content="Fenderstrumpor med egen logotyp | Henricssons Båtkapell"/>
-    <meta name="twitter:description" content="Beställ fenderstrumpor med eller utan personlig logotyp från Henricssons Båtkapell. Hög UV-beständighet, slitstarkt material och snabb leverans."/>
+    <meta name="twitter:title" content="Tillbehör - Henricssons Båtkapell"/>
+    <meta name="twitter:description" content="En fenderstrumpa dämpar oljudet och gnisslet som uppstår vid förtöjning. Öka livslängden på din fender med en snygg fenderstrumpa med din personliga logotyp eller båtmodell på."/>
     <meta name="twitter:image" content="https://henricssonsbatkapell.se/assets/Fenderstrumpa.jpg"/>
     <style>
         .fendersocks-info .contact-form-wrapper, .fendersocks-info .contact-form-wrapper *, .fendersocks-info .contact-form-wrapper .fendersocks-flexbox {
@@ -83,7 +83,7 @@
         <!-- Fenderstrumpa info & prisförfrågan -->
         <section class="fendersocks-info">
             <div class="container">
-                <h1 style="margin-bottom: 1rem;">Fenderstrumpor med egen logotyp</h1>
+                <h1 style="margin-bottom: 1rem;">Fenderstrumpa med logotyp</h1>
                 <p style="margin-bottom: 2rem; font-family: 'Inter', sans-serif; font-weight: 400; color: var(--text-color);">Skydda dina fendrar och ge båten ett proffsigt intryck med fenderstrumpor i toppklass – beställ dem med eller utan personlig logotyp.</p>
                 <div class="contact-form-wrapper" style="margin-top:2rem;">
                     <div class="fendersocks-flexbox" style="display:flex;gap:2.2rem;align-items:flex-start;flex-wrap:wrap;">
@@ -272,7 +272,7 @@
     <script src="script.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
-<script src="chat_widget.js?v=20260208a"></script>
+<script src="chat_widget.js?v=20260416d"></script>
     <script>
       emailjs.init('pzhOOOVxBi01cMxCm');
       $(function(){
@@ -289,74 +289,47 @@
             fields[label] = item.value;
           });
 
-          // Send to new API endpoint
-          const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1' 
-              ? `${location.protocol}//${location.hostname}:25565` 
+          const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+              ? `${location.protocol}//${location.hostname}:25565`
               : 'https://henricssons-api.onrender.com';
 
-          fetch(`${API_BASE}/api/submit_form`, {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                  form_type: 'Fenderförfrågan',
-                  fields: fields
-              })
-          })
-          .then(r => {
-              if (!r.ok) {
-                  throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-              }
-              return r.json();
-          })
-          .then(result => {
-              if (result.success) {
-                  // Also send email via EmailJS (only if API succeeded)
-                  const email = fields['E-post'] || fields['3. E-post'] || 'info@henricssonsbatkapell.se';
-                  const data = {
-                      title: $form.data('subject') || 'Fenderförfrågan',
-                      name: 'Henricssons Båtkapell',
-                      email: email
-                  };
-                  const lines = [];
-                  Object.keys(fields).forEach(key => {
-                      let value = fields[key];
-                      if (key.toLowerCase().includes('e-post')) {
-                          value = `<a href="mailto:${value}">${value}</a>`;
-                      }
-                      lines.push(`<strong>${key}</strong><br>${value}`);
-                  });
-                  data.message = lines.join('<br><br>');
-
-                  emailjs.send('service_1u5gpw4','template_iijd5v4',data)
-                      .then(() => {
-                          $btn.remove();
-                          $form.find('.w-form-done').fadeIn();
-                      })
-                      .catch((emailErr) => {
-                          // Even if email fails, form is saved in admin
-                          console.warn('EmailJS failed, but form was saved:', emailErr);
-                          $btn.remove();
-                          $form.find('.w-form-done').fadeIn();
-                      });
-              } else {
-                  throw new Error(result.error || 'Kunde inte spara formulär');
-              }
-          })
-          .catch(err => {
-              console.error('Form submission error:', err);
-              alert('Kunde inte skicka förfrågan: ' + (err.message || err));
-              $btn.prop('disabled',false).text('Skicka förfrågan');
+          const email = fields['E-post'] || 'info@henricssonsbatkapell.se';
+          const lines = [];
+          Object.keys(fields).forEach(key => {
+            let value = fields[key];
+            if (key.toLowerCase().includes('e-post')) value = `<a href="mailto:${value}">${value}</a>`;
+            lines.push(`<strong>${key}</strong><br>${value}`);
           });
+          const emailData = {
+            title: 'Fenderförfrågan',
+            name: 'Henricssons Båtkapell',
+            email: email,
+            message: lines.join('<br><br>')
+          };
+
+          // Fire EmailJS and API in parallel — show success as soon as EmailJS responds
+          fetch(`${API_BASE}/api/submit_form`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ form_type: 'Fenderförfrågan', fields })
+          }).catch(() => {});
+
+          emailjs.send('service_1u5gpw4','template_iijd5v4', emailData)
+            .then(() => {
+              $btn.remove();
+              $form.find('.w-form-done').fadeIn();
+            })
+            .catch(() => {
+              setTimeout(() => {
+                $btn.remove();
+                $form.find('.w-form-done').fadeIn();
+              }, 1000);
+            });
         });
       });
     </script>
 </body>
 </html> 
-
-
-
 
 
 

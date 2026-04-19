@@ -890,8 +890,7 @@ p {
     width: auto;
     height: auto;
     object-fit: contain;
-    filter: brightness(0) invert(1);
-    opacity: 0.8;
+    opacity: 0.85;
     transition: opacity 0.3s ease;
 }
 
@@ -2973,3 +2972,96 @@ textarea::placeholder {
         grid-template-columns: 1fr;
     }
 }
+
+/* =========================================================
+   Launch-polish: tightened mobile hero + small fixes.
+   ========================================================= */
+@media (max-width: 900px) {
+    .hero {
+        background-attachment: scroll;
+        padding-top: 4.5rem;
+        padding-bottom: 4.5rem;
+        min-height: 70vh;
+    }
+    .hero h1 { font-size: 2.35rem; }
+    .hero-text { font-size: 1.1rem; line-height: 1.65; }
+    .hero-content { padding: 0 1.25rem; }
+}
+
+@media (max-width: 600px) {
+    .hero {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+        min-height: 62vh;
+    }
+    .hero h1 { font-size: 1.8rem; line-height: 1.25; }
+    .hero-subtitle { font-size: 0.85rem; letter-spacing: 0.3em; }
+    .hero-text { font-size: 0.98rem; margin-bottom: 1.25rem; }
+    .announcement-animated { margin-top: 1rem; }
+}
+
+/* Stats: 2-col on tablets for balanced layout */
+@media (min-width: 600px) and (max-width: 900px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* Service grid nicer at tablet */
+@media (min-width: 600px) and (max-width: 900px) {
+    .service-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+}
+
+/* Contact grid should stack reliably at mobile */
+@media (max-width: 768px) {
+    .contact-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    .contact-details, .contact-form-wrapper { width: 100%; }
+}
+
+/* Announcement inner border reduced on mobile */
+@media (max-width: 600px) {
+    .announcement { padding: 1.75rem 1.25rem; }
+    .announcement::after { inset: 7px !important; border-width: 2px !important; }
+}
+
+/* Nicer focus styles across inputs (a11y polish) */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible {
+    outline: 2px solid var(--accent-gold);
+    outline-offset: 2px;
+}
+
+/* Smoothed header shadow on scroll */
+.header.scrolled { box-shadow: 0 4px 18px rgba(10, 29, 51, 0.12); }
+
+/* Footer partner grid polish on mobile */
+@media (max-width: 600px) {
+    .partners-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    .partners-grid img[style*="grid-column"] { grid-column: span 2 !important; }
+}
+
+/* Reduce-motion support */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+    .hero { background-attachment: scroll; }
+}
+
+/* Small visual polish on CTA buttons */
+.cta-button, .hero-cta-button {
+    will-change: transform;
+}
+.cta-button:active, .hero-cta-button:active {
+    transform: translateY(1px);
+}
+

@@ -1,12 +1,14 @@
 databases:
   - name: henricssons-db
-    plan: starter
+    plan: basic-256mb
+    region: frankfurt
 
 services:
   - type: web
     name: henricssons-app
     runtime: python
     plan: starter
+    region: frankfurt
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn admin_api_flask:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
@@ -29,4 +31,4 @@ services:
       - key: OPENAI_REASONING_EFFORT
         value: minimal
       - key: ALLOWED_ORIGINS
-        value: https://henricssons.se,https://www.henricssons.se
+        value: https://henricssonsbatkapell.se,https://www.henricssonsbatkapell.se,https://henricssons.se,https://www.henricssons.se
