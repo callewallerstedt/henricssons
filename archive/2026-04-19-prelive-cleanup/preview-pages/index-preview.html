@@ -5,6 +5,8 @@
     <title>Henricssons Båtkapell</title>
     <meta name="description" content="Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <!-- Preview page: noindex so it won't affect rankings of the live site -->
+    <meta name="robots" content="noindex,nofollow"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
@@ -24,7 +26,7 @@
 
     <style>
     /* ==========================================================
-       Premium site styles scoped under .hb-premium so it will not
+       Premium preview scoped under .hb-premium so it will not
        collide with the live styles.css if later included together.
        ========================================================== */
     .hb-premium, .hb-premium * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -210,8 +212,7 @@
         font-weight: 600;
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--white) !important;
-        -webkit-text-fill-color: var(--white);
+        color: var(--white);
         text-decoration: none;
         border-radius: 0;
         border: 0;
@@ -230,17 +231,10 @@
         animation: hbShimmer 3s infinite;
         z-index: 1;
     }
-    .hb-btn-primary span {
-        position: relative;
-        z-index: 2;
-        color: var(--white) !important;
-        -webkit-text-fill-color: var(--white);
-    }
+    .hb-btn-primary span { position: relative; z-index: 2; }
     .hb-btn-primary:hover {
         transform: translateY(-3px);
         box-shadow: 0 8px 18px rgba(247,196,91,0.45), 0 3px 6px rgba(247,196,91,0.3);
-        color: var(--white) !important;
-        -webkit-text-fill-color: var(--white);
     }
     @keyframes hbGradientShift {
         0%   { background-position: 0% 50%; }
@@ -469,7 +463,7 @@
     }
     .hb-partners-row img:hover { opacity: 1; }
 
-    /* ---------- Gallery ---------- */
+    /* ---------- Gallery preview ---------- */
     .hb-gallery { background: var(--cream); }
     .hb-gallery .head {
         display: flex; align-items: end; justify-content: space-between; gap: 2rem;
@@ -549,6 +543,15 @@
         font-size: 0.78rem; color: #6b7788;
         display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
     }
+
+    .hb-preview-banner {
+        position: fixed; bottom: 12px; right: 12px; z-index: 9999;
+        background: var(--brass); color: var(--white);
+        padding: 0.5rem 0.9rem; font-size: 0.72rem;
+        letter-spacing: 0.14em; text-transform: uppercase;
+        font-family: 'Montserrat', sans-serif; font-weight: 600;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    }
     </style>
 </head>
 <body class="hb-premium">
@@ -567,16 +570,16 @@
     <!-- Header -->
     <header class="hb-header">
         <div class="wrap hb-nav">
-            <a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell"/></a>
+            <a href="/index.html" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell"/></a>
             <button class="hb-burger" aria-label="Meny" onclick="document.getElementById('hbNav').classList.toggle('is-open')">
                 <span></span><span></span><span></span>
             </button>
             <nav class="hb-nav-links" id="hbNav">
-                <a href="/om-oss">Om oss</a>
-                <a href="/bilder-och-exempel">Bilder &amp; exempel</a>
-                <a href="/tillbehor">Fenderstrumpor</a>
-                <a href="/kontakt">Kontakt</a>
-                <a href="/kapellforfragan" class="hb-nav-cta">Kapellförfrågan</a>
+                <a href="/om-oss-preview.html">Om oss</a>
+                <a href="/bilder-och-exempel-preview.html">Bilder &amp; exempel</a>
+                <a href="/tillbehor-preview.html">Fenderstrumpor</a>
+                <a href="/kontakt-preview.html">Kontakt</a>
+                <a href="/kapellforfragan-preview.html" class="hb-nav-cta">Begär offert</a>
             </nav>
         </div>
     </header>
@@ -587,7 +590,7 @@
             <span class="tag">Aktuellt</span>
             <div class="hb-announcement-content">
                 <div class="hb-announcement-body" id="hbAnnouncementBody"></div>
-                <a href="/kapellforfragan" class="hb-announcement-cta">Kapellförfrågan</a>
+                <a href="/kapellforfragan-preview.html" class="hb-announcement-cta">Kapellförfrågan</a>
             </div>
             <button type="button" class="hb-announcement-close" id="hbAnnouncementClose" aria-label="Stäng aktuellt">×</button>
         </div>
@@ -605,8 +608,8 @@
                 Ett familjeföretag i tredje generationen. Vi tillverkar och importerar kapell till motorbåtar och segelbåtar med ett av Nordens största mallregister och originalkapell från Norge, Finland och Danmark.
             </p>
             <div class="hb-ctas">
-                <a href="/kapellforfragan" class="hb-btn hb-btn-primary"><span>Få en offert</span></a>
-                <a href="/bilder-och-exempel" class="hb-btn hb-btn-ghost">Se våra kapell</a>
+                <a href="/kapellforfragan-preview.html" class="hb-btn hb-btn-primary"><span>Få en offert</span></a>
+                <a href="/bilder-och-exempel-preview.html" class="hb-btn hb-btn-ghost">Se våra kapell</a>
             </div>
         </div>
         <div class="hb-hero-meta">
@@ -637,7 +640,7 @@
                     Varje kapell sys av erfarna hantverkare i vår verkstad i Kungsbacka. Material, sömmar och detaljer är valda för att hålla år efter år, hamn efter hamn.
                 </p>
                 <div style="margin-top: 2rem;">
-                    <a href="/om-oss" class="hb-btn hb-btn-dark">Läs mer om oss</a>
+                    <a href="/om-oss-preview.html" class="hb-btn hb-btn-dark">Läs mer om oss</a>
                 </div>
             </div>
         </div>
@@ -658,7 +661,7 @@
                     <div class="body">
                         <h3>Motorbåtar</h3>
                         <p>Brett program av standardmallar och originalkapell. Vi täcker de flesta vanliga modellerna och hittar lösningar för de mer ovanliga.</p>
-                        <a class="more" href="/kapellforfragan">Begär offert →</a>
+                        <a class="more" href="/kapellforfragan-preview.html">Begär offert →</a>
                     </div>
                 </article>
                 <article class="hb-card">
@@ -666,7 +669,7 @@
                     <div class="body">
                         <h3>Segelbåtar</h3>
                         <p>Sprayhoods, sittbrunnskapell, rulliga kapellösningar och mer. Stort mallregister och samarbetspartners för specialmodeller.</p>
-                        <a class="more" href="/kapellforfragan">Begär offert →</a>
+                        <a class="more" href="/kapellforfragan-preview.html">Begär offert →</a>
                     </div>
                 </article>
                 <article class="hb-card">
@@ -674,7 +677,7 @@
                     <div class="body">
                         <h3>Skräddarsytt</h3>
                         <p>För båtar utanför vårt mallregister kan vi malla båten i hamn eller hos oss och bygga kapellet efter din båt och dina önskemål.</p>
-                        <a class="more" href="/kontakt">Kontakta oss →</a>
+                        <a class="more" href="/kontakt-preview.html">Kontakta oss →</a>
                     </div>
                 </article>
             </div>
@@ -711,7 +714,7 @@
                 </div>
             </div>
             <div style="text-align: center; margin-top: 3rem;">
-                <a href="/kapellforfragan" class="hb-btn hb-btn-primary"><span>Skicka en kapellförfrågan</span></a>
+                <a href="/kapellforfragan-preview.html" class="hb-btn hb-btn-primary"><span>Skicka en kapellförfrågan</span></a>
             </div>
         </div>
     </section>
@@ -740,15 +743,15 @@
                     <h2>Ett urval av vårt arbete</h2>
                     <p>Över 50 års hantverk syns i de här exemplen på kapell vi levererat.</p>
                 </div>
-                <a href="/bilder-och-exempel" class="hb-btn hb-btn-dark">Se hela galleriet</a>
+                <a href="/bilder-och-exempel-preview.html" class="hb-btn hb-btn-dark">Se hela galleriet</a>
             </div>
             <div class="hb-gallery-grid">
-                <a href="/bilder-och-exempel"><img src="assets/model_images/540-cruiser/540-cruiser_01.jpg" alt="540 Cruiser kapell"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/9000-targa/9000-targa_01.jpeg" alt="9000 Targa kapell"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/760-dc-hamnkapell-original/760-dc_01.jpg" alt="760 DC hamnkapell"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/108-sprayhood-for-22mm-bagar/108-sprayhood-for-22mm-bagar_01.jpg" alt="Sprayhood segelbåt"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/625-dc-2-delat-originalkapell/625-dc-2-delat-originalkapell_01.jpg" alt="625 DC originalkapell"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/540-cabin-cruiser-med-rf-racke-pa-vindrutan/540-cabin-cruiser-med-rf-racke-pa-vindrutan_01.jpg" alt="540 Cabin Cruiser kapell"/></a>
+                <a href="/bilder-och-exempel-preview.html"><img src="assets/model_images/540-cruiser/540-cruiser_01.jpg" alt="540 Cruiser kapell"/></a>
+                <a href="/bilder-och-exempel-preview.html"><img src="assets/model_images/9000-targa/9000-targa_01.jpeg" alt="9000 Targa kapell"/></a>
+                <a href="/bilder-och-exempel-preview.html"><img src="assets/model_images/760-dc-hamnkapell-original/760-dc_01.jpg" alt="760 DC hamnkapell"/></a>
+                <a href="/bilder-och-exempel-preview.html"><img src="assets/model_images/108-sprayhood-for-22mm-bagar/108-sprayhood-for-22mm-bagar_01.jpg" alt="Sprayhood segelbåt"/></a>
+                <a href="/bilder-och-exempel-preview.html"><img src="assets/model_images/625-dc-2-delat-originalkapell/625-dc-2-delat-originalkapell_01.jpg" alt="625 DC originalkapell"/></a>
+                <a href="/bilder-och-exempel-preview.html"><img src="assets/model_images/540-cabin-cruiser-med-rf-racke-pa-vindrutan/540-cabin-cruiser-med-rf-racke-pa-vindrutan_01.jpg" alt="540 Cabin Cruiser kapell"/></a>
             </div>
         </div>
     </section>
@@ -762,8 +765,8 @@
             <h2>Dags för ett nytt kapell?</h2>
             <p>Skicka en kapellförfrågan online, eller ring så hjälper vi dig vidare. Vi svarar oftast samma dag.</p>
             <div class="hb-ctas">
-                <a href="/kapellforfragan" class="hb-btn hb-btn-primary"><span>Skicka kapellförfrågan</span></a>
-                <a href="/kontakt" class="hb-btn hb-btn-ghost">Kontakta oss</a>
+                <a href="/kapellforfragan-preview.html" class="hb-btn hb-btn-primary"><span>Skicka kapellförfrågan</span></a>
+                <a href="/kontakt-preview.html" class="hb-btn hb-btn-ghost">Kontakta oss</a>
             </div>
             <div class="phone">eller ring direkt · <a href="tel:+46314718200">+46 (0)31 47 18 20</a></div>
         </div>
@@ -788,11 +791,11 @@
                 <div>
                     <h5>Navigera</h5>
                     <ul>
-                        <li><a href="/om-oss">Om oss</a></li>
-                        <li><a href="/kapellforfragan">Kapellförfrågan</a></li>
-                        <li><a href="/bilder-och-exempel">Bilder &amp; exempel</a></li>
-                        <li><a href="/tillbehor">Fenderstrumpor</a></li>
-                        <li><a href="/kontakt">Kontakt</a></li>
+                        <li><a href="/om-oss-preview.html">Om oss</a></li>
+                        <li><a href="/kapellforfragan-preview.html">Kapellförfrågan</a></li>
+                        <li><a href="/bilder-och-exempel-preview.html">Bilder &amp; exempel</a></li>
+                        <li><a href="/tillbehor-preview.html">Fenderstrumpor</a></li>
+                        <li><a href="/kontakt-preview.html">Kontakt</a></li>
                     </ul>
                 </div>
                 <div>
@@ -821,6 +824,8 @@
             </div>
         </div>
     </footer>
+
+    <div class="hb-preview-banner">Preview · index-preview.html</div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
@@ -871,6 +876,5 @@
             }).catch(() => {});
         })();
     </script>
-    <script src="chat_widget.js?v=20260416d"></script>
 </body>
 </html>

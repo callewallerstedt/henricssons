@@ -25,6 +25,7 @@ FORM_SUBMISSIONS_FILE = BASE_DIR / "form_submissions.json"
 FORM_PROMPTS_FILE = BASE_DIR / "form_prompts.json"
 PAGE_TEXTS_FILE = BASE_DIR / "page_texts.json"
 AI_SETTINGS_FILE = BASE_DIR / "ai_settings.json"
+LOGO_FILE = BASE_DIR / "logo.png"
 IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
 EXAMPLES_META_FILE = BASE_DIR / "examples_meta.json"
@@ -121,8 +122,32 @@ MAX_ATTACHMENTS_PER_SUBMISSION = 8
 MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024
 ATTACHMENT_ALLOWED_MIME_PREFIXES = ("image/", "application/pdf")
 ATTACHMENT_ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".pdf"}
+ATTACHMENT_MIME_BY_EXT = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".pdf": "application/pdf",
+}
 STATUS_FLOW = ["nya-inskick", "vantar-pa-svar", "i-produktion", "redo-for-leverans"]
 MOJIBAKE_MARKERS = ("Ã", "Â", "â")
+
+
+def is_env_flag_enabled(name: str, default: str = "0") -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        raw = os.getenv(name.upper())
+    if raw is None:
+        raw = os.getenv(name.lower())
+    value = str(raw if raw is not None else default).strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def is_public_chatbot_enabled() -> bool:
+    return is_env_flag_enabled("enable_chatbot")
 
 Base = declarative_base()
 
@@ -1247,8 +1272,8 @@ def build_notification_html(
   <!-- Header -->
   <tr>
     <td style="background:linear-gradient(135deg,#0f2945 0%,#0a1d33 100%);padding:28px 32px;text-align:center;">
-      <div style="display:inline-block;background:linear-gradient(145deg,#c9a24a,#a8832d);border-radius:10px;padding:8px 14px;margin-bottom:14px;">
-        <span style="color:#0a1d33;font-weight:800;font-size:13px;letter-spacing:0.1em;">HENRICSSONS</span>
+      <div style="display:inline-block;background:#ffffff;border-radius:10px;padding:10px 16px;margin-bottom:14px;">
+        <img src="cid:henricssons-logo" alt="Henricssons Båtkapell" width="148" style="display:block;width:148px;height:auto;border:0;outline:none;text-decoration:none;">
       </div>
       <div style="color:#ffffff;font-size:22px;font-weight:700;margin-bottom:4px;">Ny {form_label}</div>
       <div style="color:rgba(255,255,255,0.6);font-size:13px;">{local_str}</div>
@@ -1341,6 +1366,14 @@ def sanitize_attachment_filename(raw_name: str, fallback_ext: str = "") -> str:
     return name[:120]
 
 
+def normalize_attachment_mime(filename: str, mime: str) -> str:
+    ext = os.path.splitext(filename or "")[1].lower()
+    normalized = str(mime or "").strip().lower()
+    if not normalized or normalized == "application/octet-stream":
+        normalized = ATTACHMENT_MIME_BY_EXT.get(ext, normalized or "application/octet-stream")
+    return normalized
+
+
 def save_submission_attachments(submission_id: str, files: List[Any]) -> List[Dict[str, Any]]:
     """Persist uploaded files to the DB and return attachment metadata."""
     saved: List[Dict[str, Any]] = []
@@ -1361,9 +1394,13 @@ def save_submission_attachments(submission_id: str, files: List[Any]) -> List[Di
             ext = os.path.splitext(raw_name)[1].lower()
             if ext and ext not in ATTACHMENT_ALLOWED_EXTS:
                 continue
-            mime = (getattr(file_storage, "mimetype", "") or "").lower() or "application/octet-stream"
+            mime = normalize_attachment_mime(raw_name, getattr(file_storage, "mimetype", ""))
             if not any(mime.startswith(p) for p in ATTACHMENT_ALLOWED_MIME_PREFIXES):
                 continue
+            try:
+                file_storage.stream.seek(0)
+            except Exception:
+                pass
             try:
                 blob = file_storage.read()
             except Exception:
@@ -1446,13 +1483,18 @@ def send_mailgun_submission_notification(
     enriched: List[Dict[str, Any]] = []
     inline_files: List[Tuple[str, bytes, str]] = []
     regular_files: List[Tuple[str, bytes, str]] = []
+    try:
+        inline_files.append(("henricssons-logo", LOGO_FILE.read_bytes(), "image/png"))
+    except Exception as exc:
+        print(f"Could not attach notification logo: {exc}")
     for idx, att in enumerate(attachments):
         blob = att.get("bytes")
         if not isinstance(blob, (bytes, bytearray)):
             continue
         filename = str(att.get("filename", f"bilaga-{idx+1}"))
         mime = str(att.get("mime", "application/octet-stream"))
-        cid = f"att{att.get('id', idx)}@henricssons"
+        ext = os.path.splitext(filename)[1].lower() or ".jpg"
+        cid = f"attachment-{att.get('id', idx)}{ext}"
         public_url = f"{PUBLIC_BASE_URL}/api/attachment/{att.get('id', '')}"
         enriched.append({
             "cid": cid,
@@ -1463,6 +1505,7 @@ def send_mailgun_submission_notification(
         })
         if mime.startswith("image/"):
             inline_files.append((cid, bytes(blob), mime))
+            regular_files.append((filename, bytes(blob), mime))
         else:
             regular_files.append((filename, bytes(blob), mime))
     if enriched:
@@ -2365,6 +2408,8 @@ def chat():
 def assistant_chat():
     if request.method == "OPTIONS":
         return "", 200
+    if not is_public_chatbot_enabled():
+        return jsonify(error="Chatbot disabled"), 404
     payload = request.get_json()
     if not isinstance(payload, dict):
         return jsonify(error="Invalid payload"), 400
@@ -2564,6 +2609,8 @@ def assistant_chat():
 def assistant_submit():
     if request.method == "OPTIONS":
         return "", 200
+    if not is_public_chatbot_enabled():
+        return jsonify(error="Chatbot disabled"), 404
     payload = request.get_json()
     if not isinstance(payload, dict):
         return jsonify(error="Invalid payload"), 400
@@ -2843,6 +2890,12 @@ def serve_static(filename: str):
             if page_slug == "index":
                 return redirect("/", code=301)
             return redirect(f"/{page_slug}", code=301)
+
+    if clean_name == "chat_widget.js" and not is_public_chatbot_enabled():
+        return Response(
+            "window.HenricssonsChatbotDisabled = true;\n",
+            mimetype="application/javascript; charset=utf-8",
+        )
 
     target = (BASE_DIR / clean_name).resolve()
     if BASE_DIR in target.parents and target.exists() and target.is_file():

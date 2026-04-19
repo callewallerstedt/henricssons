@@ -74,16 +74,16 @@
     <!-- Header -->
     <header class="hb-header">
         <div class="wrap hb-nav">
-            <a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons B&aring;tkapell"/></a>
+            <a href="/index.html" class="hb-logo"><img src="logo.png" alt="Henricssons B&aring;tkapell"/></a>
             <button class="hb-burger" aria-label="Meny" onclick="document.getElementById('hbNav').classList.toggle('is-open')">
                 <span></span><span></span><span></span>
             </button>
             <nav class="hb-nav-links" id="hbNav">
-                <a href="/om-oss">Om oss</a>
-                <a href="/bilder-och-exempel" class="active">Bilder &amp; exempel</a>
-                <a href="/tillbehor">Fenderstrumpor</a>
-                <a href="/kontakt">Kontakt</a>
-                <a href="/kapellforfragan" class="hb-nav-cta">Kapellf&ouml;rfr&aring;gan</a>
+                <a href="/om-oss.html">Om oss</a>
+                <a href="/bilder-och-exempel.html" class="active">Bilder &amp; exempel</a>
+                <a href="/tillbehor.html">Fenderstrumpor</a>
+                <a href="/kontakt.html">Kontakt</a>
+                <a href="/kapellforfragan.html" class="hb-nav-cta">Kapellf&ouml;rfr&aring;gan</a>
             </nav>
         </div>
     </header>
@@ -131,7 +131,7 @@
                 <p id="modalDelivery"></p>
             </div>
             <div class="modal-actions">
-                <a id="modalCta" class="modal-btn" href="/kapellforfragan">Skicka f&ouml;rfr&aring;gan</a>
+                <a id="modalCta" class="modal-btn" href="/kapellforfragan.html">Skicka f&ouml;rfr&aring;gan</a>
             </div>
         </div>
     </div>
@@ -150,8 +150,8 @@
             <h2>Beg&auml;r en <em>kostnadsfri offert</em></h2>
             <p>V&auml;lj en modell i galleriet eller skicka en fri f&ouml;rfr&aring;gan. Vi svarar oftast samma dag.</p>
             <div class="hb-ctas">
-                <a href="/kapellforfragan" class="hb-btn hb-btn-primary"><span>Skicka kapellf&ouml;rfr&aring;gan</span></a>
-                <a href="/kontakt" class="hb-btn hb-btn-ghost">Kontakta oss</a>
+                <a href="/kapellforfragan.html" class="hb-btn hb-btn-primary"><span>Skicka kapellf&ouml;rfr&aring;gan</span></a>
+                <a href="/kontakt.html" class="hb-btn hb-btn-ghost">Kontakta oss</a>
             </div>
             <div class="phone">eller ring direkt &middot; <a href="tel:+46314718200">+46 (0)31 47 18 20</a></div>
         </div>
@@ -176,11 +176,11 @@
                 <div>
                     <h5>Navigera</h5>
                     <ul>
-                        <li><a href="/om-oss">Om oss</a></li>
-                        <li><a href="/kapellforfragan">Kapellf&ouml;rfr&aring;gan</a></li>
-                        <li><a href="/bilder-och-exempel">Bilder &amp; exempel</a></li>
-                        <li><a href="/tillbehor">Fenderstrumpor</a></li>
-                        <li><a href="/kontakt">Kontakt</a></li>
+                        <li><a href="/om-oss.html">Om oss</a></li>
+                        <li><a href="/kapellforfragan.html">Kapellf&ouml;rfr&aring;gan</a></li>
+                        <li><a href="/bilder-och-exempel.html">Bilder &amp; exempel</a></li>
+                        <li><a href="/tillbehor.html">Fenderstrumpor</a></li>
+                        <li><a href="/kontakt.html">Kontakt</a></li>
                     </ul>
                 </div>
                 <div>
@@ -344,7 +344,7 @@
                     badge.textContent = text;
                     els.meta.appendChild(badge);
                 });
-            els.cta.href = '/kapellforfragan';
+            els.cta.href = '/kapellforfragan.html';
             els.cta.onclick = () => bilderexRememberSelection(item);
             bilderexRenderModalImage();
             els.modal.classList.add('open');

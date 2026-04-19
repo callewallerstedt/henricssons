@@ -26,7 +26,7 @@
                 <a href="/bilder-och-exempel">Bilder &amp; exempel</a>
                 <a href="/tillbehor">Fenderstrumpor</a>
                 <a href="/kontakt" class="active">Kontakt</a>
-                <a href="/kapellforfragan" class="hb-nav-cta">Kapellförfrågan</a>
+                <a href="/kapellforfragan" class="hb-nav-cta">Begär offert</a>
             </nav>
         </div>
     </header>
@@ -72,55 +72,7 @@
     <section class="hb-section hb-map"><div class="wrap"><iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4660.458833098003!2d12.049716311534919!3d57.508085739122635!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464fed5990737987%3A0x20da512b8425f52!2sHenricssons%20B%C3%A5tkapell%20AB!5e1!3m2!1ssv!2sse!4v1751304808249!5m2!1ssv!2sse" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe></div></section>
 
     <footer class="hb-footer">
-        <div class="wrap">
-            <div class="grid">
-                <div class="brand">
-                    <img src="logo.png" alt="Henricssons Båtkapell"/>
-                    <p>Familjeföretag i Kungsbacka sedan 1967. Vi tillverkar kapell till motorbåtar och segelbåtar och importerar originalkapell från Norge, Finland och Danmark.</p>
-                    <div class="credit">
-                        <img src="KV.svg" alt="Högsta kreditvärdighet"/>
-                        <div class="t">
-                            <strong>HÖGSTA KREDITVÄRDIGHET</strong><br/>
-                            Henricssons Båtkapell AB<br/>
-                            556799-2192
-                        </div>
-                    </div>
-                </div>
-                <div>
-                    <h5>Navigera</h5>
-                    <ul>
-                        <li><a href="/om-oss">Om oss</a></li>
-                        <li><a href="/kapellforfragan">Kapellförfrågan</a></li>
-                        <li><a href="/bilder-och-exempel">Bilder &amp; exempel</a></li>
-                        <li><a href="/tillbehor">Fenderstrumpor</a></li>
-                        <li><a href="/kontakt">Kontakt</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h5>Kontakt</h5>
-                    <ul>
-                        <li><a href="tel:+46314718200">+46 (0)31 47 18 20</a></li>
-                        <li><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></li>
-                        <li>Energigatan 17E</li>
-                        <li>434 37 Kungsbacka</li>
-                    </ul>
-                </div>
-                <div>
-                    <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
-                </div>
-            </div>
-            <div class="hb-footer-bottom">
-                <div>© Henricssons Båtkapell AB · Org.nr 556799-2192</div>
-                <div>Kungsbacka, Sverige</div>
-            </div>
-        </div>
+        <div class="wrap"><div class="grid"><div class="brand"><img src="logo.png" alt="Henricssons Båtkapell"/><p>Familjeföretag i Kungsbacka sedan 1967. Vi tillverkar kapell till motorbåtar och segelbåtar.</p></div><div><h5>Navigera</h5><ul><li><a href="/om-oss">Om oss</a></li><li><a href="/kapellforfragan">Kapellförfrågan</a></li><li><a href="/bilder-och-exempel">Bilder &amp; exempel</a></li></ul></div><div><h5>Kontakt</h5><ul><li><a href="tel:+46314718200">+46 (0)31 47 18 20</a></li><li><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></li><li>Energigatan 17E</li></ul></div></div></div>
     </footer>
 
     <script src="form_attachments.js?v=20260419"></script>

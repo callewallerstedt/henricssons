@@ -16,8 +16,5 @@
   "bugs": {
     "url": "https://github.com/callewallerstedt/henricssons/issues"
   },
-  "homepage": "https://github.com/callewallerstedt/henricssons#readme",
-  "dependencies": {
-    "@emailjs/nodejs": "^5.0.2"
-  }
+  "homepage": "https://github.com/callewallerstedt/henricssons#readme"
 }

@@ -21,20 +21,6 @@
     <meta name="twitter:description" content="Företaget grundades 1967 av Alf Henricsson, mer känd som Henric i båtkretsar och har under åren försett båtindustri och båtägare med båtkapell under namnet Båtkapellspecialisten Henrics Product AB."/>
     <meta name="twitter:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <link rel="stylesheet" href="premium.css?v=20260419"/>
-    <style>
-        .hb-content-split .side-image.hb-about-image {
-            aspect-ratio: auto;
-            overflow: visible;
-            background: var(--cream-2);
-            padding: 1rem;
-        }
-        .hb-content-split .side-image.hb-about-image img {
-            width: 100%;
-            height: auto;
-            object-fit: contain;
-            display: block;
-        }
-    </style>
 </head>
 <body class="hb-premium">
 
@@ -61,7 +47,7 @@
                 <a href="/bilder-och-exempel">Bilder &amp; exempel</a>
                 <a href="/tillbehor">Fenderstrumpor</a>
                 <a href="/kontakt">Kontakt</a>
-                <a href="/kapellforfragan" class="hb-nav-cta">Kapellförfrågan</a>
+                <a href="/kapellforfragan" class="hb-nav-cta">Begär offert</a>
             </nav>
         </div>
     </header>
@@ -142,7 +128,7 @@
 
                 <p style="margin-top: 2.5rem;"><strong>Välkommen att kontakta oss!</strong></p>
             </div>
-            <div class="side-image hb-about-image">
+            <div class="side-image">
                 <img src="omossbild.png" alt="Henricssons båtkapell"/>
             </div>
         </div>

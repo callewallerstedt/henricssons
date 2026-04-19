@@ -131,9 +131,7 @@
             return { getFiles: () => [], reset: () => {} };
         }
         const label = options.label || 'Bilder/bilagor (valfritt)';
-        const helper =
-            options.helper ||
-            `Släpp filer eller klicka för att välja. Bilder komprimeras automatiskt. Max ${MAX_FILES} filer, ${MAX_FILE_MB} MB styck.`;
+        const helper = options.helper || 'Ladda upp här';
 
         mount.innerHTML = `
             <div class="form-group">

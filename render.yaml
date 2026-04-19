@@ -30,5 +30,7 @@ services:
         value: gpt-5-mini
       - key: OPENAI_REASONING_EFFORT
         value: minimal
+      - key: enable_chatbot
+        value: "1"
       - key: ALLOWED_ORIGINS
         value: https://henricssonsbatkapell.se,https://www.henricssonsbatkapell.se,https://henricssons.se,https://www.henricssons.se

@@ -5,6 +5,7 @@
     <title>Om oss - Henricssons Båtkapell</title>
     <meta name="description" content="Företaget grundades 1967 av Alf Henricsson, mer känd som Henric i båtkretsar och har under åren försett båtindustri och båtägare med båtkapell under namnet Båtkapellspecialisten Henrics Product AB."/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="robots" content="noindex,nofollow"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
@@ -20,21 +21,7 @@
     <meta name="twitter:title" content="Om oss - Henricssons Båtkapell"/>
     <meta name="twitter:description" content="Företaget grundades 1967 av Alf Henricsson, mer känd som Henric i båtkretsar och har under åren försett båtindustri och båtägare med båtkapell under namnet Båtkapellspecialisten Henrics Product AB."/>
     <meta name="twitter:image" content="https://henricssonsbatkapell.se/logo.png"/>
-    <link rel="stylesheet" href="premium.css?v=20260419"/>
-    <style>
-        .hb-content-split .side-image.hb-about-image {
-            aspect-ratio: auto;
-            overflow: visible;
-            background: var(--cream-2);
-            padding: 1rem;
-        }
-        .hb-content-split .side-image.hb-about-image img {
-            width: 100%;
-            height: auto;
-            object-fit: contain;
-            display: block;
-        }
-    </style>
+    <link rel="stylesheet" href="premium.css?v=1"/>
 </head>
 <body class="hb-premium">
 
@@ -52,16 +39,16 @@
     <!-- Header -->
     <header class="hb-header">
         <div class="wrap hb-nav">
-            <a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell"/></a>
+            <a href="/index-preview.html" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell"/></a>
             <button class="hb-burger" aria-label="Meny" onclick="document.getElementById('hbNav').classList.toggle('is-open')">
                 <span></span><span></span><span></span>
             </button>
             <nav class="hb-nav-links" id="hbNav">
-                <a href="/om-oss" class="active">Om oss</a>
-                <a href="/bilder-och-exempel">Bilder &amp; exempel</a>
-                <a href="/tillbehor">Fenderstrumpor</a>
-                <a href="/kontakt">Kontakt</a>
-                <a href="/kapellforfragan" class="hb-nav-cta">Kapellförfrågan</a>
+                <a href="/om-oss-preview.html" class="active">Om oss</a>
+                <a href="/bilder-och-exempel-preview.html">Bilder &amp; exempel</a>
+                <a href="/tillbehor-preview.html">Fenderstrumpor</a>
+                <a href="/kontakt-preview.html">Kontakt</a>
+                <a href="/kapellforfragan-preview.html" class="hb-nav-cta">Begär offert</a>
             </nav>
         </div>
     </header>
@@ -142,7 +129,7 @@
 
                 <p style="margin-top: 2.5rem;"><strong>Välkommen att kontakta oss!</strong></p>
             </div>
-            <div class="side-image hb-about-image">
+            <div class="side-image">
                 <img src="omossbild.png" alt="Henricssons båtkapell"/>
             </div>
         </div>
@@ -157,8 +144,8 @@
             <h2>Kontakta oss för en <em>kostnadsfri offert</em></h2>
             <p>Eller besök vår verkstad på Energigatan 17E i Kungsbacka. Vi svarar oftast samma dag.</p>
             <div class="hb-ctas">
-                <a href="/kapellforfragan" class="hb-btn hb-btn-primary"><span>Skicka kapellförfrågan</span></a>
-                <a href="/kontakt" class="hb-btn hb-btn-ghost">Kontakta oss</a>
+                <a href="/kapellforfragan-preview.html" class="hb-btn hb-btn-primary"><span>Skicka kapellförfrågan</span></a>
+                <a href="/kontakt-preview.html" class="hb-btn hb-btn-ghost">Kontakta oss</a>
             </div>
             <div class="phone">eller ring direkt · <a href="tel:+46314718200">+46 (0)31 47 18 20</a></div>
         </div>
@@ -183,11 +170,11 @@
                 <div>
                     <h5>Navigera</h5>
                     <ul>
-                        <li><a href="/om-oss">Om oss</a></li>
-                        <li><a href="/kapellforfragan">Kapellförfrågan</a></li>
-                        <li><a href="/bilder-och-exempel">Bilder &amp; exempel</a></li>
-                        <li><a href="/tillbehor">Fenderstrumpor</a></li>
-                        <li><a href="/kontakt">Kontakt</a></li>
+                        <li><a href="/om-oss-preview.html">Om oss</a></li>
+                        <li><a href="/kapellforfragan-preview.html">Kapellförfrågan</a></li>
+                        <li><a href="/bilder-och-exempel-preview.html">Bilder &amp; exempel</a></li>
+                        <li><a href="/tillbehor-preview.html">Fenderstrumpor</a></li>
+                        <li><a href="/kontakt-preview.html">Kontakt</a></li>
                     </ul>
                 </div>
                 <div>
@@ -216,6 +203,7 @@
             </div>
         </div>
     </footer>
-    <script src="chat_widget.js?v=20260416d"></script>
+
+    <div class="hb-preview-banner">Preview · om-oss</div>
 </body>
 </html>

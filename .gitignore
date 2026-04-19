@@ -34,3 +34,5 @@ Thumbs.db
 *.db
 server-*.log
 chrome-profile/
+__*.png
+__*.html

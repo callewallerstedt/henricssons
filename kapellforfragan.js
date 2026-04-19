@@ -1,322 +1,426 @@
-// Säkerställ global boatData-objekt (kan finnas som const från gammal cache)
 if (!window.boatData || typeof window.boatData !== 'object') {
     window.boatData = {};
 }
-const getBoatData = () => window.boatData;
 
-// API-bas beroende på miljö
-// Use current port from the page URL, or default to 25565
 const port = '25565';
-const DATA_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1' 
-    ? `${location.protocol}//${location.hostname}:${port}` 
+const DATA_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? `${location.protocol}//${location.hostname}:${port}`
     : 'https://henricssons-api.onrender.com';
 
-// Initialize when document is ready
-$(document).ready(function() {
-    const ts = Date.now();
-    // Safari returnerar ibland 304 Not Modified trots cache-busting query-string.
-    // För att säkerställa att vi alltid får en kropp (status 200) ber vi uttryckligen
-    // om en "no-store"-hämtning. Om vi ändå får 304 faller vi tillbaka till eventuell
-    // redan befintlig boatData.
-    fetch(`${DATA_BASE}/boat_data.json?v=${ts}`, { cache: 'no-store' })
-        .then(r => {
-            if (r.ok) {
-                return r.json();
-            }
-            if (r.status === 304) {
-                // 304 innebär "oförändrad" – använd befintliga data om de finns.
-                if (window.boatData && Object.keys(window.boatData).length) {
-                    return window.boatData;
-                }
-                // Första laddningen utan data – försök igen utan villkorad cache.
-                return fetch(`${DATA_BASE}/boat_data.json?nocache=${ts + 1}`, { cache: 'reload' }).then(res => res.ok ? res.json() : null);
-            }
-            return null;
-        })
-        .then(json => {
-            if(json && typeof json === 'object') {
-                if (window.boatData && typeof window.boatData === 'object') {
-                    Object.assign(window.boatData, json);
-                } else {
-                    window.boatData = json;
-                }
-                console.log('Loaded boat_data.json', Object.keys(window.boatData).length, 'manufacturers');
-            } else {
-                alert('Kunde inte läsa boat_data.json');
-            }
-        })
-        .catch(err => {
-            console.error('Fel vid hämtning av boat_data.json', err);
-            alert('Fel: kunde inte hämta båtdata');
-        })
-        .finally(() => {
-            initializeGrids();
-            setupEventListeners();
-            preselectFromStorage();
-            
-            // Starta automatisk uppdatering av boat_data.json var 30:e sekund
-            // så att admin-ändringar visas automatiskt
-            setInterval(refreshBoatData, 30000);
-        });
-    
-    // Confirmation message for Formspree
-    const form = document.querySelector('form[action="https://formspree.io/f/xnnvovbk"]');
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            // Let the form submit normally
-            setTimeout(function() {
-                form.style.display = 'none';
-                const msg = document.createElement('div');
-                msg.className = 'form-success-message';
-                msg.innerHTML = '<h3 style="color:#1976d2; text-align:center; margin:2rem 0;">Tack för din förfrågan!<br>Vi återkommer till dig så snart vi kan.</h3>';
-                form.parentNode.appendChild(msg);
-            }, 100); // Wait a bit to allow Formspree to process
-        });
-    }
+const state = {
+    manufacturers: [],
+    selectedManufacturerKey: '',
+    selectedModelName: '',
+    searchTerm: '',
+    refreshTimer: null,
+    elements: {}
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    cacheElements();
+    bindEvents();
+
+    loadBoatData({ showAlertOnFailure: true }).finally(() => {
+        preselectFromStorage();
+
+        if (!state.refreshTimer) {
+            state.refreshTimer = setInterval(refreshBoatData, 30000);
+        }
+    });
 });
 
-function initializeGrids() {
-    const boatData = getBoatData();
+function cacheElements() {
+    state.elements = {
+        searchInput: document.getElementById('tillverkare'),
+        clearSearch: document.getElementById('clear-qs'),
+        manufacturerGrid: document.querySelector('.grid1'),
+        modelGrid: document.querySelector('.grid2'),
+        modelContainer: document.getElementById('modell-container'),
+        manufacturerField: document.getElementById('T-field'),
+        modelField: document.getElementById('M-field'),
+        clearManufacturer: document.getElementById('rensa-grid1'),
+        clearModel: document.getElementById('rensa-grid2'),
+        contactForm: document.getElementById('contact-form')
+    };
 
-    if (!boatData || Object.keys(boatData).length === 0) {
-        console.error('boatData is tomt');
+    if (state.elements.clearSearch) {
+        state.elements.clearSearch.textContent = 'Rensa sök';
+    }
+}
+
+function bindEvents() {
+    const {
+        searchInput,
+        clearSearch,
+        clearManufacturer,
+        clearModel,
+        manufacturerGrid,
+        modelGrid
+    } = state.elements;
+
+    if (searchInput) {
+        searchInput.addEventListener('input', debounce(() => {
+            state.searchTerm = state.elements.searchInput.value.trim();
+            renderManufacturers();
+            updateActions();
+        }, 120));
+    }
+
+    if (clearSearch) {
+        clearSearch.addEventListener('click', () => {
+            state.searchTerm = '';
+            state.elements.searchInput.value = '';
+            renderManufacturers();
+            updateActions();
+        });
+    }
+
+    if (clearManufacturer) {
+        clearManufacturer.addEventListener('click', (event) => {
+            event.preventDefault();
+            clearManufacturerSelection();
+        });
+    }
+
+    if (clearModel) {
+        clearModel.addEventListener('click', (event) => {
+            event.preventDefault();
+            clearModelSelection();
+        });
+    }
+
+    if (manufacturerGrid) {
+        manufacturerGrid.addEventListener('click', (event) => {
+            const item = event.target.closest('.grid1-item');
+            if (!item) {
+                return;
+            }
+
+            selectManufacturer(item.dataset.key, { scrollToModels: true });
+        });
+    }
+
+    if (modelGrid) {
+        modelGrid.addEventListener('click', (event) => {
+            const item = event.target.closest('.grid2-item');
+            if (!item) {
+                return;
+            }
+
+            selectModel(item.dataset.modelName, { scrollToForm: true });
+        });
+    }
+}
+
+async function loadBoatData({ showAlertOnFailure = false } = {}) {
+    try {
+        const payload = await fetchBoatData(Date.now());
+        if (!payload || typeof payload !== 'object') {
+            throw new Error('Invalid boat data payload');
+        }
+
+        window.boatData = payload;
+        syncManufacturers();
+        renderManufacturers();
+        renderModels();
+        updateActions();
+    } catch (error) {
+        console.error('Fel vid hämtning av boat_data.json', error);
+        if (showAlertOnFailure) {
+            alert('Kunde inte hämta båtdata just nu.');
+        }
+    }
+}
+
+async function fetchBoatData(cacheBuster) {
+    const urls = [
+        `${DATA_BASE}/boat_data.json?v=${cacheBuster}`,
+        `boat_data.json?v=${cacheBuster}`
+    ];
+
+    for (const url of urls) {
+        try {
+            const response = await fetch(url, { cache: 'no-store' });
+            if (response.ok) {
+                return response.json();
+            }
+        } catch (error) {
+            console.debug('Kunde inte läsa', url, error);
+        }
+    }
+
+    if (window.boatData && Object.keys(window.boatData).length > 0) {
+        return window.boatData;
+    }
+
+    throw new Error('boat_data.json could not be loaded');
+}
+
+function syncManufacturers() {
+    const boatData = window.boatData || {};
+
+    state.manufacturers = Object.keys(boatData)
+        .map((key) => {
+            const entry = boatData[key];
+            if (!entry || typeof entry.name !== 'string' || !Array.isArray(entry.models)) {
+                return null;
+            }
+
+            const models = entry.models
+                .map((model) => (typeof model === 'string' ? model : model && typeof model.name === 'string' ? model.name : ''))
+                .filter(Boolean)
+                .sort((left, right) => left.localeCompare(right, 'sv', { sensitivity: 'base' }));
+
+            return {
+                key,
+                name: entry.name.trim(),
+                models
+            };
+        })
+        .filter(Boolean)
+        .sort((left, right) => left.name.localeCompare(right.name, 'sv', { sensitivity: 'base' }));
+
+    const selectedManufacturer = getSelectedManufacturer();
+    if (!selectedManufacturer) {
+        state.selectedManufacturerKey = '';
+        state.selectedModelName = '';
+        state.elements.manufacturerField.value = '';
+        state.elements.modelField.value = '';
+        state.elements.modelContainer.classList.add('inaktiv');
         return;
     }
 
-    // Filtrera bort poster utan giltigt namn eller modellista
-    const validKeys = Object.keys(boatData).filter(k => {
-        const m = boatData[k];
-        return m && typeof m.name === 'string' && m.name.trim() !== '' && Array.isArray(m.models);
+    state.elements.manufacturerField.value = selectedManufacturer.name;
+
+    if (!selectedManufacturer.models.includes(state.selectedModelName)) {
+        state.selectedModelName = '';
+        state.elements.modelField.value = '';
+    }
+}
+
+function renderManufacturers() {
+    const grid = state.elements.manufacturerGrid;
+    if (!grid) {
+        return;
+    }
+
+    grid.innerHTML = '';
+
+    const term = normalizeText(state.searchTerm);
+    const matches = state.manufacturers.filter((manufacturer) => {
+        return !term || normalizeText(manufacturer.name).includes(term);
     });
 
-    console.log('boatData giltiga poster:', validKeys.length, 'av', Object.keys(boatData).length);
+    if (matches.length === 0) {
+        grid.appendChild(createEmptyState('Ingen tillverkare matchar sökningen.'));
+        return;
+    }
 
-    const grid1 = $('.grid1');
-    const manuKeys = validKeys.sort((a,b)=> {
-        const nameA = boatData[a].name.toLowerCase();
-        const nameB = boatData[b].name.toLowerCase();
-        return nameA.localeCompare(nameB,'sv',{sensitivity:'base'});
-    });
+    matches.forEach((manufacturer) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'grid1-item';
+        button.dataset.key = manufacturer.key;
+        button.textContent = manufacturer.name;
 
-    manuKeys.forEach(key => {
-        const manufacturer = boatData[key];
-        const item = $(`<div class="grid1-item" data-filter=".${key}">${manufacturer.name}</div>`);
-        grid1.append(item);
-    });
+        if (manufacturer.key === state.selectedManufacturerKey) {
+            button.classList.add('selected-t');
+        }
 
-    console.log('Manufacturers populated:', grid1.children().length, 'items');
-
-    // Populate model grid
-    const grid2 = $('.grid2');
-    manuKeys.forEach(key => {
-        const manufacturer = boatData[key];
-        const sortedModels = (manufacturer.models||[]).slice().sort((a,b)=>{
-            const nameA = typeof a === 'string' ? a : a.name;
-            const nameB = typeof b === 'string' ? b : b.name;
-            return nameA.localeCompare(nameB,'sv',{sensitivity:'base'});
-        });
-        sortedModels.forEach(model => {
-            const modelName = typeof model === 'string' ? model : model.name;
-            const item = $(`<div class="grid2-item ${key}">${modelName}</div>`);
-            grid2.append(item);
-        });
-    });
-
-    console.log('Models populated:', grid2.children().length, 'items');
-
-    // Initialize isotope for grid1
-    $grid1 = $('.grid1').isotope({
-        itemSelector: '.grid1-item',
-        layoutMode: 'fitRows',
-        filter: '*',
-    });
-
-    // Initialize isotope for grid2
-    $grid2 = $('.grid2').isotope({
-        itemSelector: '.grid2-item',
-        layoutMode: 'fitRows',
-        filter: '-',
+        grid.appendChild(button);
     });
 }
 
-function setupEventListeners() {
-    // Quick search functionality
-    var qsRegex;
-    var $quicksearch = $('.quicksearch').keyup(debounce(function() {
-        try {
-            qsRegex = new RegExp($quicksearch.val(), 'gi');
-        } catch (_) {
-            qsRegex = null;
+function renderModels() {
+    const grid = state.elements.modelGrid;
+    const container = state.elements.modelContainer;
+
+    if (!grid || !container) {
+        return;
+    }
+
+    grid.innerHTML = '';
+
+    const selectedManufacturer = getSelectedManufacturer();
+    if (!selectedManufacturer) {
+        container.classList.add('inaktiv');
+        return;
+    }
+
+    container.classList.remove('inaktiv');
+
+    if (selectedManufacturer.models.length === 0) {
+        grid.appendChild(createEmptyState('Det finns inga modeller registrerade för den här tillverkaren än.'));
+        return;
+    }
+
+    selectedManufacturer.models.forEach((modelName) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'grid2-item';
+        button.dataset.modelName = modelName;
+        button.textContent = modelName;
+
+        if (modelName === state.selectedModelName) {
+            button.classList.add('selected-m');
         }
 
-        if ($quicksearch.val() == "") {
-            $grid1.isotope({ filter: '*' });
-            $grid2.isotope({ filter: '-' });
-            $('.grid1-item').removeClass("selected-t");
-            $('.grid2-item').removeClass("selected-m");
-            $("#modell-container").addClass("inaktiv");
-            document.getElementById("T-field").value = "";
-            document.getElementById("M-field").value = "";
-        } else {
-            $grid1.isotope({
-                filter: function() {
-                    return qsRegex ? $(this).text().match(qsRegex) : true;
-                }
-            });
-        }
-    }, 200));
-
-    // Clear search button
-    $('#clear-qs').on('click', function() {
-        document.getElementById("tillverkare").value = "";
-        $grid1.isotope({ filter: '*' });
-        $grid2.isotope({ filter: '-' });
-        $('.grid1-item').removeClass("selected-t");
-        $('.grid2-item').removeClass("selected-m");
-        $("#modell-container").addClass("inaktiv");
-        document.getElementById("T-field").value = "";
-        document.getElementById("M-field").value = "";
-        $('#rensa-grid1').css('display', 'none');
-        $('#rensa-grid2').css('display', 'none');
-    });
-
-    // Filter buttons (Visa alla / Dölj alla)
-    $('.filters1').on('click', 'a', function() {
-        var filterValue = $(this).attr('data-filter');
-        $grid1.isotope({ filter: filterValue });
-        $grid2.isotope({ filter: '-' });
-
-        $('.grid1-item').removeClass("selected-t");
-        $('.grid2-item').removeClass("selected-m");
-        $("#modell-container").addClass("inaktiv");
-        document.getElementById("T-field").value = "";
-        document.getElementById("M-field").value = "";
-        $('#rensa-grid1').css('display', 'none');
-    });
-
-    // Clear selection button for manufacturers
-    $('#rensa-grid1').on('click', function() {
-        $('.grid1-item').removeClass("selected-t");
-        $('.grid2-item').removeClass("selected-m");
-        $("#modell-container").addClass("inaktiv");
-        $grid2.isotope({ filter: '-' });
-        document.getElementById("T-field").value = "";
-        document.getElementById("M-field").value = "";
-        $('#rensa-grid1').css('display', 'none');
-        $('#rensa-grid2').css('display', 'none');
-    });
-
-    // Manufacturer selection
-    $('.grid1-item').on('click', function() {
-        var filterValue = $(this).attr('data-filter');
-        $grid2.isotope({ filter: filterValue });
-
-        $('.grid1-item').removeClass("selected-t");
-        $('.grid2-item').removeClass("selected-m");
-        $(this).addClass("selected-t");
-        $('#rensa-grid1').css('display', 'inline-block');
-        $("#modell-container").removeClass("inaktiv");
-
-        document.getElementById("M-field").value = "";
-        document.getElementById("T-field").value = this.innerText;
-
-        // Scroll to model container
-        $('html, body').animate({
-            scrollTop: $("#modell-container").offset().top - 145
-        }, 800);
-    });
-
-    // Model selection
-    $('.grid2-item').on('click', function() {
-        $('.grid2-item').removeClass("selected-m");
-        $(this).addClass("selected-m");
-        $('#rensa-grid2').css('display', 'inline-block');
-
-        document.getElementById("M-field").value = this.innerText;
-
-        // Scroll to contact form
-        $('html, body').animate({
-            scrollTop: $("#contact-form").offset().top - 145
-        }, 800);
-    });
-
-    // Clear selection button for models
-    $('#rensa-grid2').on('click', function() {
-        $('.grid2-item').removeClass("selected-m");
-        $('#rensa-grid2').css('display', 'none');
-        document.getElementById("M-field").value = "";
-    });
-
-    // Prevent form submission on search
-    $('#qs-form').submit(function() {
-        return false;
+        grid.appendChild(button);
     });
 }
 
-// Debounce function
-function debounce(fn, threshold) {
-    var timeout;
-    threshold = threshold || 100;
-    return function debounced() {
-        clearTimeout(timeout);
-        var args = arguments;
-        var _this = this;
-        function delayed() {
-            fn.apply(_this, args);
-        }
-        timeout = setTimeout(delayed, threshold);
+function createEmptyState(message) {
+    const item = document.createElement('div');
+    item.className = 'grid-empty';
+    item.textContent = message;
+    return item;
+}
+
+function selectManufacturer(key, { scrollToModels = false } = {}) {
+    const manufacturer = state.manufacturers.find((item) => item.key === key);
+    if (!manufacturer) {
+        return;
+    }
+
+    state.selectedManufacturerKey = manufacturer.key;
+    state.selectedModelName = '';
+    state.elements.manufacturerField.value = manufacturer.name;
+    state.elements.modelField.value = '';
+
+    renderManufacturers();
+    renderModels();
+    updateActions();
+
+    if (scrollToModels) {
+        scrollToElement(state.elements.modelContainer, 128);
+    }
+}
+
+function clearManufacturerSelection() {
+    state.selectedManufacturerKey = '';
+    state.selectedModelName = '';
+    state.elements.manufacturerField.value = '';
+    state.elements.modelField.value = '';
+    renderManufacturers();
+    renderModels();
+    updateActions();
+}
+
+function selectModel(modelName, { scrollToForm = false } = {}) {
+    const selectedManufacturer = getSelectedManufacturer();
+    if (!selectedManufacturer || !selectedManufacturer.models.includes(modelName)) {
+        return;
+    }
+
+    state.selectedModelName = modelName;
+    state.elements.modelField.value = modelName;
+    renderModels();
+    updateActions();
+
+    if (scrollToForm) {
+        scrollToElement(state.elements.contactForm, 128);
+    }
+}
+
+function clearModelSelection() {
+    state.selectedModelName = '';
+    state.elements.modelField.value = '';
+    renderModels();
+    updateActions();
+}
+
+function updateActions() {
+    const { clearSearch, clearManufacturer, clearModel } = state.elements;
+
+    if (clearSearch) {
+        clearSearch.classList.toggle('is-visible', Boolean(state.searchTerm));
+    }
+
+    if (clearManufacturer) {
+        clearManufacturer.style.display = state.selectedManufacturerKey ? 'inline-block' : 'none';
+    }
+
+    if (clearModel) {
+        clearModel.style.display = state.selectedModelName ? 'inline-block' : 'none';
+    }
+}
+
+function getSelectedManufacturer() {
+    return state.manufacturers.find((item) => item.key === state.selectedManufacturerKey) || null;
+}
+
+function scrollToElement(element, offset = 0) {
+    if (!element) {
+        return;
+    }
+
+    const top = element.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: 'smooth' });
+}
+
+function normalizeText(value) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+}
+
+function debounce(fn, delay = 100) {
+    let timeoutId = null;
+
+    return (...args) => {
+        window.clearTimeout(timeoutId);
+        timeoutId = window.setTimeout(() => fn(...args), delay);
     };
 }
 
-// Förvald tillverkare och modell, lagras av bilder-exempel-sidan
-function preselectFromStorage(){
-    const manuName=localStorage.getItem('preselectManufacturer');
-    const modelName=localStorage.getItem('preselectModel');
-    if(!manuName||!modelName) return;
+function preselectFromStorage() {
+    const manufacturerName = localStorage.getItem('preselectManufacturer');
+    const modelName = localStorage.getItem('preselectModel');
 
-    // Hitta grid1-elementet med samma text (case-insensitivt)
-    const $manuEl=$('.grid1-item').filter(function(){
-        return $(this).text().trim().toLowerCase()===manuName.trim().toLowerCase();
-    }).first();
-
-    if($manuEl.length){
-        // Klicka tillverkare för att filtrera modeller
-        $manuEl.trigger('click');
-
-        // Vänta kort så isotope hinner filtrera
-        setTimeout(()=>{
-            const $modelEl=$('.grid2-item').filter(function(){
-                return $(this).text().trim().toLowerCase()===modelName.trim().toLowerCase();
-            }).first();
-            if($modelEl.length){
-                $modelEl.trigger('click');
-            }
-        },100);
+    if (!manufacturerName || !modelName) {
+        return;
     }
 
-    // Nollställ sparade värden
+    const manufacturer = state.manufacturers.find((item) => {
+        return normalizeText(item.name) === normalizeText(manufacturerName);
+    });
+
+    if (manufacturer) {
+        selectManufacturer(manufacturer.key, { scrollToModels: false });
+
+        const matchedModel = manufacturer.models.find((item) => {
+            return normalizeText(item) === normalizeText(modelName);
+        });
+
+        if (matchedModel) {
+            selectModel(matchedModel, { scrollToForm: false });
+        }
+    }
+
     localStorage.removeItem('preselectManufacturer');
     localStorage.removeItem('preselectModel');
 }
 
-// Funktion för att uppdatera boat_data.json automatiskt
-function refreshBoatData() {
-    const ts = Date.now();
-    fetch(`${DATA_BASE}/boat_data.json?v=${ts}`, { cache: 'no-store' })
-        .then(r => r.ok ? r.json() : null)
-        .then(json => {
-            if (json && typeof json === 'object') {
-                // Jämför med befintlig data för att se om något ändrats
-                const currentSerialized = JSON.stringify(window.boatData || {});
-                const nextSerialized = JSON.stringify(json);
-                if (currentSerialized !== nextSerialized) {
-                    console.log('Boat data uppdaterad - laddar om grid');
-                    window.boatData = json;
-                    initializeGrids();
-                }
-            }
-        })
-        .catch(err => {
-            console.log('Kunde inte uppdatera boat_data.json:', err);
-        });
-} 
+async function refreshBoatData() {
+    try {
+        const payload = await fetchBoatData(Date.now());
+        if (!payload || typeof payload !== 'object') {
+            return;
+        }
+
+        const current = JSON.stringify(window.boatData || {});
+        const next = JSON.stringify(payload);
+        if (current === next) {
+            return;
+        }
+
+        window.boatData = payload;
+        syncManufacturers();
+        renderManufacturers();
+        renderModels();
+        updateActions();
+    } catch (error) {
+        console.debug('Kunde inte uppdatera boat_data.json', error);
+    }
+}
