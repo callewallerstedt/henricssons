@@ -238,6 +238,7 @@ let nyaInskickSortOrder = 'newest'; // 'newest' or 'oldest'
 let currentFormFilter = 'all'; // 'all', 'Kapellförfrågan', 'Fenderförfrågan', 'Kontakt'
 let chatbotPrompt = 'Du är en hjälpsam assistent för Henricssons Båtkapell. Du hjälper till med frågor om båtkapell, beställningar och allmän service.';
 let currentEditingItem = null;
+let statusFoldersLoading = false;
 function getAdvancedGreeting(language = 'sv') {
     return language === 'en'
         ? 'Hello! What do you need help with today?'
@@ -1553,6 +1554,9 @@ function initAdvancedTestChat() {
 }
 
 function loadStatusItems() {
+    statusFoldersLoading = true;
+    renderStatusFolders();
+
     const defaultStatusItems = {
         'nya-inskick': [],
         'vantar-pa-svar': [],
@@ -1625,12 +1629,14 @@ function loadStatusItems() {
 
             sortNyaInskick();
             saveStatusItems();
+            statusFoldersLoading = false;
             renderStatusFolders();
             updateSortButton();
         })
         .catch(err => {
             console.error('Kunde inte ladda form submissions', err);
             statusItems = ensureStatusBuckets(statusItems);
+            statusFoldersLoading = false;
             renderStatusFolders();
             updateSortButton();
         });
@@ -1692,6 +1698,17 @@ function renderStatusFolders() {
 
         // Make folders droppable
         folderDiv.attr('data-status', status).addClass('droppable-folder');
+
+        if (statusFoldersLoading) {
+            const loadingDiv = $('<div>').addClass('folder-loading-state').attr('aria-live', 'polite');
+            loadingDiv.append(
+                $('<span>').addClass('folder-loading-spinner').attr('aria-hidden', 'true'),
+                $('<span>').text('Laddar...')
+            );
+            folderDiv.append(loadingDiv);
+            folderDiv.off('dragover dragleave drop').on('dragover', handleDragOver).on('dragleave', handleDragLeave).on('drop', handleDrop);
+            return;
+        }
 
         // Filter items based on current form filter for ALL folders
         let itemsToShow = statusItems[status];
