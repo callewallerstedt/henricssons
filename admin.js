@@ -35,6 +35,38 @@ function sanitizeHtml(html) {
     return escapeHtml(html);
 }
 
+function getSubmissionField(fields, ...names) {
+    if (!fields || typeof fields !== 'object') return '';
+    const normalize = value => String(value || '')
+        .replace(/^\d+\.\s*/, '')
+        .trim()
+        .toLowerCase()
+        .replace(/[åä]/g, 'a')
+        .replace(/ö/g, 'o')
+        .replace(/[-\s]+/g, '_')
+        .replace(/[^a-z0-9_]/g, '');
+    const wanted = new Set(names.map(normalize));
+    for (const [key, value] of Object.entries(fields)) {
+        if (wanted.has(normalize(key)) && value) return value;
+    }
+    return '';
+}
+
+async function refreshSubmissionAttachments(item) {
+    if (!item || !item.form_id) return [];
+    try {
+        const res = await adminFetch(`${API_BASE}/api/submission_attachments?submission_id=${encodeURIComponent(item.form_id)}`);
+        if (!res.ok) return Array.isArray(item.attachments) ? item.attachments : [];
+        const attachments = await res.json();
+        item.attachments = Array.isArray(attachments) ? attachments : [];
+        saveStatusItems();
+        return item.attachments;
+    } catch (err) {
+        console.warn('Kunde inte ladda bilagor', err);
+        return Array.isArray(item.attachments) ? item.attachments : [];
+    }
+}
+
 async function adminFetch(url, options = {}) {
     const opts = { ...options };
     opts.headers = { ...(options.headers || {}) };
@@ -1670,10 +1702,10 @@ function renderStatusFolders() {
 
                 // For form submissions, show compact info
                 if (item.is_form_submission && item.fields) {
-                    const personName = item.fields['Namn'] || item.fields['1. Namn'] || item.fields['Name'] || 'Okänd';
+                    const personName = getSubmissionField(item.fields, 'name', 'namn') || 'Okänd';
                     const formType = item.form_type || 'Formulär';
-                    const manufacturer = item.fields['Tillverkare'] || item.fields['4. Tillverkare'] || '';
-                    const model = item.fields['Modell'] || item.fields['5. Modell'] || '';
+                    const manufacturer = getSubmissionField(item.fields, 'manufacturer', 'tillverkare');
+                    const model = getSubmissionField(item.fields, 'model', 'modell');
 
                     titleDiv.append($('<div>').addClass('person-name').text(personName));
                     titleDiv.append($('<div>').addClass('form-type-line').text(formType));
@@ -1682,7 +1714,7 @@ function renderStatusFolders() {
                     }
 
                     if (formType === 'Kontakt') {
-                        const subject = item.fields['Ämne'] || item.fields['ämne'] || item.fields['Subject'] || '';
+                        const subject = getSubmissionField(item.fields, 'subject', 'ämne', 'amne');
                         if (subject) {
                             titleDiv.append($('<div>').addClass('contact-subject').text(subject));
                         }
@@ -1897,9 +1929,11 @@ function showStatusMessage(message) {
     }, 3000);
 }
 
-function viewFormSubmission(status, index) {
+async function viewFormSubmission(status, index) {
     const item = statusItems[status][index];
     if (!item || !item.is_form_submission) return;
+
+    item.attachments = await refreshSubmissionAttachments(item);
     
     // Mark as read
     item.read = true;
@@ -1988,22 +2022,41 @@ function viewFormSubmission(status, index) {
                 fontSize: '11px'
             });
             if (att.is_image) {
+                const loading = $('<div>').css({
+                    height: '110px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: '#e2e8f0',
+                    color: '#64748b',
+                    fontSize: '12px'
+                }).text('Laddar bild...');
                 const img = $('<img>').attr('alt', att.filename).css({
                     width: '100%',
                     height: '110px',
                     objectFit: 'cover',
-                    display: 'block',
+                    display: 'none',
                     cursor: 'pointer',
                     background: '#e2e8f0'
                 });
-                // Fetch with admin header then blob → object URL (Authorization can't be set via <img src>)
+                // Fetch with admin header immediately, then use a blob URL for the thumbnail.
                 adminFetch(url).then(r => r.ok ? r.blob() : null).then(blob => {
-                    if (blob) img.attr('src', URL.createObjectURL(blob));
+                    if (!blob) throw new Error('empty attachment blob');
+                    const objectUrl = URL.createObjectURL(blob);
+                    img.attr('src', objectUrl);
+                    img.css('display', 'block');
+                    loading.remove();
+                }).catch(err => {
+                    console.warn('Kunde inte ladda bilaga', err);
+                    loading.text('Kunde inte ladda bild').css({ color: '#b91c1c', background: '#fee2e2' });
                 });
                 img.on('click', () => {
+                    const src = img.attr('src');
+                    if (!src) return;
                     const w = window.open('', '_blank');
-                    if (w) w.document.write(`<img src="${img.attr('src')}" style="max-width:100vw;max-height:100vh;"/>`);
+                    if (w) w.document.write(`<img src="${src}" style="max-width:100vw;max-height:100vh;"/>`);
                 });
+                tile.append(loading);
                 tile.append(img);
             } else {
                 tile.append($('<div>').css({
