@@ -36,3 +36,4 @@ server-*.log
 chrome-profile/
 __*.png
 __*.html
+legacy-live-pages-before-premium/

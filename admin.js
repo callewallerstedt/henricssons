@@ -35,9 +35,48 @@ function sanitizeHtml(html) {
     return escapeHtml(html);
 }
 
-function getSubmissionField(fields, ...names) {
-    if (!fields || typeof fields !== 'object') return '';
-    const normalize = value => String(value || '')
+const SUBMISSION_FIELD_LABELS = {
+    name: 'Namn',
+    email: 'E-postadress',
+    phone: 'Telefonnummer',
+    telefon: 'Telefonnummer',
+    telefonnummer: 'Telefonnummer',
+    address: 'Adress',
+    adress: 'Adress',
+    postal_code: 'Postnummer',
+    city: 'Ort',
+    ort: 'Ort',
+    epost: 'E-postadress',
+    e_post: 'E-postadress',
+    e_postadress: 'E-postadress',
+    manufacturer: 'Tillverkare',
+    tillverkare: 'Tillverkare',
+    model: 'Modell',
+    modell: 'Modell',
+    boat_brand: 'Båtmärke',
+    boat_model: 'Båtmodell',
+    boat_year: 'Årsmodell',
+    arsmodell: 'Årsmodell',
+    home_port: 'Hemmahamn',
+    hemmahamn: 'Hemmahamn',
+    old_canopy: 'Tillverkare av befintligt kapell',
+    tillverkare_av_befintligt_kapell: 'Tillverkare av befintligt kapell',
+    wants_cover: 'Önskar kapell',
+    wants_fender_socks: 'Önskar fenderstrumpor',
+    quantity: 'Antal',
+    antal: 'Antal',
+    size: 'Storlek',
+    storlek: 'Storlek',
+    subject: 'Ämne',
+    amne: 'Ämne',
+    message: 'Meddelande',
+    meddelande: 'Meddelande',
+    ovrig_information: 'Meddelande',
+    ovriga_onskemal: 'Meddelande'
+};
+
+function normalizeSubmissionFieldKey(value) {
+    return String(value || '')
         .replace(/^\d+\.\s*/, '')
         .trim()
         .toLowerCase()
@@ -45,9 +84,22 @@ function getSubmissionField(fields, ...names) {
         .replace(/ö/g, 'o')
         .replace(/[-\s]+/g, '_')
         .replace(/[^a-z0-9_]/g, '');
-    const wanted = new Set(names.map(normalize));
+}
+
+function getSubmissionFieldLabel(key) {
+    const normalized = normalizeSubmissionFieldKey(key);
+    if (SUBMISSION_FIELD_LABELS[normalized]) return SUBMISSION_FIELD_LABELS[normalized];
+    return String(key || '')
+        .replace(/^\d+\.\s*/, '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function getSubmissionField(fields, ...names) {
+    if (!fields || typeof fields !== 'object') return '';
+    const wanted = new Set(names.map(normalizeSubmissionFieldKey));
     for (const [key, value] of Object.entries(fields)) {
-        if (wanted.has(normalize(key)) && value) return value;
+        if (wanted.has(normalizeSubmissionFieldKey(key)) && value) return value;
     }
     return '';
 }
@@ -1995,7 +2047,12 @@ async function viewFormSubmission(status, index) {
         const fieldsList = $('<div>').addClass('form-fields');
         Object.keys(item.fields).forEach(key => {
             if (!key.startsWith('__') && item.fields[key]) {
-                fieldsList.append($('<div>').addClass('form-field').text(`${key}: ${item.fields[key]}`));
+                const fieldRow = $('<div>').addClass('form-field');
+                fieldRow.append(
+                    $('<strong>').text(`${getSubmissionFieldLabel(key)}:`),
+                    document.createTextNode(` ${item.fields[key]}`)
+                );
+                fieldsList.append(fieldRow);
             }
         });
         formSection.append(fieldsList);

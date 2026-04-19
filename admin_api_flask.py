@@ -90,6 +90,7 @@ if DATABASE_URL.startswith("postgres://"):
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gpt-5-mini").strip() or "gpt-5-mini"
+ADMIN_CHAT_MODEL = os.getenv("ADMIN_CHAT_MODEL", "gpt-5.4").strip() or "gpt-5.4"
 OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "minimal").strip().lower() or "minimal"
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "").strip()
 ADMIN_PANEL_PASSWORD = os.getenv("ADMIN_PANEL_PASSWORD", "").strip() or ADMIN_API_KEY
@@ -147,6 +148,12 @@ FORM_RATE_LIMIT_LONG_WINDOW = 60 * 60
 FORM_RATE_LIMIT_LONG_MAX = 30
 FORM_MIN_SECONDS = 2
 FORM_RATE_LIMITS: Dict[str, List[float]] = {}
+MAX_ADMIN_CONTEXT_FIELD_CHARS = 900
+MAX_ADMIN_CONTEXT_TEXT_CHARS = 1800
+CHAT_WIDGET_DISABLED_JS = (
+    "window.HenricssonsChatbotDisabled = true;\n"
+    "document.documentElement.classList.add('henricssons-chatbot-disabled');\n"
+)
 
 
 def is_env_flag_enabled(name: str, default: str = "0") -> bool:
@@ -675,7 +682,7 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         </div>
     </footer>
     <script src="/script.js"></script>
-    <script src="/chat_widget.js?v=20260416d"></script>
+    <script src="/chat_widget.js?v=20260420a"></script>
 </body>
 </html>""",
         title=title,
@@ -1954,6 +1961,106 @@ def get_all_submissions() -> List[Dict[str, Any]]:
     return file_normalized
 
 
+def truncate_admin_context_text(value: Any, limit: int = MAX_ADMIN_CONTEXT_TEXT_CHARS) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}... [kortad]"
+
+
+def label_submission_field_for_admin(key: str) -> str:
+    clean_key = re.sub(r"^\d+\.\s*", "", str(key or "").strip())
+    canonical_key = canonicalize_draft_key(clean_key)
+    return _label(canonical_key or clean_key)
+
+
+def build_admin_chat_context() -> Dict[str, Any]:
+    submissions = get_all_submissions()
+    normalized_submissions: List[Dict[str, Any]] = []
+
+    for row in submissions:
+        fields = row.get("fields", {})
+        if not isinstance(fields, dict):
+            fields = {}
+        visible_fields: List[Dict[str, str]] = []
+        for key, value in fields.items():
+            if str(key).startswith("__"):
+                continue
+            rendered_value = truncate_admin_context_text(value, MAX_ADMIN_CONTEXT_FIELD_CHARS)
+            if not rendered_value:
+                continue
+            visible_fields.append(
+                {
+                    "label": label_submission_field_for_admin(str(key)),
+                    "key": str(key),
+                    "value": rendered_value,
+                }
+            )
+
+        attachments = row.get("attachments", [])
+        attachment_items: List[Dict[str, Any]] = []
+        if isinstance(attachments, list):
+            for attachment in attachments:
+                if not isinstance(attachment, dict):
+                    continue
+                attachment_items.append(
+                    {
+                        "filename": str(attachment.get("original_name") or attachment.get("filename") or ""),
+                        "is_image": bool(attachment.get("is_image")),
+                        "url": str(attachment.get("url") or ""),
+                    }
+                )
+
+        normalized_submissions.append(
+            {
+                "id": str(row.get("id", "") or ""),
+                "form_type": FORM_TYPE_LABELS_SV.get(str(row.get("form_type", "")), str(row.get("form_type", ""))),
+                "raw_form_type": str(row.get("form_type", "") or ""),
+                "title": str(row.get("title", "") or ""),
+                "category": str(row.get("category", "") or ""),
+                "status": str(row.get("status", "") or "nya-inskick"),
+                "read": bool(row.get("read", False)),
+                "submitted_via": str(row.get("submitted_via", "") or ""),
+                "timestamp": str(row.get("timestamp", "") or row.get("date", "") or ""),
+                "notes": truncate_admin_context_text(row.get("notes", ""), 1200),
+                "summary": truncate_admin_context_text(row.get("form_summary", ""), 1200),
+                "proposed_response": truncate_admin_context_text(row.get("proposed_response", ""), 1500),
+                "fields": visible_fields,
+                "attachments": attachment_items,
+            }
+        )
+
+    return {
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "site": {
+            "name": "Henricssons Båtkapell",
+            "public_url": PUBLIC_BASE_URL,
+            "public_pages": CORE_PUBLIC_PATHS,
+            "forms": {
+                "Kapellförfrågan": "Kund skickar namn, telefon, e-post, båttillverkare, modell, årsmodell, hemmahamn, eventuell befintlig kapelltillverkare, meddelande och bilagor.",
+                "Fenderförfrågan": "Kund skickar namn, telefon, e-post, adress, antal, storlek och bilagor.",
+                "Kontakt": "Kund skickar namn, e-post, telefon, ämne och meddelande.",
+            },
+        },
+        "admin_panel": {
+            "statuses": {
+                "nya-inskick": "Nytt inkommet ärende som normalt bör granskas först.",
+                "vantar-pa-svar": "Ärende där Henricssons väntar på svar eller komplettering.",
+                "i-produktion": "Ärende markerat som pågående produktion.",
+                "redo-for-leverans": "Ärende som är klart eller nära leverans.",
+            },
+            "important_rules": [
+                "Använd submissions-listan som sanningskälla när du rangordnar ärenden eller skriver kundsvar.",
+                "När användaren nämner en kund vid namn, matcha mot fälten Namn, titel, sammanfattning och meddelande.",
+                "Status, interna anteckningar och föreslagna svar ska vägas in i prioriteringar.",
+                "Om fakta saknas i inskicket ska du säga exakt vad som saknas i stället för att gissa.",
+            ],
+        },
+        "submissions_total": len(normalized_submissions),
+        "submissions": normalized_submissions,
+    }
+
+
 def update_submission_status_record(submission_id: str, status: Optional[str], read: Optional[bool]) -> bool:
     updated = False
     db = get_db()
@@ -2726,7 +2833,23 @@ def chat():
     if not message:
         return jsonify(error="Message required"), 400
     try:
-        answer = get_openai_response(message, custom_prompt, 0.6, 550, model=CHAT_MODEL)
+        admin_context = build_admin_chat_context()
+        admin_system_prompt = (
+            f"{custom_prompt}\n\n"
+            "Du har nu full admin-context i användarmeddelandet som JSON. "
+            "Den innehåller alla formulärinskick, statusar, interna anteckningar, bilagor, föreslagna svar och hur formulären fungerar. "
+            "Svara på svenska om användaren skriver svenska. "
+            "När du hänvisar till ett specifikt inskick: nämn kundnamn om det finns, status och kort varför. "
+            "När du skriver kundsvar: skriv bara svaret som kan skickas, utan intern analys."
+        )
+        admin_payload = json.dumps(
+            {
+                "admin_question": message,
+                "admin_context": admin_context,
+            },
+            ensure_ascii=False,
+        )
+        answer = get_openai_response(admin_payload, admin_system_prompt, 0.4, 1800, model=ADMIN_CHAT_MODEL)
         return jsonify(success=True, response=answer)
     except Exception as exc:
         return jsonify(error=str(exc)), 500
@@ -3233,6 +3356,17 @@ def root():
     return jsonify(status="ok")
 
 
+@app.route("/chat_widget.js", methods=["GET"])
+def chat_widget_script():
+    if not is_public_chatbot_enabled():
+        response = Response(CHAT_WIDGET_DISABLED_JS, content_type="application/javascript; charset=utf-8")
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        return response
+    response = send_from_directory(str(BASE_DIR), "chat_widget.js")
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
+
+
 @app.route("/<path:filename>", methods=["GET"])
 def serve_static(filename: str):
     if filename.startswith("api/"):
@@ -3242,26 +3376,30 @@ def serve_static(filename: str):
     if not clean_name:
         return redirect("/", code=301)
 
+    admin_html_path = (BASE_DIR / "admin.html").resolve()
+    requested_file_path = (BASE_DIR / clean_name).resolve()
+    requested_html_path = (BASE_DIR / f"{clean_name}.html").resolve()
+    if requested_file_path == admin_html_path or requested_html_path == admin_html_path:
+        return admin_page()
+
     # Keep legacy .html links working but canonicalize to extensionless URLs.
     if clean_name.endswith(".html"):
         page_slug = clean_name[:-5]
-        target = (BASE_DIR / clean_name).resolve()
-        if BASE_DIR in target.parents and target.exists() and target.is_file():
+        if BASE_DIR in requested_file_path.parents and requested_file_path.exists() and requested_file_path.is_file():
             if page_slug == "index":
                 return redirect("/", code=301)
             return redirect(f"/{page_slug}", code=301)
 
     if clean_name == "chat_widget.js" and not is_public_chatbot_enabled():
-        return Response(
-            "window.HenricssonsChatbotDisabled = true;\n",
-            mimetype="application/javascript; charset=utf-8",
-        )
+        response = Response(CHAT_WIDGET_DISABLED_JS, content_type="application/javascript; charset=utf-8")
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        return response
 
-    target = (BASE_DIR / clean_name).resolve()
+    target = requested_file_path
     if BASE_DIR in target.parents and target.exists() and target.is_file():
         return send_from_directory(str(target.parent), target.name)
 
-    html_target = (BASE_DIR / f"{clean_name}.html").resolve()
+    html_target = requested_html_path
     if BASE_DIR in html_target.parents and html_target.exists() and html_target.is_file():
         return send_from_directory(str(html_target.parent), html_target.name)
 
