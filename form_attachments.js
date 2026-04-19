@@ -315,6 +315,17 @@
         const formType = options.formType || form.dataset.subject || 'Kontakt';
         const progress = ensureProgressUi(form);
         const doneMessage = form.querySelector('.hb-form-done');
+        const formStartedAt = Date.now();
+        if (!form.querySelector('input[name="website"]')) {
+            const honeypot = document.createElement('input');
+            honeypot.type = 'text';
+            honeypot.name = 'website';
+            honeypot.tabIndex = -1;
+            honeypot.autocomplete = 'off';
+            honeypot.setAttribute('aria-hidden', 'true');
+            honeypot.style.cssText = 'position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;';
+            form.appendChild(honeypot);
+        }
 
         form.addEventListener('submit', async e => {
             e.preventDefault();
@@ -335,6 +346,7 @@
             new FormData(form).forEach((value, key) => {
                 fields[key.replace(/^\d+\.\s*/, '')] = value;
             });
+            fields.__form_started_at = String(formStartedAt);
             const api =
                 location.hostname === 'localhost' || location.hostname === '127.0.0.1'
                     ? `${location.protocol}//${location.hostname}:25565`

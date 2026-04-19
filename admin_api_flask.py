@@ -1,11 +1,14 @@
 ﻿from __future__ import annotations
 
 import base64
+import hashlib
 import html
+import hmac
 import ipaddress
 import json
 import os
 import re
+import time
 import unicodedata
 from datetime import datetime
 from functools import wraps
@@ -89,6 +92,7 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gpt-5-mini").strip() or "gpt-5-mini"
 OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "minimal").strip().lower() or "minimal"
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "").strip()
+ADMIN_PANEL_PASSWORD = os.getenv("ADMIN_PANEL_PASSWORD", "").strip() or ADMIN_API_KEY
 MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN", "").strip()
 MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY", "").strip()
 MAILGUN_FROM = os.getenv("MAILGUN_FROM", "").strip()
@@ -135,6 +139,14 @@ ATTACHMENT_MIME_BY_EXT = {
 }
 STATUS_FLOW = ["nya-inskick", "vantar-pa-svar", "i-produktion", "redo-for-leverans"]
 MOJIBAKE_MARKERS = ("Ã", "Â", "â")
+ADMIN_SESSION_COOKIE = "henricssons_admin"
+ADMIN_SESSION_MAX_AGE = 60 * 60 * 12
+FORM_RATE_LIMIT_WINDOW = 60
+FORM_RATE_LIMIT_MAX = 8
+FORM_RATE_LIMIT_LONG_WINDOW = 60 * 60
+FORM_RATE_LIMIT_LONG_MAX = 30
+FORM_MIN_SECONDS = 2
+FORM_RATE_LIMITS: Dict[str, List[float]] = {}
 
 
 def is_env_flag_enabled(name: str, default: str = "0") -> bool:
@@ -284,7 +296,38 @@ def is_local_request() -> bool:
         return False
 
 
+def get_client_ip() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return (request.remote_addr or "unknown").strip()
+
+
+def sign_admin_session(timestamp: int) -> str:
+    secret = ADMIN_PANEL_PASSWORD or ADMIN_API_KEY
+    payload = str(timestamp)
+    signature = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}.{signature}"
+
+
+def verify_admin_session(token: str) -> bool:
+    secret = ADMIN_PANEL_PASSWORD or ADMIN_API_KEY
+    if not secret or not token or "." not in token:
+        return False
+    raw_ts, signature = token.rsplit(".", 1)
+    try:
+        issued_at = int(raw_ts)
+    except ValueError:
+        return False
+    if int(time.time()) - issued_at > ADMIN_SESSION_MAX_AGE:
+        return False
+    expected = hmac.new(secret.encode("utf-8"), raw_ts.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)
+
+
 def check_admin_access() -> bool:
+    if verify_admin_session(request.cookies.get(ADMIN_SESSION_COOKIE, "")):
+        return True
     if ADMIN_API_KEY:
         header_key = request.headers.get("X-Admin-Key", "").strip()
         auth_header = request.headers.get("Authorization", "").strip()
@@ -303,6 +346,49 @@ def admin_required(fn):
         return fn(*args, **kwargs)
 
     return wrapper
+
+
+def render_admin_login(error: str = "") -> Response:
+    error_html = f"<div class='error'>{html.escape(error)}</div>" if error else ""
+    return Response(
+        f"""<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin - Henricssons</title>
+  <style>
+    body {{ margin:0; min-height:100vh; display:grid; place-items:center; background:#0c1a2b; font-family:Arial,sans-serif; color:#17212f; }}
+    form {{ width:min(92vw,380px); background:#f5f0e6; padding:32px; border:1px solid #d9cfbe; box-shadow:0 24px 80px rgba(0,0,0,.28); }}
+    img {{ display:block; height:54px; width:auto; margin:0 0 24px; }}
+    h1 {{ margin:0 0 8px; font-size:24px; }}
+    p {{ margin:0 0 22px; color:#667085; font-size:14px; line-height:1.5; }}
+    label {{ display:block; margin:0 0 8px; font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }}
+    input {{ width:100%; box-sizing:border-box; padding:13px 14px; border:1px solid #d9cfbe; background:#fff; font-size:16px; }}
+    button {{ width:100%; margin-top:16px; padding:13px 14px; border:0; background:#b28a4c; color:#fff; font-weight:700; cursor:pointer; }}
+    .error {{ margin:0 0 16px; padding:10px 12px; background:#fee2e2; color:#991b1b; font-size:14px; }}
+  </style>
+</head>
+<body>
+  <form method="post" action="/admin/login">
+    <img src="/logo.png" alt="Henricssons Båtkapell">
+    <h1>Adminpanel</h1>
+    <p>Logga in för att hantera formulär, bilder och innehåll.</p>
+    {error_html}
+    <label for="password">Lösenord</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit">Logga in</button>
+  </form>
+</body>
+</html>""",
+        mimetype="text/html; charset=utf-8",
+    )
+
+
+def validate_admin_password(password: str) -> bool:
+    if not ADMIN_PANEL_PASSWORD:
+        return is_local_request()
+    return hmac.compare_digest(str(password or ""), ADMIN_PANEL_PASSWORD)
 
 
 @app.before_request
@@ -972,6 +1058,41 @@ def get_field_value(fields: Dict[str, Any], *names: str) -> str:
             if value:
                 return value
     return ""
+
+
+def is_form_rate_limited(ip: str) -> bool:
+    now = time.time()
+    recent = [ts for ts in FORM_RATE_LIMITS.get(ip, []) if now - ts <= FORM_RATE_LIMIT_LONG_WINDOW]
+    FORM_RATE_LIMITS[ip] = recent
+    short_count = sum(1 for ts in recent if now - ts <= FORM_RATE_LIMIT_WINDOW)
+    if short_count >= FORM_RATE_LIMIT_MAX or len(recent) >= FORM_RATE_LIMIT_LONG_MAX:
+        return True
+    recent.append(now)
+    FORM_RATE_LIMITS[ip] = recent
+    return False
+
+
+def validate_public_form_submission(fields: Dict[str, Any], submitted_via: str) -> Optional[Tuple[Dict[str, Any], int]]:
+    if submitted_via != "web_form":
+        return None
+
+    ip = get_client_ip()
+    if is_form_rate_limited(ip):
+        return {"error": "För många formulärförsök. Vänta en stund och försök igen."}, 429
+
+    honeypot = str(fields.get("website", "") or fields.get("url", "") or "").strip()
+    if honeypot:
+        return {"error": "Formuläret kunde inte skickas."}, 400
+
+    started_raw = str(fields.get("__form_started_at", "") or "").strip()
+    try:
+        started_at = float(started_raw) / 1000
+    except ValueError:
+        started_at = 0
+    if not started_at or time.time() - started_at < FORM_MIN_SECONDS:
+        return {"error": "Formuläret skickades för snabbt. Försök igen."}, 400
+
+    return None
 
 
 def build_form_summary(form_type: str, fields: Dict[str, str]) -> str:
@@ -2325,6 +2446,11 @@ def submit_form():
         form_type = str(payload.get("form_type", "Kontakt") or "Kontakt")
         submitted_via = str(payload.get("submitted_via", "web_form") or "web_form")
 
+    bot_error = validate_public_form_submission(fields, submitted_via)
+    if bot_error:
+        payload, status_code = bot_error
+        return jsonify(payload), status_code
+
     try:
         submission_id = process_form_submission(
             form_type,
@@ -3067,6 +3193,38 @@ def example_page(slug: str):
 @app.route("/healthz", methods=["GET"])
 def healthz():
     return jsonify(status="ok"), 200
+
+
+@app.route("/admin", methods=["GET"])
+@app.route("/admin.html", methods=["GET"])
+def admin_page():
+    if not check_admin_access():
+        return render_admin_login()
+    return send_from_directory(str(BASE_DIR), "admin.html")
+
+
+@app.route("/admin/login", methods=["POST"])
+def admin_login():
+    password = request.form.get("password", "")
+    if not validate_admin_password(password):
+        return render_admin_login("Fel lösenord."), 403
+    response = redirect("/admin", code=303)
+    response.set_cookie(
+        ADMIN_SESSION_COOKIE,
+        sign_admin_session(int(time.time())),
+        max_age=ADMIN_SESSION_MAX_AGE,
+        httponly=True,
+        secure=not is_local_request(),
+        samesite="Lax",
+    )
+    return response
+
+
+@app.route("/admin/logout", methods=["POST", "GET"])
+def admin_logout():
+    response = redirect("/admin", code=303)
+    response.delete_cookie(ADMIN_SESSION_COOKIE)
+    return response
 
 
 @app.route("/", methods=["GET"])
