@@ -6,6 +6,7 @@ import ipaddress
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -1328,7 +1329,7 @@ def build_customer_confirmation_html(
     form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
     safe_name = html.escape((customer_name or "").strip())
     greeting = f"Hej {safe_name}," if safe_name else "Hej,"
-    return f"""<!DOCTYPE html>
+    html_doc = f"""<!DOCTYPE html>
 <html lang="sv">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#eef2f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#17212f;">
@@ -1364,6 +1365,18 @@ def build_customer_confirmation_html(
 </table>
 </body>
 </html>"""
+    return html_doc.encode("ascii", "xmlcharrefreplace").decode("ascii")
+
+
+def make_mailgun_safe_text(text: str) -> str:
+    raw = str(text or "")
+    normalized = unicodedata.normalize("NFKD", raw)
+    return normalized.encode("ascii", "ignore").decode("ascii")
+
+
+def make_mailgun_safe_html(html_body: str) -> str:
+    raw = str(html_body or "")
+    return raw.encode("ascii", "xmlcharrefreplace").decode("ascii")
 
 
 def send_mailgun_email(
@@ -1387,9 +1400,9 @@ def send_mailgun_email(
     data = {
         "from": MAILGUN_FROM,
         "to": recipients,
-        "subject": subject,
-        "text": text_body,
-        "html": html_body,
+        "subject": make_mailgun_safe_text(subject),
+        "text": make_mailgun_safe_text(text_body),
+        "html": make_mailgun_safe_html(html_body),
     }
     files: List[Tuple[str, Tuple[str, bytes, str]]] = []
     for name, blob, mime in inline_attachments or []:
