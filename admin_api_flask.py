@@ -1325,6 +1325,7 @@ def build_notification_html(
 def build_customer_confirmation_html(
     form_type: str,
     customer_name: str,
+    summary_html: str = "",
 ) -> str:
     form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
     safe_name = html.escape((customer_name or "").strip())
@@ -1350,6 +1351,7 @@ def build_customer_confirmation_html(
       <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">{greeting}</p>
       <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Tack för att du kontaktade oss på Henricssons Båtkapell.</p>
       <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Vi har tagit emot din förfrågan och återkommer så snart vi kan med information eller eventuella följdfrågor.</p>
+      {summary_html}
       <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Om du vill komplettera din förfrågan under tiden går det bra att svara på detta mejl eller kontakta oss direkt.</p>
       <div style="margin:18px 0 16px;padding:16px 18px;background:#f7f9fc;border:1px solid #e6ebf2;border-radius:10px;">
         <div style="font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Kontaktuppgifter</div>
@@ -1386,6 +1388,47 @@ def make_mailgun_safe_text(text: str) -> str:
 def make_mailgun_safe_html(html_body: str) -> str:
     raw = str(html_body or "")
     return raw.encode("ascii", "xmlcharrefreplace").decode("ascii")
+
+
+def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
+    if not isinstance(fields, dict):
+        return "", ""
+
+    summary_keys = [
+        "manufacturer",
+        "model",
+        "boat_year",
+        "home_port",
+        "quantity",
+        "size",
+        "subject",
+        "message",
+    ]
+    rows: List[Tuple[str, str]] = []
+    for key in summary_keys:
+        value = _humanize_value(fields.get(key, ""))
+        if not value:
+            continue
+        if key == "message" and len(value) > 220:
+            value = value[:217].rstrip() + "..."
+        rows.append((_label(key), value))
+
+    if not rows:
+        return "", ""
+
+    summary_html = (
+        '<div style="margin:18px 0 16px;padding:16px 18px;background:#fcfbf7;border:1px solid #e6ebf2;border-radius:10px;">'
+        '<div style="font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Din inskickade sammanfattning</div>'
+        + "".join(
+            f'<div style="font-size:14px;line-height:1.75;color:#17212f;"><strong>{html.escape(label)}:</strong> {html.escape(value)}</div>'
+            for label, value in rows
+        )
+        + '</div>'
+    )
+    summary_text = "Din inskickade sammanfattning:\n" + "\n".join(
+        f"- {label}: {value}" for label, value in rows
+    ) + "\n\n"
+    return summary_html, summary_text
 
 
 def send_mailgun_email(
@@ -1637,11 +1680,13 @@ def send_mailgun_customer_confirmation(submission: Dict[str, Any]) -> None:
 
     customer_name = str(fields.get("name", "") or "").strip()
     form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
+    summary_html, summary_text = build_customer_summary(fields)
     subject = f"Tack för att du kontaktade oss - {form_label}"
     text_body = (
         f"Tack för att du kontaktade oss på Henricssons Båtkapell.\n\n"
         f"Vi har tagit emot din {form_label.lower()} och återkommer så snart vi kan "
         f"med information eller eventuella frågor.\n\n"
+        f"{summary_text}"
         f"Om du vill komplettera din förfrågan under tiden går det bra att svara på detta mejl "
         f"eller kontakta oss direkt.\n\n"
         f"Telefon: +46 (0)31 47 18 20\n"
@@ -1650,7 +1695,7 @@ def send_mailgun_customer_confirmation(submission: Dict[str, Any]) -> None:
         f"Vänliga hälsningar\n"
         f"Henricssons Båtkapell\n"
     )
-    html_body = build_customer_confirmation_html(form_type, customer_name)
+    html_body = build_customer_confirmation_html(form_type, customer_name, summary_html=summary_html)
     inline_files: List[Tuple[str, bytes, str]] = []
     try:
         inline_files.append(("henricssons-logo", LOGO_FILE.read_bytes(), "image/png"))
