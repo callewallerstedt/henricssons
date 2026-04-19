@@ -205,12 +205,18 @@
                     message: lines.join('<br><br>')
                 };
 
-                // Fire EmailJS and API in parallel — show success as soon as EmailJS responds
-                fetch(`${API_BASE}/api/submit_form`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ form_type: emailData.title, fields })
-                }).catch(() => {});
+                // Notify backend with retry — Render free tier may need up to 50s to wake
+                (async function notifyBackend() {
+                  const url = `${API_BASE}/api/submit_form`;
+                  const body = JSON.stringify({ form_type: emailData.title, fields });
+                  for (let i = 0; i < 5; i++) {
+                    try {
+                      const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+                      if (resp.ok) return;
+                    } catch (_) {}
+                    await new Promise(r => setTimeout(r, 12000));
+                  }
+                })();
 
                 emailjs.send('service_1u5gpw4','template_iijd5v4', emailData)
                     .then(() => {
