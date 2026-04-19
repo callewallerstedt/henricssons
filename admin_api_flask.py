@@ -1170,6 +1170,7 @@ def build_notification_html(
     submission_id: str,
     timestamp_iso: str,
     attachments: Optional[List[Dict[str, Any]]] = None,
+    proposed_response: str = "",
 ) -> str:
     form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
 
@@ -1254,29 +1255,41 @@ def build_notification_html(
             files_html = "<ul style='margin:8px 0 0;padding-left:18px;list-style:none;'>" + "".join(file_rows) + "</ul>"
         attachments_block = (
             "<tr><td style='background:#ffffff;padding:14px 24px 18px;"
-            "border-top:1px solid #e8edf3;'>"
+            "border-top:1px solid #e6ebf2;'>"
             "<div style='font-size:11px;color:#8b6f18;font-weight:700;letter-spacing:0.08em;"
             "text-transform:uppercase;margin-bottom:10px;'>"
             f"Bifogade filer ({len(attachments)})</div>"
             f"{tiles_html}{files_html}</td></tr>"
         )
 
+    ai_reply_block = ""
+    if str(proposed_response or "").strip():
+        ai_reply_html = html.escape(str(proposed_response).strip()).replace("\n", "<br>")
+        ai_reply_block = (
+            "<tr><td style='background:#f8fafc;padding:18px 24px 20px;border-top:1px solid #e6ebf2;'>"
+            "<div style='font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;"
+            "text-transform:uppercase;margin-bottom:8px;'>AI-utkast till svar</div>"
+            "<div style='font-size:12px;line-height:1.65;color:#667085;'>"
+            f"{ai_reply_html}</div>"
+            "</td></tr>"
+        )
+
     return f"""<!DOCTYPE html>
 <html lang="sv">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Helvetica Neue',Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
+<body style="margin:0;padding:0;background:#eef2f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#17212f;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;padding:32px 16px;">
 <tr><td align="center">
-<table width="100%" style="max-width:580px;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(10,29,51,0.12);">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border:1px solid #d9e1ea;border-radius:14px;overflow:hidden;">
 
   <!-- Header -->
   <tr>
-    <td style="background:linear-gradient(135deg,#0f2945 0%,#0a1d33 100%);padding:28px 32px;text-align:center;">
-      <div style="display:inline-block;background:#ffffff;border-radius:10px;padding:10px 16px;margin-bottom:14px;">
+    <td style="background:#10263f;padding:28px 32px;text-align:center;">
+      <div style="display:inline-block;background:#ffffff;border-radius:10px;padding:10px 16px;margin-bottom:14px;border:1px solid #d9e1ea;">
         <img src="cid:henricssons-logo" alt="Henricssons Båtkapell" width="148" style="display:block;width:148px;height:auto;border:0;outline:none;text-decoration:none;">
       </div>
       <div style="color:#ffffff;font-size:22px;font-weight:700;margin-bottom:4px;">Ny {form_label}</div>
-      <div style="color:rgba(255,255,255,0.6);font-size:13px;">{local_str}</div>
+      <div style="color:#c4cfdb;font-size:13px;">{local_str}</div>
     </td>
   </tr>
 
@@ -1289,13 +1302,14 @@ def build_notification_html(
     </td>
   </tr>
   {attachments_block}
+  {ai_reply_block}
 
   <!-- Footer -->
   <tr>
-    <td style="background:#f8f9fb;padding:18px 32px;border-top:1px solid #e8edf3;">
-      <p style="margin:0;color:#a0aec0;font-size:12px;text-align:center;">
+    <td style="background:#f7f9fc;padding:18px 32px;border-top:1px solid #e6ebf2;">
+      <p style="margin:0;color:#7d8796;font-size:12px;text-align:center;line-height:1.6;">
         Referens-ID: {html.escape(submission_id)}<br>
-        Henricssonsbåtkapell.se — automatiskt meddelande
+        Henricssonsbatkapell.se - automatiskt meddelande
       </p>
     </td>
   </tr>
@@ -1470,6 +1484,7 @@ def send_mailgun_submission_notification(
         fields = {}
     submission_id = str(submission.get("id", ""))
     timestamp_iso = str(submission.get("timestamp", ""))
+    proposed_response = str(submission.get("proposed_response", "") or "").strip()
     form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
     subject = f"Ny {form_label} — Henricssons"
     field_lines = "\n".join(
@@ -1513,15 +1528,24 @@ def send_mailgun_submission_notification(
             f"  - {a['filename']} ({max(1, int(a['size']/1024))} KB) {a['public_url']}"
             for a in enriched
         )
+    ai_reply_lines = f"\nAI-utkast till svar:\n{proposed_response}\n" if proposed_response else ""
     text_body = (
         f"Ny {form_label}\n"
         f"{'=' * (len(form_label) + 4)}\n\n"
         f"{field_lines}"
         f"{attachment_lines}\n\n"
+        f"{ai_reply_lines}"
         f"Tid (UTC): {timestamp_iso}\n"
         f"ID: {submission_id}\n"
     )
-    html_body = build_notification_html(form_type, fields, submission_id, timestamp_iso, attachments=enriched)
+    html_body = build_notification_html(
+        form_type,
+        fields,
+        submission_id,
+        timestamp_iso,
+        attachments=enriched,
+        proposed_response=proposed_response,
+    )
     ok, info = send_mailgun_email(
         recipients=recipients,
         subject=subject,

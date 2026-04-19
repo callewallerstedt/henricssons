@@ -221,7 +221,164 @@
         };
     }
 
+    function ensureProgressUi(form) {
+        let root = form.querySelector('.hb-form-progress');
+        if (!root) {
+            root = document.createElement('div');
+            root.className = 'hb-form-progress';
+            root.innerHTML = '' +
+                '<div class="hb-form-progress-track">' +
+                    '<div class="hb-form-progress-bar"></div>' +
+                '</div>' +
+                '<div class="hb-form-progress-text">Forbereder skickning...</div>';
+            const done = form.querySelector('.hb-form-done');
+            if (done) {
+                form.insertBefore(root, done);
+            } else {
+                form.appendChild(root);
+            }
+        }
+        return {
+            root,
+            bar: root.querySelector('.hb-form-progress-bar'),
+            text: root.querySelector('.hb-form-progress-text'),
+        };
+    }
+
+    function createFormDataPayload(payloadJson, files) {
+        if (!files || !files.length) {
+            return payloadJson;
+        }
+        const fd = new FormData();
+        fd.append('payload', payloadJson);
+        files.forEach(f => fd.append('attachments', f, f.name));
+        return fd;
+    }
+
+    function sendWithProgress(url, body, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            let indeterminateTimer = null;
+            xhr.open('POST', url, true);
+            if (!(body instanceof FormData)) {
+                xhr.setRequestHeader('Content-Type', 'application/json');
+            }
+            xhr.upload.addEventListener('progress', event => {
+                if (event.lengthComputable && onProgress) {
+                    onProgress({
+                        percent: Math.max(3, Math.min(96, Math.round((event.loaded / event.total) * 100))),
+                        phase: 'upload',
+                        indeterminate: false,
+                    });
+                }
+            });
+            xhr.onreadystatechange = () => {
+                if (xhr.readyState === 2 && onProgress) {
+                    onProgress({ percent: 96, phase: 'processing', indeterminate: true });
+                }
+            };
+            xhr.onloadstart = () => {
+                if (onProgress) {
+                    onProgress({
+                        percent: body instanceof FormData ? 4 : 18,
+                        phase: body instanceof FormData ? 'starting' : 'processing',
+                        indeterminate: !(body instanceof FormData),
+                    });
+                }
+                if (!(body instanceof FormData) && onProgress) {
+                    indeterminateTimer = window.setInterval(() => {
+                        onProgress({ percent: 72, phase: 'processing', indeterminate: true });
+                    }, 700);
+                }
+            };
+            xhr.onerror = () => {
+                if (indeterminateTimer) window.clearInterval(indeterminateTimer);
+                reject(new Error('network error'));
+            };
+            xhr.onload = () => {
+                if (indeterminateTimer) window.clearInterval(indeterminateTimer);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(xhr.responseText);
+                    return;
+                }
+                reject(new Error(`request failed (${xhr.status})`));
+            };
+            xhr.send(body);
+        });
+    }
+
+    function bindFormSubmission(formSelector, options = {}) {
+        const form =
+            typeof formSelector === 'string' ? document.querySelector(formSelector) : formSelector;
+        if (!form) return;
+        const attachmentWidget = options.attachmentWidget || { getFiles: () => [], reset: () => {} };
+        const formType = options.formType || form.dataset.subject || 'Kontakt';
+        const progress = ensureProgressUi(form);
+        const doneMessage = form.querySelector('.hb-form-done');
+
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (options.capture) {
+                e.stopImmediatePropagation();
+            }
+            const btn = form.querySelector('button[type="submit"]');
+            if (!btn) return;
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Skickar...';
+            if (doneMessage) doneMessage.style.display = 'none';
+            progress.root.classList.add('is-visible', 'is-indeterminate');
+            progress.bar.style.width = '10%';
+            progress.text.textContent = 'Forbereder skickning...';
+
+            const fields = {};
+            new FormData(form).forEach((value, key) => {
+                fields[key.replace(/^\d+\.\s*/, '')] = value;
+            });
+            const api =
+                location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+                    ? `${location.protocol}//${location.hostname}:25565`
+                    : 'https://henricssons-api.onrender.com';
+            const payloadJson = JSON.stringify({ form_type: formType, fields });
+            const files = attachmentWidget.getFiles();
+            const body = createFormDataPayload(payloadJson, files);
+
+            try {
+                await sendWithProgress(`${api}/api/submit_form`, body, state => {
+                    if (!state) return;
+                    progress.root.classList.toggle('is-indeterminate', !!state.indeterminate);
+                    if (!state.indeterminate && typeof state.percent === 'number') {
+                        progress.bar.style.width = `${state.percent}%`;
+                    } else if (state.phase === 'processing') {
+                        progress.bar.style.width = '96%';
+                    }
+                    if (state.phase === 'upload') {
+                        progress.text.textContent = `Laddar upp filer... ${Math.min(99, state.percent)}%`;
+                    } else if (state.phase === 'processing') {
+                        progress.text.textContent = 'Skickar forfragan...';
+                    } else {
+                        progress.text.textContent = 'Forbereder skickning...';
+                    }
+                });
+                progress.root.classList.remove('is-indeterminate');
+                progress.bar.style.width = '100%';
+                progress.text.textContent = 'Klart.';
+                btn.remove();
+                if (doneMessage) doneMessage.style.display = 'block';
+                attachmentWidget.reset();
+            } catch (_) {
+                progress.root.classList.remove('is-visible', 'is-indeterminate');
+                progress.bar.style.width = '0%';
+                progress.text.textContent = '';
+                btn.disabled = false;
+                btn.textContent = original;
+                alert('Kunde inte skicka formuläret. Försök igen.');
+            }
+        }, !!options.capture);
+    }
+
     window.HenricssonsAttachments = {
         create: createAttachmentWidget,
+        bindFormSubmission: bindFormSubmission,
     };
 })();

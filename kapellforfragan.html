@@ -146,6 +146,15 @@
             }
         });
     </script>
+    <script>
+        if (window.HenricssonsAttachments && window.HenricssonsAttachments.bindFormSubmission) {
+            window.HenricssonsAttachments.bindFormSubmission('.contact-form', {
+                formType: 'Kapellförfrågan',
+                attachmentWidget: kapellAttachmentWidget,
+                capture: true,
+            });
+        }
+    </script>
     <script src="chat_widget.js?v=20260416d"></script>
 </body>
 </html>
