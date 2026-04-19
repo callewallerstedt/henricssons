@@ -33,4 +33,4 @@ Thumbs.db
 # Local runtime artifacts
 *.db
 server-*.log
-
+chrome-profile/

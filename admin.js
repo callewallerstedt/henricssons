@@ -1528,6 +1528,7 @@ function loadStatusItems() {
                         notes: submission.notes || '',
                         read: Boolean(submission.read),
                         submitted_via: submission.submitted_via || 'web_form',
+                        attachments: Array.isArray(submission.attachments) ? submission.attachments : [],
                         is_form_submission: true
                     });
                 });
@@ -1692,6 +1693,17 @@ function renderStatusFolders() {
                         if (boatInfo) {
                             titleDiv.append($('<div>').addClass('boat-model-line').text(boatInfo));
                         }
+                    }
+
+                    if (Array.isArray(item.attachments) && item.attachments.length > 0) {
+                        titleDiv.append(
+                            $('<div>').addClass('attachment-badge').css({
+                                fontSize: '0.78rem',
+                                color: '#8b6f18',
+                                marginTop: '0.2rem',
+                                fontWeight: '600'
+                            }).text(`📎 ${item.attachments.length} bifogad${item.attachments.length === 1 ? '' : 'e'} ${item.attachments.length === 1 ? 'fil' : 'filer'}`)
+                        );
                     }
 
                     // Add date and time for form submissions
@@ -1953,6 +1965,80 @@ function viewFormSubmission(status, index) {
             }
         });
         formSection.append(fieldsList);
+    }
+
+    // Attachments (images + files)
+    if (Array.isArray(item.attachments) && item.attachments.length > 0) {
+        const attSection = $('<div>').addClass('form-section').css('margin-top', '1rem');
+        attSection.append($('<h3>').text(`Bifogade filer (${item.attachments.length})`));
+        const grid = $('<div>').addClass('attachment-grid').css({
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+            gap: '0.6rem',
+            marginTop: '0.4rem'
+        });
+        item.attachments.forEach(att => {
+            const url = `${API_BASE}${att.url}`;
+            const sizeKb = Math.max(1, Math.round((att.size || 0) / 1024));
+            const tile = $('<div>').css({
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                background: '#f8fafc',
+                fontSize: '11px'
+            });
+            if (att.is_image) {
+                const img = $('<img>').attr('alt', att.filename).css({
+                    width: '100%',
+                    height: '110px',
+                    objectFit: 'cover',
+                    display: 'block',
+                    cursor: 'pointer',
+                    background: '#e2e8f0'
+                });
+                // Fetch with admin header then blob → object URL (Authorization can't be set via <img src>)
+                adminFetch(url).then(r => r.ok ? r.blob() : null).then(blob => {
+                    if (blob) img.attr('src', URL.createObjectURL(blob));
+                });
+                img.on('click', () => {
+                    const w = window.open('', '_blank');
+                    if (w) w.document.write(`<img src="${img.attr('src')}" style="max-width:100vw;max-height:100vh;"/>`);
+                });
+                tile.append(img);
+            } else {
+                tile.append($('<div>').css({
+                    padding: '24px 8px',
+                    textAlign: 'center',
+                    fontSize: '28px'
+                }).text('📎'));
+            }
+            const caption = $('<div>').css({
+                padding: '6px 8px',
+                color: '#475569',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+            });
+            const dl = $('<a>').attr({ href: '#', title: att.filename })
+                .css({ color: '#0a2342', textDecoration: 'none', display: 'block' })
+                .text(att.filename);
+            dl.on('click', function(e) {
+                e.preventDefault();
+                adminFetch(url).then(r => r.ok ? r.blob() : null).then(blob => {
+                    if (!blob) return;
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = att.filename;
+                    a.click();
+                });
+            });
+            caption.append(dl);
+            caption.append($('<div>').css({ color: '#94a3b8', fontSize: '10px' }).text(`${sizeKb} KB`));
+            tile.append(caption);
+            grid.append(tile);
+        });
+        attSection.append(grid);
+        formSection.append(attSection);
     }
 
     const notesSection = $('<div>').addClass('form-section');

@@ -59,13 +59,9 @@
                 <a href="/kapellforfragan" class="hero-cta-button"><span>Skicka en Kapellförfrågan</span></a>
             </div>
             <div class="announcement-animated">
-                <section class="announcement">
+                <section class="announcement is-loading" id="announcement-panel">
                     <div class="announcement-content" id="announcement-content">
-                        <div id="announcement-text">
-                            <h3>Ny lokal i Kungsbacka</h3>
-                            <p>Vi har flyttat till större lokaler i Varla industriområde. Vill du besöka oss? Kontakta oss i förväg så vi säkert är på plats och kan hjälpa dig på bästa sätt.</p>
-                            <p>Vi har kapell på lager för flera modeller från VA-Varuste, MP-Venekuomu och Hansen Protection.</p>
-                        </div>
+                        <div id="announcement-text"></div>
                     </div>
                 </section>
             </div>
@@ -262,6 +258,8 @@
         
         // Load announcement text dynamically
         function loadAnnouncementContent() {
+            const panelEl = document.getElementById('announcement-panel');
+            const textEl = document.getElementById('announcement-text');
             const apiBases = [];
             const seenBases = {};
             function addBase(value) {
@@ -293,22 +291,29 @@
                 .then(data => {
                     console.log('Received data:', data);
                     if (data && data.announcement && data.announcement.text) {
-                        const textEl = document.getElementById('announcement-text');
                         if (textEl) {
                             // Render markdown to HTML
                             const html = parseMarkdown(data.announcement.text);
                             console.log('Rendered HTML:', html);
                             textEl.innerHTML = html;
+                            if (panelEl) {
+                                panelEl.classList.remove('is-loading');
+                            }
                         } else {
                             console.error('announcement-text element not found');
                         }
                     } else {
                         console.log('No announcement text in data');
+                        if (panelEl) {
+                            panelEl.style.display = 'none';
+                        }
                     }
                 })
                 .catch(err => {
-                    console.log('Could not load announcement text from API, using default:', err);
-                    // Use default content if API fails
+                    console.log('Could not load announcement text from API:', err);
+                    if (panelEl) {
+                        panelEl.style.display = 'none';
+                    }
                 });
         }
         
@@ -321,7 +326,5 @@
     </script>
 </body>
 </html> 
-
-
 
 

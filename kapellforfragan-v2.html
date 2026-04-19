@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8"/>
+    <title>Kapellförfrågan – Henricssons Båtkapell</title>
+    <meta name="description" content="Vi har många kapell på vårt lager. Vi besvarar inkomna förfrågningar löpande och där ger er mer exakt leveranstid."/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="logo.png">
+    <link rel="stylesheet" href="styles.css?v=20260416">
+
+    <style>
+        /* ============================================================
+           V2 PAGE-SPECIFIC STYLES
+           ============================================================ */
+
+        /* --- Variables ------------------------------------------- */
+        :root {
+            --v2-navy:      #0a1d33;
+            --v2-gold:      #f7c45b;
+            --v2-gold-dk:   #e2a946;
+            --v2-blue:      #0b3b65;
+            --v2-blue-lt:   #e8f1f9;
+            --v2-gray:      #f5f6f8;
+            --v2-border:    #dde1e7;
+            --v2-text:      #1a2535;
+            --v2-muted:     #6b7585;
+            --v2-radius:    10px;
+            --v2-shadow:    0 4px 24px rgba(10,29,51,.10);
+            --v2-shadow-lg: 0 12px 48px rgba(10,29,51,.15);
+        }
+
+        /* Reset for v2 scope */
+        .v2 * { box-sizing: border-box; }
+
+        /* ---- Hero ------------------------------------------------ */
+        .v2-hero {
+            margin-top: var(--header-height, 60px);
+            background: linear-gradient(160deg, rgba(10,29,51,.72) 0%, rgba(11,59,101,.58) 100%),
+                        url('bakgrundhav.webp') center/cover no-repeat;
+            min-height: 420px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 5rem 1.5rem 4rem;
+            position: relative;
+        }
+        .v2-hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            background: rgba(247,196,91,.18);
+            border: 1px solid rgba(247,196,91,.4);
+            color: var(--v2-gold);
+            font-family: 'Inter', sans-serif;
+            font-size: .75rem;
+            font-weight: 600;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            padding: .4rem 1rem;
+            border-radius: 50px;
+            margin-bottom: 1.25rem;
+        }
+        .v2-hero h1 {
+            font-family: 'Libre Baskerville', serif;
+            font-size: clamp(1.9rem, 4vw, 3rem);
+            color: #fff;
+            line-height: 1.2;
+            margin-bottom: .75rem;
+            text-shadow: 0 2px 16px rgba(0,0,0,.3);
+        }
+        .v2-hero h1 span { color: var(--v2-gold); }
+        .v2-hero p {
+            font-family: 'Inter', sans-serif;
+            font-size: 1.05rem;
+            color: rgba(255,255,255,.85);
+            max-width: 560px;
+            line-height: 1.7;
+            margin-bottom: 2rem;
+        }
+        .v2-hero-scroll {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: .35rem;
+            color: rgba(255,255,255,.55);
+            font-family: 'Inter', sans-serif;
+            font-size: .7rem;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+        }
+        .v2-hero-scroll svg { animation: v2-bounce 1.6s ease-in-out infinite; }
+        @keyframes v2-bounce {
+            0%,100% { transform: translateY(0); }
+            50%      { transform: translateY(5px); }
+        }
+
+        /* ---- Trust bar ------------------------------------------ */
+        .v2-trust {
+            background: var(--v2-navy);
+            color: rgba(255,255,255,.8);
+            padding: .85rem 1.5rem;
+        }
+        .v2-trust-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem 2.5rem;
+        }
+        .v2-trust-item {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            font-family: 'Inter', sans-serif;
+            font-size: .82rem;
+            font-weight: 500;
+        }
+        .v2-trust-item svg { color: var(--v2-gold); flex-shrink: 0; }
+
+        /* ---- Steps indicator ------------------------------------- */
+        .v2-steps {
+            background: var(--v2-gray);
+            border-bottom: 1px solid var(--v2-border);
+            padding: 1.25rem 1.5rem;
+            position: sticky;
+            top: var(--header-height, 60px);
+            z-index: 50;
+        }
+        .v2-steps-inner {
+            max-width: 700px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .v2-step {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            font-family: 'Inter', sans-serif;
+            font-size: .82rem;
+            font-weight: 600;
+            color: var(--v2-muted);
+            transition: color .3s;
+        }
+        .v2-step.active { color: var(--v2-navy); }
+        .v2-step.done   { color: var(--v2-blue); }
+        .v2-step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .8rem;
+            font-weight: 700;
+            background: var(--v2-border);
+            color: var(--v2-muted);
+            flex-shrink: 0;
+            transition: background .3s, color .3s;
+        }
+        .v2-step.active .v2-step-num {
+            background: var(--v2-gold);
+            color: var(--v2-navy);
+        }
+        .v2-step.done .v2-step-num {
+            background: var(--v2-blue);
+            color: #fff;
+        }
+        .v2-step-connector {
+            flex: 1;
+            height: 2px;
+            background: var(--v2-border);
+            margin: 0 .75rem;
+            max-width: 80px;
+            transition: background .3s;
+        }
+        .v2-step-connector.done { background: var(--v2-blue); }
+
+        /* ---- Main layout ---------------------------------------- */
+        .v2-main {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem 5rem;
+        }
+
+        /* ---- Section card --------------------------------------- */
+        .v2-card {
+            background: #fff;
+            border: 1px solid var(--v2-border);
+            border-radius: var(--v2-radius);
+            padding: 2rem 2rem 1.75rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--v2-shadow);
+            transition: opacity .4s, transform .4s;
+        }
+        .v2-card.v2-locked {
+            opacity: .45;
+            pointer-events: none;
+        }
+        .v2-card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .v2-card-num {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--v2-navy);
+            color: #fff;
+            font-family: 'Libre Baskerville', serif;
+            font-weight: 700;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .v2-card-num.gold { background: var(--v2-gold); color: var(--v2-navy); }
+        .v2-card-title {
+            font-family: 'Libre Baskerville', serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--v2-navy);
+            margin: 0;
+        }
+        .v2-card-sub {
+            font-family: 'Inter', sans-serif;
+            font-size: .82rem;
+            color: var(--v2-muted);
+            margin: .15rem 0 0;
+        }
+
+        /* ---- Search box ----------------------------------------- */
+        .v2-search-wrap {
+            position: relative;
+            margin-bottom: 1.25rem;
+        }
+        .v2-search-wrap svg.icon-search {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--v2-muted);
+            pointer-events: none;
+        }
+        .v2-search-input {
+            width: 100%;
+            padding: .8rem 2.75rem .8rem 2.75rem;
+            border: 1.5px solid var(--v2-border);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: .95rem;
+            color: var(--v2-text);
+            background: var(--v2-gray);
+            outline: none;
+            transition: border-color .2s, box-shadow .2s;
+        }
+        .v2-search-input:focus {
+            border-color: var(--v2-gold);
+            box-shadow: 0 0 0 3px rgba(247,196,91,.2);
+            background: #fff;
+        }
+        .v2-search-clear {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--v2-muted);
+            padding: 4px;
+            display: none;
+            line-height: 1;
+        }
+        .v2-search-clear:hover { color: var(--v2-navy); }
+
+        /* ---- Manufacturer pills --------------------------------- */
+        .v2-manu-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .v2-manu-list::-webkit-scrollbar { width: 5px; }
+        .v2-manu-list::-webkit-scrollbar-track { background: transparent; }
+        .v2-manu-list::-webkit-scrollbar-thumb { background: var(--v2-border); border-radius: 4px; }
+
+        .v2-pill {
+            padding: .45rem .95rem;
+            border: 1.5px solid var(--v2-border);
+            border-radius: 50px;
+            font-family: 'Inter', sans-serif;
+            font-size: .82rem;
+            font-weight: 500;
+            color: var(--v2-text);
+            background: #fff;
+            cursor: pointer;
+            transition: all .18s;
+            white-space: nowrap;
+        }
+        .v2-pill:hover {
+            border-color: var(--v2-gold);
+            background: rgba(247,196,91,.08);
+            color: var(--v2-navy);
+        }
+        .v2-pill.selected {
+            background: var(--v2-navy);
+            border-color: var(--v2-navy);
+            color: #fff;
+        }
+        .v2-pill.hidden { display: none; }
+        .v2-no-results {
+            font-family: 'Inter', sans-serif;
+            font-size: .9rem;
+            color: var(--v2-muted);
+            padding: .75rem 0;
+            display: none;
+        }
+
+        /* ---- Model list ----------------------------------------- */
+        .v2-model-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: .6rem;
+            max-height: 320px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .v2-model-grid::-webkit-scrollbar { width: 5px; }
+        .v2-model-grid::-webkit-scrollbar-thumb { background: var(--v2-border); border-radius: 4px; }
+
+        .v2-model-item {
+            padding: .6rem .85rem;
+            border: 1.5px solid var(--v2-border);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: .83rem;
+            font-weight: 500;
+            color: var(--v2-text);
+            cursor: pointer;
+            transition: all .18s;
+            text-align: center;
+        }
+        .v2-model-item:hover {
+            border-color: var(--v2-gold);
+            background: rgba(247,196,91,.08);
+        }
+        .v2-model-item.selected {
+            background: var(--v2-gold);
+            border-color: var(--v2-gold-dk);
+            color: var(--v2-navy);
+            font-weight: 700;
+        }
+        .v2-model-item.hidden { display: none; }
+
+        /* ---- Selected badge ------------------------------------- */
+        .v2-selected-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            background: #e8f4e8;
+            border: 1px solid #b2d8b2;
+            color: #1a6b1a;
+            border-radius: 50px;
+            padding: .35rem .9rem;
+            font-family: 'Inter', sans-serif;
+            font-size: .8rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        .v2-selected-badge svg { color: #2e7d32; }
+        .v2-change-link {
+            background: none;
+            border: none;
+            font-family: 'Inter', sans-serif;
+            font-size: .78rem;
+            color: var(--v2-blue);
+            cursor: pointer;
+            text-decoration: underline;
+            padding: 0;
+            margin-left: .5rem;
+        }
+        .v2-change-link:hover { color: var(--v2-navy); }
+
+        /* ---- Contact Form --------------------------------------- */
+        .v2-form { display: flex; flex-direction: column; gap: 1.25rem; }
+
+        .v2-form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        @media (max-width: 600px) {
+            .v2-form-row { grid-template-columns: 1fr; }
+        }
+
+        .v2-field {
+            display: flex;
+            flex-direction: column;
+            gap: .4rem;
+        }
+        .v2-label {
+            font-family: 'Inter', sans-serif;
+            font-size: .8rem;
+            font-weight: 600;
+            color: var(--v2-navy);
+            letter-spacing: .02em;
+            text-transform: uppercase;
+        }
+        .v2-label .req { color: var(--v2-gold-dk); }
+        .v2-input, .v2-textarea {
+            padding: .75rem 1rem;
+            border: 1.5px solid var(--v2-border);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: .93rem;
+            color: var(--v2-text);
+            background: var(--v2-gray);
+            outline: none;
+            transition: border-color .2s, box-shadow .2s, background .2s;
+            width: 100%;
+        }
+        .v2-input:focus, .v2-textarea:focus {
+            border-color: var(--v2-gold);
+            box-shadow: 0 0 0 3px rgba(247,196,91,.2);
+            background: #fff;
+        }
+        .v2-input.readonly {
+            background: #eef3fa;
+            border-color: #c5d5e8;
+            color: var(--v2-blue);
+            font-weight: 600;
+        }
+        .v2-textarea { resize: vertical; min-height: 100px; }
+
+        /* ---- Submit button -------------------------------------- */
+        .v2-submit-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: .75rem; }
+        .v2-submit {
+            display: inline-flex;
+            align-items: center;
+            gap: .65rem;
+            padding: 1rem 2.5rem;
+            background: var(--v2-navy);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Libre Baskerville', serif;
+            font-weight: 700;
+            font-size: 1.05rem;
+            cursor: pointer;
+            transition: background .2s, transform .2s, box-shadow .2s;
+            box-shadow: 0 4px 16px rgba(10,29,51,.2);
+            position: relative;
+            overflow: hidden;
+        }
+        .v2-submit::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+            transform: translateX(-100%);
+            transition: transform .5s;
+        }
+        .v2-submit:hover { background: var(--v2-blue); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(10,29,51,.25); }
+        .v2-submit:hover::after { transform: translateX(100%); }
+        .v2-submit:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+        .v2-privacy {
+            font-family: 'Inter', sans-serif;
+            font-size: .75rem;
+            color: var(--v2-muted);
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+        }
+
+        /* ---- Success state -------------------------------------- */
+        .v2-success {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 2.5rem 1rem;
+            gap: 1rem;
+        }
+        .v2-success-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #e8f4e8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .v2-success h3 {
+            font-family: 'Libre Baskerville', serif;
+            font-size: 1.4rem;
+            color: var(--v2-navy);
+        }
+        .v2-success p {
+            font-family: 'Inter', sans-serif;
+            font-size: .95rem;
+            color: var(--v2-muted);
+            max-width: 380px;
+        }
+
+        /* ---- Sidebar info --------------------------------------- */
+        .v2-layout {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 2rem;
+            align-items: start;
+        }
+        @media (max-width: 900px) {
+            .v2-layout { grid-template-columns: 1fr; }
+            .v2-sidebar { order: -1; }
+        }
+
+        .v2-info-card {
+            background: var(--v2-navy);
+            border-radius: var(--v2-radius);
+            padding: 1.75rem;
+            color: rgba(255,255,255,.85);
+            margin-bottom: 1.25rem;
+        }
+        .v2-info-card h3 {
+            font-family: 'Libre Baskerville', serif;
+            font-size: 1rem;
+            color: var(--v2-gold);
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        .v2-info-card p, .v2-info-card li {
+            font-family: 'Inter', sans-serif;
+            font-size: .83rem;
+            line-height: 1.65;
+            color: rgba(255,255,255,.78);
+        }
+        .v2-info-card ul {
+            padding-left: 1.1rem;
+            margin: .5rem 0;
+            display: flex;
+            flex-direction: column;
+            gap: .25rem;
+        }
+        .v2-info-card li::marker { color: var(--v2-gold); }
+
+        .v2-delivery-badge {
+            display: flex;
+            align-items: center;
+            gap: .7rem;
+            background: rgba(247,196,91,.12);
+            border: 1px solid rgba(247,196,91,.25);
+            border-radius: 8px;
+            padding: .8rem 1rem;
+            margin-top: 1rem;
+        }
+        .v2-delivery-badge svg { color: var(--v2-gold); flex-shrink: 0; }
+        .v2-delivery-badge span {
+            font-family: 'Inter', sans-serif;
+            font-size: .8rem;
+            font-weight: 500;
+            color: rgba(255,255,255,.85);
+            line-height: 1.45;
+        }
+
+        .v2-partners-card {
+            background: var(--v2-navy);
+            border-radius: var(--v2-radius);
+            padding: 1.5rem;
+        }
+        .v2-partners-card h3 {
+            font-family: 'Libre Baskerville', serif;
+            font-size: .95rem;
+            color: var(--v2-gold);
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        .v2-partners-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: .75rem;
+        }
+        .v2-partner-img {
+            width: 100%;
+            height: 44px;
+            object-fit: contain;
+            opacity: 1;
+            transition: opacity .2s, transform .2s;
+        }
+        .v2-partner-img:hover { opacity: .8; transform: scale(1.04); }
+        .v2-partner-full { grid-column: span 2; height: 36px; }
+
+        /* ---- Misc ----------------------------------------------- */
+        .v2-model-search-wrap { margin-bottom: 1rem; }
+
+        /* CTA bar at page end */
+        .v2-cta-bar {
+            background: var(--v2-gold);
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+        }
+        .v2-cta-bar h2 {
+            font-family: 'Libre Baskerville', serif;
+            font-size: 1.5rem;
+            color: var(--v2-navy);
+            margin-bottom: .5rem;
+        }
+        .v2-cta-bar p {
+            font-family: 'Inter', sans-serif;
+            font-size: .92rem;
+            color: var(--v2-navy);
+            opacity: .8;
+            margin-bottom: 1.25rem;
+        }
+        .v2-cta-bar a {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .85rem 2rem;
+            background: var(--v2-navy);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            font-size: .9rem;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background .2s;
+        }
+        .v2-cta-bar a:hover { background: var(--v2-blue); }
+
+        /* Smooth reveal */
+        @keyframes v2-fadeUp {
+            from { opacity: 0; transform: translateY(18px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .v2-card { animation: v2-fadeUp .45s ease both; }
+        .v2-card:nth-child(2) { animation-delay: .08s; }
+        .v2-card:nth-child(3) { animation-delay: .16s; }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================================
+         NAV (shared with site)
+    ============================================================ -->
+    <header class="header">
+        <nav class="navbar">
+            <a href="/" class="nav-logo">
+                <img src="logo.png" alt="Henricssons Båtkapell Logo"/>
+            </a>
+            <button class="menu-btn" aria-label="Toggle menu">
+                <span class="menu-line"></span>
+                <span class="menu-line"></span>
+                <span class="menu-line"></span>
+            </button>
+            <div class="nav-menu">
+                <a href="/om-oss" class="nav-link">Om oss</a>
+                <a href="/kapellforfragan" class="nav-link active">Kapellförfrågan</a>
+                <a href="/bilder-och-exempel" class="nav-link">Bilder & exempel</a>
+                <a href="/tillbehor" class="nav-link">Fenderstrumpor</a>
+                <a href="/kontakt" class="nav-link">Kontakt</a>
+            </div>
+        </nav>
+    </header>
+    <div class="cta-line--nav"></div>
+    <div class="nav-rugged-border"></div>
+
+    <!-- ============================================================
+         HERO
+    ============================================================ -->
+    <section class="v2-hero">
+        <div class="v2-hero-badge">
+            <svg width="12" height="12" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            Kapellspecialister sedan decennier
+        </div>
+        <h1>Hitta rätt kapell till<br><span>din båt</span></h1>
+        <p>Välj tillverkare och modell – eller fyll i din båt manuellt. Vi återkommer med pris och leveranstid så snart vi kan.</p>
+        <div class="v2-hero-scroll">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+            Rulla ner
+        </div>
+    </section>
+
+    <!-- ============================================================
+         TRUST BAR
+    ============================================================ -->
+    <div class="v2-trust">
+        <div class="v2-trust-inner">
+            <div class="v2-trust-item">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                Stort lagersortiment
+            </div>
+            <div class="v2-trust-item">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                DHL &amp; PostNord leverans
+            </div>
+            <div class="v2-trust-item">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                Swish för snabb expediering
+            </div>
+            <div class="v2-trust-item">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                Högsta kreditvärdighet
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         STEPS BAR
+    ============================================================ -->
+    <div class="v2-steps">
+        <div class="v2-steps-inner">
+            <div class="v2-step active" id="step-indicator-1">
+                <div class="v2-step-num">1</div>
+                <span>Välj tillverkare</span>
+            </div>
+            <div class="v2-step-connector" id="connector-1"></div>
+            <div class="v2-step" id="step-indicator-2">
+                <div class="v2-step-num">2</div>
+                <span>Välj modell</span>
+            </div>
+            <div class="v2-step-connector" id="connector-2"></div>
+            <div class="v2-step" id="step-indicator-3">
+                <div class="v2-step-num">3</div>
+                <span>Skicka förfrågan</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         MAIN CONTENT
+    ============================================================ -->
+    <main>
+        <div class="v2-main v2">
+            <div class="v2-layout">
+
+                <!-- ---- LEFT: interactive form ------------------- -->
+                <div class="v2-form-col">
+
+                    <!-- STEP 1: Manufacturer -->
+                    <div class="v2-card" id="card-manufacturer">
+                        <div class="v2-card-header">
+                            <div class="v2-card-num">1</div>
+                            <div>
+                                <p class="v2-card-title">Välj båttillverkare</p>
+                                <p class="v2-card-sub">Sök eller bläddra bland tillverkarna nedan</p>
+                            </div>
+                        </div>
+
+                        <!-- Selected badge (hidden until selection) -->
+                        <div id="manu-selected-badge" style="display:none;" class="v2-selected-badge">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                            <span id="manu-selected-text"></span>
+                            <button class="v2-change-link" id="manu-change-btn">Ändra</button>
+                        </div>
+
+                        <div id="manu-selector">
+                            <div class="v2-search-wrap">
+                                <svg class="icon-search" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                                <input class="v2-search-input" type="text" id="manu-search" placeholder="Sök tillverkare, t.ex. Buster, Ryds…" autocomplete="off"/>
+                                <button class="v2-search-clear" id="manu-search-clear" aria-label="Rensa sökning">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                                <div id="manu-loading" style="font-family:'Inter',sans-serif;font-size:.88rem;color:var(--v2-muted);padding:.5rem 0;">
+                                Laddar tillverkare…
+                            </div>
+                            <div class="v2-manu-list" id="manu-list" style="display:none;">
+                                <!-- populated by JS -->
+                            </div>
+                            <div class="v2-no-results" id="manu-no-results">Ingen tillverkare matchade din sökning.</div>
+                            <div id="manu-error" style="display:none;font-family:'Inter',sans-serif;font-size:.85rem;color:#b94a48;padding:.5rem 0;">
+                                Kunde inte ladda tillverkardata. Skriv in tillverkare och modell manuellt i formuläret nedan.
+                                <br><button type="button" id="manu-retry" style="margin-top:.5rem;background:none;border:1px solid #b94a48;color:#b94a48;border-radius:6px;padding:.3rem .75rem;font-family:'Inter',sans-serif;font-size:.8rem;cursor:pointer;">Försök igen</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STEP 2: Model -->
+                    <div class="v2-card v2-locked" id="card-model">
+                        <div class="v2-card-header">
+                            <div class="v2-card-num">2</div>
+                            <div>
+                                <p class="v2-card-title">Välj båtmodell</p>
+                                <p class="v2-card-sub" id="model-card-sub">Välj tillverkare ovan för att se modeller</p>
+                            </div>
+                        </div>
+
+                        <div id="model-selected-badge" style="display:none;" class="v2-selected-badge">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                            <span id="model-selected-text"></span>
+                            <button class="v2-change-link" id="model-change-btn">Ändra</button>
+                        </div>
+
+                        <div id="model-selector">
+                            <div class="v2-search-wrap v2-model-search-wrap" id="model-search-wrap" style="display:none;">
+                                <svg class="icon-search" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                                <input class="v2-search-input" type="text" id="model-search" placeholder="Sök modell…" autocomplete="off"/>
+                                <button class="v2-search-clear" id="model-search-clear" aria-label="Rensa">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                            <div class="v2-model-grid" id="model-grid"></div>
+                            <div class="v2-no-results" id="model-no-results">Ingen modell matchade sökningen.</div>
+                            <p style="font-family:'Inter',sans-serif;font-size:.8rem;color:var(--v2-muted);margin-top:.75rem;">
+                                Hittar du inte din modell? Skriv in den manuellt i formuläret nedan.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- STEP 3: Contact form -->
+                    <div class="v2-card" id="card-form">
+                        <div class="v2-card-header">
+                            <div class="v2-card-num gold">3</div>
+                            <div>
+                                <p class="v2-card-title">Fyll i dina uppgifter</p>
+                                <p class="v2-card-sub">Vi återkommer med pris och leveranstid</p>
+                            </div>
+                        </div>
+
+                        <!-- Form -->
+                        <form class="v2-form" id="v2-contact-form" data-subject="Kapellförfrågan">
+
+                            <!-- Pre-filled boat selection (read-only display) -->
+                            <div class="v2-form-row">
+                                <div class="v2-field">
+                                    <label class="v2-label">Tillverkare</label>
+                                    <input type="text" class="v2-input readonly" id="v2-T-field" name="4. Tillverkare" placeholder="Välj ovan eller skriv manuellt" readonly>
+                                </div>
+                                <div class="v2-field">
+                                    <label class="v2-label">Modell</label>
+                                    <input type="text" class="v2-input readonly" id="v2-M-field" name="5. Modell" placeholder="Välj ovan eller skriv manuellt" readonly>
+                                </div>
+                            </div>
+
+                            <!-- Override button when fields are set -->
+                            <div id="v2-override-note" style="display:none;margin-top:-.5rem;">
+                                <button type="button" id="v2-unlock-fields" style="background:none;border:none;font-family:'Inter',sans-serif;font-size:.78rem;color:var(--v2-blue);cursor:pointer;text-decoration:underline;padding:0;">
+                                    Skriv in annan båt manuellt
+                                </button>
+                            </div>
+
+                            <div class="v2-form-row">
+                                <div class="v2-field">
+                                    <label class="v2-label">Årsmodell</label>
+                                    <input type="text" class="v2-input" id="v2-year" name="6. Årsmodell" placeholder="t.ex. 2018">
+                                </div>
+                                <div class="v2-field">
+                                    <label class="v2-label">Hemmahamn</label>
+                                    <input type="text" class="v2-input" id="v2-port" name="7. Hemmahamn" placeholder="Din ort eller hamn">
+                                </div>
+                            </div>
+
+                            <div class="v2-field">
+                                <label class="v2-label">Tillverkare av befintligt kapell</label>
+                                <input type="text" class="v2-input" id="v2-oldCanopy" name="8. Tillverkare av befintligt kapell" placeholder="t.ex. Helly-Hansen, Schulz…">
+                            </div>
+
+                            <hr style="border:none;border-top:1px solid var(--v2-border);">
+
+                            <div class="v2-form-row">
+                                <div class="v2-field">
+                                    <label class="v2-label">Namn <span class="req">*</span></label>
+                                    <input type="text" class="v2-input" id="v2-name" name="1. Namn" placeholder="Ditt för- och efternamn" required>
+                                </div>
+                                <div class="v2-field">
+                                    <label class="v2-label">Telefonnummer <span class="req">*</span></label>
+                                    <input type="tel" class="v2-input" id="v2-phone" name="2. Telefonnummer" placeholder="070 – 000 00 00" required>
+                                </div>
+                            </div>
+
+                            <div class="v2-field">
+                                <label class="v2-label">E-postadress <span class="req">*</span></label>
+                                <input type="email" class="v2-input" id="v2-email" name="3. E-postadress" placeholder="din@epost.se" required>
+                            </div>
+
+                            <div class="v2-field">
+                                <label class="v2-label">Övrig information</label>
+                                <textarea class="v2-textarea" id="v2-message" name="9. Övrig information" placeholder="Berätta gärna mer – t.ex. om kapellet behöver speciallösningar eller om du vill ha snabb leverans."></textarea>
+                            </div>
+
+                            <div class="v2-submit-wrap">
+                                <button type="submit" class="v2-submit" id="v2-submit-btn">
+                                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+                                    Skicka förfrågan
+                                </button>
+                                <span class="v2-privacy">
+                                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                                    Dina uppgifter skickas säkert och delas inte vidare.
+                                </span>
+                            </div>
+
+                        </form>
+
+                        <!-- Success state -->
+                        <div class="v2-success" id="v2-success">
+                            <div class="v2-success-icon">
+                                <svg width="32" height="32" fill="none" stroke="#2e7d32" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                            </div>
+                            <h3>Förfrågan skickad!</h3>
+                            <p>Tack! Vi återkommer med pris och leveranstid så snart vi kan. Kolla din e-post – vi hör av oss dit.</p>
+                            <a href="/bilder-och-exempel" style="font-family:'Inter',sans-serif;font-size:.85rem;color:var(--v2-blue);text-decoration:underline;margin-top:.5rem;">
+                                Se bilder &amp; exempel på kapell →
+                            </a>
+                        </div>
+                    </div>
+
+                </div><!-- /form-col -->
+
+                <!-- ---- RIGHT: sidebar info ---------------------- -->
+                <aside class="v2-sidebar">
+
+                    <div class="v2-info-card">
+                        <h3>Så här fungerar det</h3>
+                        <p>Hitta din båt i listan och fyll i formuläret. Vi kollar lagret och återkommer med exakt pris och leveranstid.</p>
+                        <p style="margin-top:.75rem;">Om din modell saknas – skriv in den manuellt. Vi har ett stort mallregister och hittar som regel rätt kapell.</p>
+                        <div class="v2-delivery-badge">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                            <span>Leverans med <strong>DHL &amp; PostNord</strong> – hämtas på servicepoint nära dig.</span>
+                        </div>
+                    </div>
+
+                    <div class="v2-info-card" style="background:var(--v2-blue);">
+                        <h3>Märken vi säkert matchar</h3>
+                        <ul>
+                            <li>Båtkapellspecialisten Henrics Product AB</li>
+                            <li>VA-Varuste</li>
+                            <li>MP-Venekuomo</li>
+                            <li>Schulz Seilmakeri</li>
+                            <li>Marin &amp; Industrisöm</li>
+                            <li>Jens Sagen A/S</li>
+                            <li>Hübert</li>
+                            <li>Helly-Hansen</li>
+                            <li>Hansen Protection</li>
+                        </ul>
+                        <p style="margin-top:.85rem;">Ange märke på ditt gamla kapell i formuläret så matchar vi säkert.</p>
+                    </div>
+
+                    <div class="v2-partners-card">
+                        <h3>Våra leverantörer</h3>
+                        <div class="v2-partners-grid">
+                            <img src="assets/jens sagen.png" alt="Jens Sagen" class="v2-partner-img">
+                            <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" class="v2-partner-img">
+                            <img src="assets/Varuste.png" alt="VA Varuste" class="v2-partner-img">
+                            <img src="assets/schultz.png" alt="Schultz" class="v2-partner-img">
+                            <img src="assets/mpvenekuomo.png" alt="MP Venekuomo" class="v2-partner-img v2-partner-full">
+                        </div>
+                    </div>
+
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <!-- ============================================================
+         FOOTER (shared)
+    ============================================================ -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <img src="logo.png" alt="Henricssons Båtkapell Logo" class="footer-logo"/>
+                <div class="divider" style="margin-left:0;margin-right:auto;"></div>
+                <p>Vi gör kapell till många olika typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller</p>
+            </div>
+            <div class="footer-section">
+                <h2 style="text-align:left;">Partners</h2>
+                <div class="divider" style="margin-left:0;margin-right:auto;"></div>
+                <div class="partners-grid">
+                    <img src="assets/jens sagen.png" alt="Jens Sagen" class="partner-logo"/>
+                    <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" class="partner-logo"/>
+                    <img src="assets/Varuste.png" alt="VA Varuste" class="partner-logo"/>
+                    <img src="assets/schultz.png" alt="Schultz Kalecher" class="partner-logo"/>
+                    <img src="assets/mpvenekuomo.png" alt="MP Venekuomu" class="partner-logo" style="grid-column:span 2;"/>
+                </div>
+            </div>
+            <div class="footer-section">
+                <h2 style="text-align:left;">Kontakt</h2>
+                <div class="divider" style="margin-left:0;margin-right:auto;"></div>
+                <p>
+                    +46 (0)31 471820<br/>
+                    Energigatan 17E<br/>
+                    434 37 Kungsbacka<br/>
+                    <a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a>
+                </p>
+                <div class="credit-rating">
+                    <img src="KV.svg" alt="Kreditvärdighet" class="credit-logo"/>
+                    <div class="credit-text">
+                        <div class="credit-title">HÖGSTA KREDITVÄRDIGHET</div>
+                        <div class="credit-company">Henricssons Båtkapell AB</div>
+                        <div class="credit-details">556799-2192 | 2025-11-25</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ============================================================
+         SCRIPTS
+    ============================================================ -->
+    <script src="script.js"></script>
+    <script src="chat_widget.js?v=20260416d"></script>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ---- Config -----------------------------------------------
+        const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+            ? `${location.protocol}//${location.hostname}:25565`
+            : 'https://henricssons-api.onrender.com';
+
+        // ---- State ------------------------------------------------
+        let boatData        = {};
+        let selectedManuKey = null;
+        let selectedManu    = null;
+        let selectedModel   = null;
+
+        // ---- DOM refs ---------------------------------------------
+        const manuList        = document.getElementById('manu-list');
+        const manuLoading     = document.getElementById('manu-loading');
+        const manuError       = document.getElementById('manu-error');
+        const manuRetry       = document.getElementById('manu-retry');
+        const manuSearch      = document.getElementById('manu-search');
+        const manuSearchClear = document.getElementById('manu-search-clear');
+        const manuNoResults   = document.getElementById('manu-no-results');
+        const manuBadge       = document.getElementById('manu-selected-badge');
+        const manuBadgeText   = document.getElementById('manu-selected-text');
+        const manuSelector    = document.getElementById('manu-selector');
+        const manuChangeBtn   = document.getElementById('manu-change-btn');
+
+        const cardModel       = document.getElementById('card-model');
+        const modelGrid       = document.getElementById('model-grid');
+        const modelSearch     = document.getElementById('model-search');
+        const modelSearchWrap = document.getElementById('model-search-wrap');
+        const modelSearchClear= document.getElementById('model-search-clear');
+        const modelNoResults  = document.getElementById('model-no-results');
+        const modelBadge      = document.getElementById('model-selected-badge');
+        const modelBadgeText  = document.getElementById('model-selected-text');
+        const modelSelector   = document.getElementById('model-selector');
+        const modelChangeBtn  = document.getElementById('model-change-btn');
+        const modelCardSub    = document.getElementById('model-card-sub');
+
+        const tField          = document.getElementById('v2-T-field');
+        const mField          = document.getElementById('v2-M-field');
+        const overrideNote    = document.getElementById('v2-override-note');
+        const unlockBtn       = document.getElementById('v2-unlock-fields');
+
+        const form            = document.getElementById('v2-contact-form');
+        const submitBtn       = document.getElementById('v2-submit-btn');
+        const successDiv      = document.getElementById('v2-success');
+
+        // ---- Step indicators --------------------------------------
+        function setStep(n) {
+            [1,2,3].forEach(i => {
+                const el = document.getElementById(`step-indicator-${i}`);
+                el.classList.remove('active','done');
+                if (i < n)  el.classList.add('done');
+                if (i === n) el.classList.add('active');
+            });
+            [1,2].forEach(i => {
+                const c = document.getElementById(`connector-${i}`);
+                c.classList.toggle('done', i < n);
+            });
+        }
+
+        // ---- Load boat data ---------------------------------------
+        function loadBoatData() {
+            manuLoading.style.display = 'block';
+            manuError.style.display   = 'none';
+            manuList.style.display    = 'none';
+
+            fetch(`${API_BASE}/boat_data.json?v=${Date.now()}`, { cache: 'no-store' })
+                .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+                .then(json => {
+                    if (json && typeof json === 'object') {
+                        boatData = json;
+                        manuLoading.style.display = 'none';
+                        manuList.style.display    = '';
+                        buildManufacturers();
+                        preselectFromStorage();
+                    } else {
+                        throw new Error('Ogiltig data');
+                    }
+                })
+                .catch(err => {
+                    console.error('Kunde inte ladda båtdata:', err);
+                    manuLoading.style.display = 'none';
+                    manuError.style.display   = 'block';
+                    // Still unlock manual input in the form
+                    tField.readOnly = false;
+                    tField.classList.remove('readonly');
+                    mField.readOnly = false;
+                    mField.classList.remove('readonly');
+                });
+        }
+
+        manuRetry.addEventListener('click', loadBoatData);
+        loadBoatData();
+
+        // ---- Build manufacturer pills ----------------------------
+        function buildManufacturers() {
+            manuList.innerHTML = '';
+            const keys = Object.keys(boatData)
+                .filter(k => boatData[k] && typeof boatData[k].name === 'string' && boatData[k].name.trim())
+                .sort((a, b) => boatData[a].name.localeCompare(boatData[b].name, 'sv', { sensitivity: 'base' }));
+
+            keys.forEach(key => {
+                const pill = document.createElement('button');
+                pill.type = 'button';
+                pill.className = 'v2-pill';
+                pill.dataset.key = key;
+                pill.textContent = boatData[key].name;
+                pill.addEventListener('click', () => selectManufacturer(key));
+                manuList.appendChild(pill);
+            });
+        }
+
+        // ---- Manufacturer search ---------------------------------
+        manuSearch.addEventListener('input', () => {
+            const q = manuSearch.value.trim().toLowerCase();
+            manuSearchClear.style.display = q ? 'block' : 'none';
+            let any = false;
+            manuList.querySelectorAll('.v2-pill').forEach(p => {
+                const match = p.textContent.toLowerCase().includes(q);
+                p.classList.toggle('hidden', !match);
+                if (match) any = true;
+            });
+            manuNoResults.style.display = any ? 'none' : 'block';
+        });
+
+        manuSearchClear.addEventListener('click', () => {
+            manuSearch.value = '';
+            manuSearch.dispatchEvent(new Event('input'));
+            manuSearch.focus();
+        });
+
+        // ---- Select manufacturer ---------------------------------
+        function selectManufacturer(key) {
+            selectedManuKey = key;
+            selectedManu = boatData[key].name;
+            selectedModel = null;
+
+            // Update pills
+            manuList.querySelectorAll('.v2-pill').forEach(p => {
+                p.classList.toggle('selected', p.dataset.key === key);
+            });
+
+            // Show badge, hide selector
+            manuBadgeText.textContent = selectedManu;
+            manuBadge.style.display = 'inline-flex';
+            manuSelector.style.display = 'none';
+
+            // Fill form field
+            tField.value = selectedManu;
+            tField.readOnly = true;
+            tField.classList.add('readonly');
+            mField.value = '';
+            overrideNote.style.display = 'block';
+
+            // Unlock model card
+            cardModel.classList.remove('v2-locked');
+
+            // Build models
+            buildModels(key);
+            modelCardSub.textContent = `Modeller för ${selectedManu}`;
+
+            // Step
+            setStep(2);
+
+            // Scroll to model card
+            cardModel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => window.scrollBy(0, -80), 500);
+        }
+
+        manuChangeBtn.addEventListener('click', () => {
+            manuBadge.style.display = 'none';
+            manuSelector.style.display = '';
+            manuSearch.value = '';
+            manuSearch.dispatchEvent(new Event('input'));
+            manuList.querySelectorAll('.v2-pill').forEach(p => p.classList.remove('selected'));
+
+            // Reset model
+            resetModel();
+            cardModel.classList.add('v2-locked');
+            modelCardSub.textContent = 'Välj tillverkare ovan för att se modeller';
+            tField.value = '';
+            overrideNote.style.display = 'none';
+            setStep(1);
+        });
+
+        // ---- Build models ----------------------------------------
+        function buildModels(key) {
+            modelGrid.innerHTML = '';
+            modelBadge.style.display = 'none';
+            modelSelector.style.display = '';
+            modelSearch.value = '';
+            modelNoResults.style.display = 'none';
+
+            const models = (boatData[key].models || [])
+                .map(m => (typeof m === 'string' ? m : m.name))
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b, 'sv', { sensitivity: 'base' }));
+
+            if (models.length > 8) {
+                modelSearchWrap.style.display = '';
+            } else {
+                modelSearchWrap.style.display = 'none';
+            }
+
+            models.forEach(name => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'v2-model-item';
+                item.textContent = name;
+                item.addEventListener('click', () => selectModel(name));
+                modelGrid.appendChild(item);
+            });
+        }
+
+        // ---- Model search ----------------------------------------
+        modelSearch.addEventListener('input', () => {
+            const q = modelSearch.value.trim().toLowerCase();
+            modelSearchClear.style.display = q ? 'block' : 'none';
+            let any = false;
+            modelGrid.querySelectorAll('.v2-model-item').forEach(item => {
+                const match = item.textContent.toLowerCase().includes(q);
+                item.classList.toggle('hidden', !match);
+                if (match) any = true;
+            });
+            modelNoResults.style.display = any ? 'none' : 'block';
+        });
+
+        modelSearchClear.addEventListener('click', () => {
+            modelSearch.value = '';
+            modelSearch.dispatchEvent(new Event('input'));
+            modelSearch.focus();
+        });
+
+        // ---- Select model ----------------------------------------
+        function selectModel(name) {
+            selectedModel = name;
+
+            modelGrid.querySelectorAll('.v2-model-item').forEach(item => {
+                item.classList.toggle('selected', item.textContent === name);
+            });
+
+            modelBadgeText.textContent = name;
+            modelBadge.style.display = 'inline-flex';
+            modelSelector.style.display = 'none';
+
+            mField.value = name;
+            mField.readOnly = true;
+            mField.classList.add('readonly');
+
+            setStep(3);
+
+            document.getElementById('card-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => window.scrollBy(0, -80), 500);
+        }
+
+        function resetModel() {
+            selectedModel = null;
+            modelGrid.innerHTML = '';
+            modelBadge.style.display = 'none';
+            modelSelector.style.display = '';
+            mField.value = '';
+        }
+
+        modelChangeBtn.addEventListener('click', () => {
+            modelBadge.style.display = 'none';
+            modelSelector.style.display = '';
+            modelGrid.querySelectorAll('.v2-model-item').forEach(i => i.classList.remove('selected'));
+            mField.value = '';
+            mField.readOnly = true;
+            mField.classList.add('readonly');
+            selectedModel = null;
+            setStep(2);
+        });
+
+        // ---- Unlock manual entry ---------------------------------
+        unlockBtn.addEventListener('click', () => {
+            tField.readOnly = false;
+            tField.classList.remove('readonly');
+            mField.readOnly = false;
+            mField.classList.remove('readonly');
+            tField.focus();
+            overrideNote.style.display = 'none';
+        });
+
+        // ---- Form submit -----------------------------------------
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="animation:spin .8s linear infinite"><path d="M12 2a10 10 0 0110 10"/></svg>
+                Skickar…`;
+
+            const formData = new FormData(form);
+            const fields   = {};
+            for (const [key, val] of formData.entries()) {
+                const label = key.replace(/^\d+\.\s*/, '');
+                fields[label] = val;
+            }
+
+            const email = fields['E-postadress'] || 'info@henricssonsbatkapell.se';
+            const lines = Object.keys(fields).map(k => {
+                let v = fields[k];
+                if (k.toLowerCase().includes('e-post')) v = `<a href="mailto:${v}">${v}</a>`;
+                return `<strong>${k}</strong><br>${v}`;
+            });
+            const emailData = {
+                title: 'Kapellförfrågan',
+                name: 'Henricssons Båtkapell',
+                email,
+                message: lines.join('<br><br>')
+            };
+
+            // Fire EmailJS and API in parallel — show success as soon as EmailJS responds
+            fetch(`${API_BASE}/api/submit_form`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ form_type: 'Kapellförfrågan', fields })
+            }).catch(() => {});
+
+            emailjs.send('service_1u5gpw4', 'template_iijd5v4', emailData)
+                .then(() => {
+                    form.style.display = 'none';
+                    successDiv.style.display = 'flex';
+                })
+                .catch(() => {
+                    setTimeout(() => {
+                        form.style.display = 'none';
+                        successDiv.style.display = 'flex';
+                    }, 1000);
+                });
+        });
+
+        // ---- Preselect from localStorage (from bilder-sidan) -----
+        function preselectFromStorage() {
+            const manuName  = localStorage.getItem('preselectManufacturer');
+            const modelName = localStorage.getItem('preselectModel');
+            if (!manuName) return;
+
+            const key = Object.keys(boatData).find(k =>
+                boatData[k].name.trim().toLowerCase() === manuName.trim().toLowerCase()
+            );
+            if (key) {
+                selectManufacturer(key);
+                if (modelName) {
+                    setTimeout(() => {
+                        const item = [...modelGrid.querySelectorAll('.v2-model-item')]
+                            .find(el => el.textContent.trim().toLowerCase() === modelName.trim().toLowerCase());
+                        if (item) item.click();
+                    }, 150);
+                }
+            }
+
+            localStorage.removeItem('preselectManufacturer');
+            localStorage.removeItem('preselectModel');
+        }
+
+        // ---- Spinner keyframe (inline) ---------------------------
+        const style = document.createElement('style');
+        style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+        document.head.appendChild(style);
+
+        // Init step
+        setStep(1);
+
+    })();
+    </script>
+
+    <!-- EmailJS (kept for dual delivery) -->
+    <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+    <script>emailjs.init('pzhOOOVxBi01cMxCm');</script>
+</body>
+</html>

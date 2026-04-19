@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 
 import requests
 from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_from_directory
-from sqlalchemy import Boolean, Column, DateTime, Integer, JSON as SQLJSON, String, Text, create_engine
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON as SQLJSON, LargeBinary, String, Text, create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 app = Flask(__name__)
@@ -114,6 +114,13 @@ PUBLIC_HOST_ALIASES = {"henricssonsbatkapell.se", "www.henricssonsbatkapell.se"}
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+# Attachment upload limits (per-file and per-submission aggregate)
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+MAX_ATTACHMENTS_PER_SUBMISSION = 8
+MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024
+ATTACHMENT_ALLOWED_MIME_PREFIXES = ("image/", "application/pdf")
+ATTACHMENT_ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".pdf"}
 STATUS_FLOW = ["nya-inskick", "vantar-pa-svar", "i-produktion", "redo-for-leverans"]
 MOJIBAKE_MARKERS = ("Ã", "Â", "â")
 
@@ -171,6 +178,29 @@ class SiteContent(Base):
     key = Column(String, primary_key=True)
     data = Column(SQLJSON, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SubmissionAttachment(Base):
+    __tablename__ = "submission_attachments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    submission_id = Column(String, ForeignKey("form_submissions.id", ondelete="CASCADE"), index=True, nullable=False)
+    filename = Column(String, nullable=False)
+    mime = Column(String, nullable=False, default="application/octet-stream")
+    size = Column(Integer, nullable=False, default=0)
+    data = Column(LargeBinary, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_meta(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "submission_id": self.submission_id,
+            "filename": self.filename,
+            "mime": self.mime,
+            "size": int(self.size or 0),
+            "is_image": str(self.mime or "").startswith("image/"),
+            "url": f"/api/attachment/{self.id}",
+        }
 
 
 engine = None
@@ -1109,7 +1139,13 @@ def _humanize_value(value: Any) -> str:
     return s
 
 
-def build_notification_html(form_type: str, fields: Dict[str, Any], submission_id: str, timestamp_iso: str) -> str:
+def build_notification_html(
+    form_type: str,
+    fields: Dict[str, Any],
+    submission_id: str,
+    timestamp_iso: str,
+    attachments: Optional[List[Dict[str, Any]]] = None,
+) -> str:
     form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
 
     # Build ordered rows, then any remaining keys not in FIELD_ORDER
@@ -1151,6 +1187,55 @@ def build_notification_html(form_type: str, fields: Dict[str, Any], submission_i
     except Exception:
         local_str = html.escape(timestamp_iso)
 
+    # Attachments block (inline image thumbnails via cid, download links for non-images)
+    attachments_block = ""
+    if attachments:
+        image_tiles: List[str] = []
+        file_rows: List[str] = []
+        for att in attachments:
+            cid = str(att.get("cid", "")).strip()
+            filename = html.escape(str(att.get("filename", "bilaga")))
+            mime = str(att.get("mime", ""))
+            size_kb = max(1, int((att.get("size") or 0) / 1024))
+            public_url = html.escape(str(att.get("public_url", "")))
+            if mime.startswith("image/") and cid:
+                image_tiles.append(
+                    f"<td style='padding:6px;vertical-align:top;'>"
+                    f"<a href='{public_url}' style='text-decoration:none;'>"
+                    f"<img src='cid:{html.escape(cid)}' alt='{filename}' "
+                    f"style='display:block;width:170px;height:128px;object-fit:cover;"
+                    f"border-radius:6px;border:1px solid #e8edf3;'/></a>"
+                    f"<div style='font-size:11px;color:#718096;margin-top:4px;"
+                    f"max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>"
+                    f"{filename} &middot; {size_kb} KB</div></td>"
+                )
+            else:
+                file_rows.append(
+                    f"<li style='margin:4px 0;color:#1a202c;font-size:13px;'>"
+                    f"<a href='{public_url}' style='color:#0a2342;text-decoration:none;'>&#128206; {filename}</a> "
+                    f"<span style='color:#718096;'>({size_kb} KB)</span></li>"
+                )
+        tiles_html = ""
+        if image_tiles:
+            rows_of_tiles = ""
+            for i in range(0, len(image_tiles), 3):
+                rows_of_tiles += "<tr>" + "".join(image_tiles[i : i + 3]) + "</tr>"
+            tiles_html = (
+                "<table cellpadding='0' cellspacing='0' style='border-collapse:separate;'>"
+                f"{rows_of_tiles}</table>"
+            )
+        files_html = ""
+        if file_rows:
+            files_html = "<ul style='margin:8px 0 0;padding-left:18px;list-style:none;'>" + "".join(file_rows) + "</ul>"
+        attachments_block = (
+            "<tr><td style='background:#ffffff;padding:14px 24px 18px;"
+            "border-top:1px solid #e8edf3;'>"
+            "<div style='font-size:11px;color:#8b6f18;font-weight:700;letter-spacing:0.08em;"
+            "text-transform:uppercase;margin-bottom:10px;'>"
+            f"Bifogade filer ({len(attachments)})</div>"
+            f"{tiles_html}{files_html}</td></tr>"
+        )
+
     return f"""<!DOCTYPE html>
 <html lang="sv">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1178,6 +1263,7 @@ def build_notification_html(form_type: str, fields: Dict[str, Any], submission_i
       </table>
     </td>
   </tr>
+  {attachments_block}
 
   <!-- Footer -->
   <tr>
@@ -1196,7 +1282,15 @@ def build_notification_html(form_type: str, fields: Dict[str, Any], submission_i
 </html>"""
 
 
-def send_mailgun_email(*, recipients: List[str], subject: str, text_body: str, html_body: str) -> Tuple[bool, str]:
+def send_mailgun_email(
+    *,
+    recipients: List[str],
+    subject: str,
+    text_body: str,
+    html_body: str,
+    inline_attachments: Optional[List[Tuple[str, bytes, str]]] = None,
+    regular_attachments: Optional[List[Tuple[str, bytes, str]]] = None,
+) -> Tuple[bool, str]:
     if not MAILGUN_DOMAIN:
         return False, "MAILGUN_DOMAIN missing"
     if not MAILGUN_API_KEY:
@@ -1206,18 +1300,30 @@ def send_mailgun_email(*, recipients: List[str], subject: str, text_body: str, h
     if not recipients:
         return False, "MAILGUN_TO missing/empty"
 
+    data = {
+        "from": MAILGUN_FROM,
+        "to": recipients,
+        "subject": subject,
+        "text": text_body,
+        "html": html_body,
+    }
+    files: List[Tuple[str, Tuple[str, bytes, str]]] = []
+    for name, blob, mime in inline_attachments or []:
+        files.append(("inline", (name, blob, mime)))
+    for name, blob, mime in regular_attachments or []:
+        files.append(("attachment", (name, blob, mime)))
+
     try:
+        kwargs: Dict[str, Any] = {
+            "auth": ("api", MAILGUN_API_KEY),
+            "data": data,
+            "timeout": 30,
+        }
+        if files:
+            kwargs["files"] = files
         response = requests.post(
             f"{MAILGUN_API_BASE}/v3/{MAILGUN_DOMAIN}/messages",
-            auth=("api", MAILGUN_API_KEY),
-            data={
-                "from": MAILGUN_FROM,
-                "to": recipients,
-                "subject": subject,
-                "text": text_body,
-                "html": html_body,
-            },
-            timeout=15,
+            **kwargs,
         )
         if response.status_code >= 400:
             return False, f"HTTP {response.status_code}: {response.text}"
@@ -1226,7 +1332,100 @@ def send_mailgun_email(*, recipients: List[str], subject: str, text_body: str, h
         return False, str(exc)
 
 
-def send_mailgun_submission_notification(submission: Dict[str, Any]) -> None:
+def sanitize_attachment_filename(raw_name: str, fallback_ext: str = "") -> str:
+    name = str(raw_name or "").strip().replace("\\", "/").split("/")[-1]
+    name = re.sub(r"[^A-Za-z0-9_.\- ()]+", "_", name)
+    name = name.strip() or "bilaga"
+    if "." not in name and fallback_ext:
+        name = f"{name}{fallback_ext}"
+    return name[:120]
+
+
+def save_submission_attachments(submission_id: str, files: List[Any]) -> List[Dict[str, Any]]:
+    """Persist uploaded files to the DB and return attachment metadata."""
+    saved: List[Dict[str, Any]] = []
+    if not files:
+        return saved
+    db = get_db()
+    if not db:
+        return saved
+    try:
+        total_bytes = 0
+        kept = 0
+        for file_storage in files:
+            if kept >= MAX_ATTACHMENTS_PER_SUBMISSION:
+                break
+            if file_storage is None or not getattr(file_storage, "filename", ""):
+                continue
+            raw_name = file_storage.filename
+            ext = os.path.splitext(raw_name)[1].lower()
+            if ext and ext not in ATTACHMENT_ALLOWED_EXTS:
+                continue
+            mime = (getattr(file_storage, "mimetype", "") or "").lower() or "application/octet-stream"
+            if not any(mime.startswith(p) for p in ATTACHMENT_ALLOWED_MIME_PREFIXES):
+                continue
+            try:
+                blob = file_storage.read()
+            except Exception:
+                continue
+            if not blob:
+                continue
+            if len(blob) > MAX_ATTACHMENT_BYTES:
+                continue
+            if total_bytes + len(blob) > MAX_TOTAL_ATTACHMENT_BYTES:
+                break
+            filename = sanitize_attachment_filename(raw_name, fallback_ext=ext)
+            record = SubmissionAttachment(
+                submission_id=submission_id,
+                filename=filename,
+                mime=mime,
+                size=len(blob),
+                data=blob,
+            )
+            db.add(record)
+            db.flush()
+            saved.append({
+                "id": record.id,
+                "submission_id": submission_id,
+                "filename": filename,
+                "mime": mime,
+                "size": len(blob),
+                "bytes": blob,
+            })
+            total_bytes += len(blob)
+            kept += 1
+        db.commit()
+    except Exception as exc:
+        print(f"save_submission_attachments failed: {exc}")
+        db.rollback()
+        saved = []
+    finally:
+        db.close()
+    return saved
+
+
+def get_submission_attachments_meta(submission_id: str) -> List[Dict[str, Any]]:
+    db = get_db()
+    if not db:
+        return []
+    try:
+        rows = (
+            db.query(SubmissionAttachment)
+            .filter_by(submission_id=submission_id)
+            .order_by(SubmissionAttachment.id.asc())
+            .all()
+        )
+        return [row.to_meta() for row in rows]
+    except Exception:
+        return []
+    finally:
+        db.close()
+
+
+def send_mailgun_submission_notification(
+    submission: Dict[str, Any],
+    attachments: Optional[List[Dict[str, Any]]] = None,
+) -> None:
     recipients = get_mailgun_recipients()
     form_type = str(submission.get("form_type", "Kontakt"))
     fields = submission.get("fields", {})
@@ -1241,20 +1440,63 @@ def send_mailgun_submission_notification(submission: Dict[str, Any]) -> None:
         for k, v in fields.items()
         if k != "__submitted_via" and _humanize_value(v)
     )
+    attachment_lines = ""
+    attachments = attachments or []
+    # Enrich attachments with cid + public_url
+    enriched: List[Dict[str, Any]] = []
+    inline_files: List[Tuple[str, bytes, str]] = []
+    regular_files: List[Tuple[str, bytes, str]] = []
+    for idx, att in enumerate(attachments):
+        blob = att.get("bytes")
+        if not isinstance(blob, (bytes, bytearray)):
+            continue
+        filename = str(att.get("filename", f"bilaga-{idx+1}"))
+        mime = str(att.get("mime", "application/octet-stream"))
+        cid = f"att{att.get('id', idx)}@henricssons"
+        public_url = f"{PUBLIC_BASE_URL}/api/attachment/{att.get('id', '')}"
+        enriched.append({
+            "cid": cid,
+            "filename": filename,
+            "mime": mime,
+            "size": att.get("size", len(blob)),
+            "public_url": public_url,
+        })
+        if mime.startswith("image/"):
+            inline_files.append((cid, bytes(blob), mime))
+        else:
+            regular_files.append((filename, bytes(blob), mime))
+    if enriched:
+        attachment_lines = "\n\nBifogade filer:\n" + "\n".join(
+            f"  - {a['filename']} ({max(1, int(a['size']/1024))} KB) {a['public_url']}"
+            for a in enriched
+        )
     text_body = (
         f"Ny {form_label}\n"
         f"{'=' * (len(form_label) + 4)}\n\n"
-        f"{field_lines}\n\n"
+        f"{field_lines}"
+        f"{attachment_lines}\n\n"
         f"Tid (UTC): {timestamp_iso}\n"
         f"ID: {submission_id}\n"
     )
-    html_body = build_notification_html(form_type, fields, submission_id, timestamp_iso)
-    ok, info = send_mailgun_email(recipients=recipients, subject=subject, text_body=text_body, html_body=html_body)
+    html_body = build_notification_html(form_type, fields, submission_id, timestamp_iso, attachments=enriched)
+    ok, info = send_mailgun_email(
+        recipients=recipients,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        inline_attachments=inline_files,
+        regular_attachments=regular_files,
+    )
     if not ok:
         print(f"Mailgun notification failed: {info}")
 
 
-def process_form_submission(form_type: str, fields: Dict[str, Any], submitted_via: str = "web_form") -> str:
+def process_form_submission(
+    form_type: str,
+    fields: Dict[str, Any],
+    submitted_via: str = "web_form",
+    upload_files: Optional[List[Any]] = None,
+) -> str:
     normalized_form_type = display_form_type(form_type)
     safe_fields = sanitize_fields(fields, submitted_via=submitted_via)
     form_summary = build_form_summary(normalized_form_type, safe_fields)
@@ -1274,7 +1516,8 @@ def process_form_submission(form_type: str, fields: Dict[str, Any], submitted_vi
         "submitted_via": submitted_via,
     }
     save_submission_record(submission)
-    send_mailgun_submission_notification(submission)
+    saved_attachments = save_submission_attachments(submission_id, upload_files or [])
+    send_mailgun_submission_notification(submission, attachments=saved_attachments)
     return submission_id
 
 
@@ -1293,13 +1536,38 @@ def get_all_submissions() -> List[Dict[str, Any]]:
             else:
                 copy_row["submitted_via"] = "web_form"
         copy_row["notes"] = get_submission_notes(copy_row)
+        copy_row["attachments"] = []
         file_normalized.append(copy_row)
+
+    # Prefetch attachments per submission id (one query rather than N+1)
+    attachments_by_sub: Dict[str, List[Dict[str, Any]]] = {}
+    db_for_attachments = get_db()
+    if db_for_attachments:
+        try:
+            rows = (
+                db_for_attachments.query(SubmissionAttachment)
+                .order_by(SubmissionAttachment.id.asc())
+                .all()
+            )
+            for row in rows:
+                attachments_by_sub.setdefault(row.submission_id, []).append(row.to_meta())
+        except Exception:
+            pass
+        finally:
+            db_for_attachments.close()
+    for row in file_normalized:
+        row_id = str(row.get("id", "")).strip()
+        if row_id and row_id in attachments_by_sub:
+            row["attachments"] = attachments_by_sub[row_id]
 
     db = get_db()
     if db:
         try:
             rows = db.query(FormSubmission).order_by(FormSubmission.timestamp.desc()).all()
             db_rows = [row.to_dict() for row in rows]
+            for row in db_rows:
+                row_id = str(row.get("id", "")).strip()
+                row["attachments"] = attachments_by_sub.get(row_id, [])
             merged: Dict[str, Dict[str, Any]] = {}
             for row in file_normalized:
                 row_id = str(row.get("id", "")).strip()
@@ -1775,19 +2043,86 @@ def save_models_meta():
 def submit_form():
     if request.method == "OPTIONS":
         return "", 200
-    payload = request.get_json()
-    if not isinstance(payload, dict):
-        return jsonify(error="Form data required"), 400
-    fields = payload.get("fields", {})
-    if not isinstance(fields, dict):
-        return jsonify(error="Invalid fields"), 400
-    form_type = payload.get("form_type", "Kontakt")
-    submitted_via = str(payload.get("submitted_via", "web_form") or "web_form")
+
+    upload_files: List[Any] = []
+    fields: Dict[str, Any] = {}
+    form_type = "Kontakt"
+    submitted_via = "web_form"
+
+    content_type = (request.content_type or "").lower()
+    if content_type.startswith("multipart/form-data"):
+        raw_payload = request.form.get("payload")
+        if raw_payload:
+            try:
+                parsed = json.loads(raw_payload)
+            except Exception:
+                return jsonify(error="Invalid payload JSON"), 400
+            if not isinstance(parsed, dict):
+                return jsonify(error="Invalid payload"), 400
+            maybe_fields = parsed.get("fields", {})
+            if isinstance(maybe_fields, dict):
+                fields = maybe_fields
+            form_type = str(parsed.get("form_type", "Kontakt") or "Kontakt")
+            submitted_via = str(parsed.get("submitted_via", "web_form") or "web_form")
+        # Files under key "attachments"
+        files_list = request.files.getlist("attachments")
+        if files_list:
+            upload_files = files_list[:MAX_ATTACHMENTS_PER_SUBMISSION]
+    else:
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify(error="Form data required"), 400
+        maybe_fields = payload.get("fields", {})
+        if not isinstance(maybe_fields, dict):
+            return jsonify(error="Invalid fields"), 400
+        fields = maybe_fields
+        form_type = str(payload.get("form_type", "Kontakt") or "Kontakt")
+        submitted_via = str(payload.get("submitted_via", "web_form") or "web_form")
+
     try:
-        submission_id = process_form_submission(form_type, fields, submitted_via=submitted_via)
-        return jsonify(success=True, submission_id=submission_id)
+        submission_id = process_form_submission(
+            form_type,
+            fields,
+            submitted_via=submitted_via,
+            upload_files=upload_files,
+        )
+        return jsonify(success=True, submission_id=submission_id, attachments=len(upload_files))
     except Exception as exc:
         return jsonify(error=f"Server error: {exc}"), 500
+
+
+@app.route("/api/attachment/<int:attachment_id>", methods=["GET"])
+def get_attachment(attachment_id: int):
+    """Public-link fetch for a single attachment. Admin-gated."""
+    if not check_admin_access():
+        return jsonify(error="Admin authorization required"), 403
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        row = db.query(SubmissionAttachment).filter_by(id=attachment_id).first()
+        if not row:
+            return jsonify(error="Not found"), 404
+        response = Response(row.data, mimetype=row.mime or "application/octet-stream")
+        safe_name = sanitize_attachment_filename(row.filename or f"attachment-{row.id}")
+        disposition = "inline" if str(row.mime or "").startswith("image/") else "attachment"
+        response.headers["Content-Disposition"] = f'{disposition}; filename="{safe_name}"'
+        response.headers["Content-Length"] = str(len(row.data or b""))
+        response.headers["Cache-Control"] = "private, max-age=3600"
+        return response
+    except Exception as exc:
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/submission_attachments", methods=["GET"])
+@admin_required
+def submission_attachments_route():
+    submission_id = str(request.args.get("submission_id", "")).strip()
+    if not submission_id:
+        return jsonify(error="submission_id required"), 400
+    return jsonify(get_submission_attachments_meta(submission_id))
 
 
 @app.route("/api/get_form_submissions", methods=["GET"])
@@ -1913,13 +2248,7 @@ def page_texts():
         file_data = read_json_file(PAGE_TEXTS_FILE, None)
         if isinstance(file_data, dict):
             return jsonify(file_data)
-        return jsonify(
-            {
-                "announcement": {
-                    "text": "## Ny lokal i Kungsbacka\n\nVi har flyttat till storre lokaler i Varla industriomrade."
-                }
-            }
-        )
+        return jsonify({"announcement": {"text": ""}})
 
     if not check_admin_access():
         return jsonify(error="Admin authorization required"), 403

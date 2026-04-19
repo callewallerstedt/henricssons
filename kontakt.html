@@ -105,7 +105,9 @@
                                 <label for="message">Meddelande *</label>
                                 <textarea id="message" name="5. Meddelande" rows="4" placeholder="Meddelande *" required></textarea>
                             </div>
-                            
+
+                            <div id="contactAttachments"></div>
+
                             <button type="submit" class="btn btn-primary">Skicka meddelande</button>
                             <div class="w-form-done" style="display:none; padding:1.2rem 0;text-align:center;font-size:1.05rem;color:#1976d2;">Tack! Ditt meddelande har skickats.</div>
                         </form>
@@ -170,9 +172,16 @@
     <script src="script.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+    <script src="form_attachments.js?v=20260419"></script>
 <script src="chat_widget.js?v=20260416d"></script>
     <script>
         emailjs.init('pzhOOOVxBi01cMxCm');
+        const contactAttachmentWidget = window.HenricssonsAttachments
+            ? window.HenricssonsAttachments.create('#contactAttachments', {
+                  label: 'Bifoga bilder (valfritt)',
+                  helper: 'Dra och släpp eller klicka för att bifoga bilder eller PDF. Bilder komprimeras automatiskt.',
+              })
+            : { getFiles: () => [], reset: () => {} };
         $(function(){
             $('#contactForm').on('submit',function(e){
                 e.preventDefault();
@@ -198,20 +207,29 @@
                     if (key.toLowerCase().includes('e-post')) value = `<a href="mailto:${value}">${value}</a>`;
                     lines.push(`<strong>${key}</strong><br>${value}`);
                 });
+                const attachmentFiles = contactAttachmentWidget.getFiles();
                 const emailData = {
                     title: $form.data('subject') || 'Kontakt',
                     name: 'Henricssons Båtkapell',
                     email: email,
-                    message: lines.join('<br><br>')
+                    message: lines.join('<br><br>') + (attachmentFiles.length ? `<br><br><em>Kunden har bifogat ${attachmentFiles.length} fil(er) i formuläret.</em>` : '')
                 };
 
                 // Notify backend with retry — Render free tier may need up to 50s to wake
                 (async function notifyBackend() {
                   const url = `${API_BASE}/api/submit_form`;
-                  const body = JSON.stringify({ form_type: emailData.title, fields });
+                  const payloadJson = JSON.stringify({ form_type: emailData.title, fields });
                   for (let i = 0; i < 5; i++) {
                     try {
-                      const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+                      let resp;
+                      if (attachmentFiles.length) {
+                        const fd = new FormData();
+                        fd.append('payload', payloadJson);
+                        attachmentFiles.forEach(f => fd.append('attachments', f, f.name));
+                        resp = await fetch(url, { method: 'POST', body: fd });
+                      } else {
+                        resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payloadJson });
+                      }
                       if (resp.ok) return;
                     } catch (_) {}
                     await new Promise(r => setTimeout(r, 12000));
@@ -222,11 +240,13 @@
                     .then(() => {
                         $btn.remove();
                         $form.find('.w-form-done').show();
+                        contactAttachmentWidget.reset();
                     })
                     .catch(() => {
                         setTimeout(() => {
                             $btn.remove();
                             $form.find('.w-form-done').show();
+                            contactAttachmentWidget.reset();
                         }, 1000);
                     });
             });

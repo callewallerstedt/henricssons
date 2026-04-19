@@ -428,6 +428,10 @@ p {
     overflow: hidden;
 }
 
+.announcement.is-loading {
+    visibility: hidden;
+}
+
 .announcement::after {
     content: '';
     position: absolute;

@@ -12,7 +12,7 @@
         'F6 12x43"'
     ];
     const API_BASE_CANDIDATES = buildApiBaseCandidates();
-    const GREETING_SV = 'Hej! Beskriv vad du behöver, så visar jag rätt väg.';
+    const GREETING_SV = 'Hej! Vad kan vi hjälpa dig med?';
     const GREETING_EN = 'Hello! Tell me what you need, and I will point you in the right direction.';
     const ACTION_KEYS = ['Kapellforfragan', 'Fenderforfragan', 'Kontakt'];
     const ROUTE_CONFIG = {
