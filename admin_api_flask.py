@@ -10,9 +10,10 @@ from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import requests
-from flask import Flask, abort, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_from_directory
 from sqlalchemy import Boolean, Column, DateTime, Integer, JSON as SQLJSON, String, Text, create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -26,6 +27,56 @@ PAGE_TEXTS_FILE = BASE_DIR / "page_texts.json"
 AI_SETTINGS_FILE = BASE_DIR / "ai_settings.json"
 IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
+EXAMPLES_META_FILE = BASE_DIR / "examples_meta.json"
+PUBLIC_BASE_URL = "https://www.henricssonsbatkapell.se"
+GENERIC_EXAMPLE_DESCRIPTION = (
+    "Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning "
+    "och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi "
+    "ett brett register av modeller"
+)
+CORE_PUBLIC_PATHS = [
+    "/",
+    "/om-oss",
+    "/bilder-och-exempel",
+    "/search",
+    "/tillbehor",
+    "/kontakt",
+    "/kapellforfragan",
+]
+LEGACY_EXAMPLE_REDIRECTS = {
+    "16-ht": "/bilder-och-exempel",
+    "215-pilot-house": "/bilder-och-exempel",
+    "26-2657": "/exempel/26-2656",
+    "26-aldre-med-traram-doghouse-specialkapell": "/exempel/26-102-71-aldre-korta-std-traram-doghouse",
+    "26-dc-utan-targa": "/exempel/26-dc",
+    "27-sun-cruiser": "/bilder-och-exempel",
+    "28-2": "/exempel/28",
+    "30-scampi": "/bilder-och-exempel",
+    "31-sprayhood-for-22mm-bagar": "/exempel/if-sprayhood-22mm-bagar",
+    "32-specialsprayhood": "/exempel/32",
+    "33": "/bilder-och-exempel",
+    "34-3": "/exempel/34",
+    "505-ht-d-a": "/exempel/505-ht",
+    "510gts-konsollhuv": "/exempel/510-pulpethuv",
+    "565-ht": "/exempel/560-ht",
+    "5820-58br-original-dynsats": "/exempel/5820",
+    "630wa-fam": "/exempel/6230wa",
+    "630wa-fam-2": "/exempel/6230wa",
+    "635-wa-utan-racke-vindruta": "/exempel/635-wa",
+    "640-dc-original-hamnkapell-2": "/exempel/640-dc-original-hamnkapell",
+    "6600-wa-med-targabage": "/bilder-och-exempel",
+    "68-br-originalkapell": "/exempel/68-dc-originalkapell",
+    "680-snipa-originalkapell": "/bilder-och-exempel",
+    "7700ht-originalkapell": "/bilder-och-exempel",
+    "95-sprayhood-till-originalbagar": "/exempel/cumulus-sprayhood-pa-originalbagar",
+    "le": "/exempel/l",
+    "magnum-dynsats-original-1999-2001": "/exempel/magnum-dynsats-original",
+    "magnum-dynsats-original-2010-2014": "/exempel/magnum-dynsats-original",
+    "magnum-original-hamnkapell-02-10": "/exempel/magnum-hamnkapell",
+    "s51": "/exempel/s52",
+    "xxl-hamnkapell-2015-2019": "/exempel/xxl",
+    "xxl-originalkapell-2015-2019": "/exempel/xxl",
+}
 
 DEFAULT_DATABASE_URL = f"sqlite:///{(BASE_DIR / 'henricssons.db').as_posix()}"
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
@@ -44,6 +95,8 @@ MAILGUN_API_BASE = os.getenv("MAILGUN_API_BASE", "https://api.mailgun.net").stri
 
 DEFAULT_ALLOWED_ORIGINS = ",".join(
     [
+        "https://henricssonsbatkapell.se",
+        "https://www.henricssonsbatkapell.se",
         "https://henricssons.se",
         "https://www.henricssons.se",
         "https://henricssons-api.onrender.com",
@@ -56,6 +109,8 @@ DEFAULT_ALLOWED_ORIGINS = ",".join(
 ALLOWED_ORIGINS = {
     origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",") if origin.strip()
 }
+PRIMARY_PUBLIC_HOST = "www.henricssonsbatkapell.se"
+PUBLIC_HOST_ALIASES = {"henricssonsbatkapell.se", "www.henricssonsbatkapell.se"}
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -81,8 +136,10 @@ class FormSubmission(Base):
 
     def to_dict(self) -> Dict[str, Any]:
         submitted_via = "web_form"
+        notes = ""
         if isinstance(self.fields, dict):
             submitted_via = str(self.fields.get("__submitted_via", "web_form"))
+            notes = str(self.fields.get("__internal_notes", "") or "")
         return {
             "id": self.id,
             "form_type": self.form_type,
@@ -95,6 +152,7 @@ class FormSubmission(Base):
             "status": self.status,
             "read": self.read,
             "submitted_via": submitted_via,
+            "notes": notes,
         }
 
 
@@ -191,6 +249,21 @@ def admin_required(fn):
     return wrapper
 
 
+@app.before_request
+def enforce_public_host() -> Optional[Any]:
+    if request.method not in {"GET", "HEAD"}:
+        return None
+    host_header = request.headers.get("X-Forwarded-Host", request.host or "")
+    host = host_header.split(",")[0].strip().split(":")[0].lower()
+    if host not in PUBLIC_HOST_ALIASES:
+        return None
+    proto = request.headers.get("X-Forwarded-Proto", request.scheme or "http").split(",")[0].strip().lower()
+    if host == PRIMARY_PUBLIC_HOST and proto == "https":
+        return None
+    target = f"https://{PRIMARY_PUBLIC_HOST}{request.full_path}".rstrip("?")
+    return redirect(target, code=301)
+
+
 def read_json_file(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
@@ -225,6 +298,250 @@ def repair_mojibake_text(text: str) -> str:
         if candidate != core:
             return candidate
     return core
+
+
+def absolute_public_url(path: str) -> str:
+    if not path or path == "/":
+        return PUBLIC_BASE_URL
+    clean = path if path.startswith("/") else f"/{path}"
+    return f"{PUBLIC_BASE_URL}{clean}"
+
+
+def normalize_example_record(raw: Any, fallback_slug: str = "") -> Dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    images = raw.get("images") or []
+    if not isinstance(images, list):
+        images = []
+    return {
+        "manufacturer": str(raw.get("manufacturer", "") or "").strip(),
+        "model": str(raw.get("model", "") or "").strip(),
+        "description": str(raw.get("description", "") or "").strip(),
+        "variant": str(raw.get("variant", "") or "").strip(),
+        "delivery": str(raw.get("delivery", "") or "").strip(),
+        "category": str(raw.get("category", "") or "").strip(),
+        "images": [str(image or "").strip() for image in images if str(image or "").strip()],
+        "source": str(raw.get("source", "") or "").strip(),
+        "fallback_slug": fallback_slug.strip(),
+    }
+
+
+def extract_example_slug(source: str, fallback_slug: str = "") -> str:
+    source = str(source or "").strip()
+    if source:
+        parsed = urlparse(source)
+        path = parsed.path.strip("/")
+        if path.startswith("exempel/"):
+            return path.split("/", 1)[1].strip()
+    return fallback_slug.strip()
+
+
+def image_path_to_site_url(image_path: str) -> str:
+    clean = str(image_path or "").strip().replace("\\", "/")
+    if not clean:
+        return "/logo.png"
+    if clean.startswith("http://") or clean.startswith("https://") or clean.startswith("data:"):
+        return clean
+    if clean.startswith("assets/"):
+        return f"/{clean}"
+    if clean.startswith("henricssons_bilder/"):
+        return f"/{clean}"
+    return f"/henricssons_bilder/{clean.lstrip('/')}"
+
+
+def merge_example_records(base_record: Dict[str, Any], override_record: Dict[str, Any]) -> Dict[str, Any]:
+    fields = ("manufacturer", "model", "description", "variant", "delivery", "category", "source", "fallback_slug", "canonical_slug")
+    merged = dict(base_record or {})
+    for field in fields:
+        override_value = str(override_record.get(field, "") or "").strip()
+        if override_value:
+            merged[field] = override_value
+    base_images = list(base_record.get("images") or [])
+    override_images = list(override_record.get("images") or [])
+    if override_images and (not base_images or len(override_images) >= len(base_images)):
+        merged["images"] = override_images
+    else:
+        merged["images"] = base_images
+    return merged
+
+
+def build_example_registry() -> Dict[str, Dict[str, Any]]:
+    registry: Dict[str, Dict[str, Any]] = {}
+
+    models_meta = read_json_file(MODELS_META_FILE, {})
+    if isinstance(models_meta, dict):
+        for key, raw in models_meta.items():
+            normalized = normalize_example_record(raw, fallback_slug=str(key))
+            canonical_slug = extract_example_slug(normalized.get("source", ""), str(key))
+            normalized["canonical_slug"] = canonical_slug
+            if canonical_slug:
+                registry[canonical_slug] = merge_example_records(registry.get(canonical_slug, {}), normalized)
+            if key and str(key) != canonical_slug:
+                registry[str(key)] = merge_example_records(registry.get(str(key), {}), normalized)
+
+    examples_meta = read_json_file(EXAMPLES_META_FILE, {})
+    if isinstance(examples_meta, dict):
+        for key, raw in examples_meta.items():
+            fallback_slug = str(key).split("::", 1)[-1].strip()
+            normalized = normalize_example_record(raw, fallback_slug=fallback_slug)
+            canonical_slug = extract_example_slug(normalized.get("source", ""), fallback_slug)
+            normalized["canonical_slug"] = canonical_slug
+            if canonical_slug:
+                registry[canonical_slug] = merge_example_records(registry.get(canonical_slug, {}), normalized)
+            if fallback_slug and fallback_slug != canonical_slug:
+                registry[fallback_slug] = merge_example_records(registry.get(fallback_slug, {}), normalized)
+
+    return registry
+
+
+def list_canonical_examples() -> List[Dict[str, Any]]:
+    canonical_examples: Dict[str, Dict[str, Any]] = {}
+    for slug, record in build_example_registry().items():
+        canonical_slug = str(record.get("canonical_slug", "") or "").strip()
+        if not canonical_slug:
+            continue
+        record_with_slug = dict(record)
+        record_with_slug["canonical_slug"] = canonical_slug
+        canonical_examples[canonical_slug] = merge_example_records(canonical_examples.get(canonical_slug, {}), record_with_slug)
+    items = list(canonical_examples.values())
+    items.sort(key=lambda item: (str(item.get("manufacturer", "")).lower(), str(item.get("model", "")).lower(), str(item.get("canonical_slug", "")).lower()))
+    return items
+
+
+def render_public_page(title: str, description: str, canonical_path: str, content_html: str, og_image: str = "/logo.png") -> str:
+    canonical_url = absolute_public_url(canonical_path)
+    og_image_url = og_image if og_image.startswith("http://") or og_image.startswith("https://") else absolute_public_url(og_image)
+    return render_template_string(
+        """<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8"/>
+    <title>{{ title }}</title>
+    <meta name="description" content="{{ description }}"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css?v=20250630">
+    <link rel="icon" href="/logo.png">
+    <link rel="canonical" href="{{ canonical_url }}"/>
+    <meta property="og:title" content="{{ title }}"/>
+    <meta property="og:description" content="{{ description }}"/>
+    <meta property="og:image" content="{{ og_image_url }}"/>
+    <meta property="og:type" content="website"/>
+    <meta property="og:url" content="{{ canonical_url }}"/>
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="{{ title }}"/>
+    <meta name="twitter:description" content="{{ description }}"/>
+    <meta name="twitter:image" content="{{ og_image_url }}"/>
+    <style>
+        .seo-shell { min-height: 100vh; background: #f7f4ee; }
+        .seo-page { max-width: 1180px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+        .seo-hero { display: grid; gap: 1.25rem; margin-bottom: 2rem; }
+        .seo-kicker { color: #8b6f18; font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
+        .seo-breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; color: #5d5d5d; font-size: 0.92rem; margin-bottom: 1rem; }
+        .seo-breadcrumbs a { color: inherit; text-decoration: none; }
+        .seo-breadcrumbs a:hover { text-decoration: underline; }
+        .seo-grid { display: grid; gap: 2rem; grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr); align-items: start; }
+        .seo-card { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); box-shadow: 0 16px 40px rgba(10, 35, 66, 0.08); padding: 1.5rem; }
+        .seo-gallery { display: grid; gap: 0.9rem; }
+        .seo-gallery-main img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #ece7da; }
+        .seo-thumbs { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 0.75rem; }
+        .seo-thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #ece7da; }
+        .seo-meta { display: grid; gap: 0.9rem; }
+        .seo-meta-block { border-top: 1px solid rgba(10, 35, 66, 0.08); padding-top: 0.9rem; }
+        .seo-meta-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8b6f18; font-weight: 700; margin-bottom: 0.35rem; }
+        .seo-cta-row { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-top: 1.2rem; }
+        .seo-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 1.2rem; text-decoration: none; font-weight: 700; letter-spacing: 0.03em; border: 1px solid #0a2342; color: #0a2342; background: #fff; }
+        .seo-btn.seo-btn-primary { background: #c8a93f; border-color: #c8a93f; color: #0a2342; }
+        .seo-related { margin-top: 2.5rem; }
+        .seo-related-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+        .seo-related-card { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); text-decoration: none; color: #0a2342; overflow: hidden; }
+        .seo-related-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #ece7da; }
+        .seo-related-copy { padding: 1rem; }
+        .seo-search-form { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.2rem 0 1.8rem; }
+        .seo-search-form input { flex: 1 1 260px; min-height: 48px; padding: 0 1rem; border: 1px solid rgba(10, 35, 66, 0.16); font: inherit; }
+        .seo-search-list { display: grid; gap: 0.9rem; }
+        .seo-search-item { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); padding: 1rem 1.1rem; display: grid; gap: 0.35rem; }
+        @media (max-width: 900px) {
+            .seo-grid { grid-template-columns: 1fr; }
+            .seo-page { padding-top: 2rem; }
+        }
+    </style>
+</head>
+<body class="seo-shell">
+    <header class="header">
+        <nav class="navbar">
+            <a href="/" class="nav-logo">
+                <img src="/logo.png" alt="Henricssons Båtkapell Logo"/>
+            </a>
+            <button class="menu-btn" aria-label="Toggle menu">
+                <span class="menu-line"></span>
+                <span class="menu-line"></span>
+                <span class="menu-line"></span>
+            </button>
+            <div class="nav-menu">
+                <a href="/om-oss" class="nav-link">Om oss</a>
+                <a href="/kapellforfragan" class="nav-link">Kapellförfrågan</a>
+                <a href="/bilder-och-exempel" class="nav-link">Bilder & exempel</a>
+                <a href="/tillbehor" class="nav-link">Fenderstrumpor</a>
+                <a href="/kontakt" class="nav-link">Kontakt</a>
+            </div>
+        </nav>
+    </header>
+    <div class="cta-line--nav"></div>
+    <div class="nav-rugged-border"></div>
+
+    {{ content_html | safe }}
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <img src="/logo.png" alt="Henricssons Båtkapell Logo" class="footer-logo"/>
+                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
+                <p>Vi gör kapell till många olika typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller</p>
+            </div>
+            <div class="footer-section">
+                <h2 style="text-align:left;">Partners</h2>
+                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
+                <div class="partners-grid">
+                    <img src="/assets/jens sagen.png" alt="Jens Sagen" class="partner-logo"/>
+                    <img src="/assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" class="partner-logo"/>
+                    <img src="/assets/Varuste.png" alt="VA Varuste" class="partner-logo"/>
+                    <img src="/assets/schultz.png" alt="Schultz Kalecher" class="partner-logo"/>
+                    <img src="/assets/mpvenekuomo.png" alt="MP Venekuomu" class="partner-logo" style="grid-column: span 2;"/>
+                </div>
+            </div>
+            <div class="footer-section">
+                <h2 style="text-align:left;">Kontakt</h2>
+                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
+                <p>
+                    +46 (0)31 471820<br/>
+                    Energigatan 17E<br/>
+                    434 37 Kungsbacka<br/>
+                    <a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a>
+                </p>
+                <div class="credit-rating">
+                    <img src="/KV.svg" alt="Kreditvärdighet" class="credit-logo"/>
+                    <div class="credit-text">
+                        <div class="credit-title">HÖGSTA KREDITVÄRDIGHET</div>
+                        <div class="credit-company">Henricssons Båtkapell AB</div>
+                        <div class="credit-details">556799-2192 | 2025-11-25</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <script src="/script.js"></script>
+    <script src="/chat_widget.js?v=20260416d"></script>
+</body>
+</html>""",
+        title=title,
+        description=description,
+        canonical_url=canonical_url,
+        og_image_url=og_image_url,
+        content_html=content_html,
+    )
 
 
 def auto_repair_static_text_files() -> List[Path]:
@@ -280,20 +597,22 @@ def get_site_content(key: str) -> Optional[Any]:
 
 DEFAULT_FORM_PROMPTS: Dict[str, str] = {
     "Kapellforfragan": (
-        "Du svarar på kapellförfrågningar för Henricssons Båtkapell. "
-        "Svara kort, professionellt och affärsdrivande. "
-        "Bekräfta kundens båt/kapellbehov och be om de viktigaste saknade detaljerna för offert/måttagning. "
-        "Fråga bara relevanta följdfrågor som tar ärendet till nästa steg."
+        "Du svarar på inkomna kapellförfrågningar för Henricssons Båtkapell. "
+        "Svara kort, tryggt och professionellt på svenska. "
+        "Bekräfta båt och behov, ge ett tydligt nästa steg och be bara om komplettering "
+        "om någon avgörande uppgift saknas för offert eller måttagning."
     ),
     "Fenderforfragan": (
-        "Du svarar på förfrågningar om fenderstrumpor. "
-        "Svara kort, tydligt och affärsdrivande på svenska. "
-        "Bekräfta antal/storlek och be om endast relevanta saknade uppgifter för att kunna lägga offert/order."
+        "Du svarar på inkomna förfrågningar om fenderstrumpor. "
+        "Svara kort, tydligt och professionellt på svenska. "
+        "Bekräfta antal och storlek, ge ett tydligt nästa steg och be bara om komplettering "
+        "om någon avgörande uppgift saknas för offert eller order."
     ),
     "Kontakt": (
         "Du svarar på allmänna kontaktförfrågningar. "
         "Svara kort, hjälpsamt och professionellt på svenska. "
-        "Identifiera syftet snabbt och ställ endast relevanta följdfrågor som gör att vi kan återkomma med tydligt nästa steg."
+        "Identifiera syftet snabbt, svara direkt om möjligt och be bara om den komplettering "
+        "som verkligen behövs för ett tydligt nästa steg."
     ),
 }
 
@@ -312,77 +631,35 @@ DEFAULT_ADMIN_CHAT_PROMPT = (
 
 DEFAULT_PUBLIC_ASSISTANT_PROMPT = """
 Du är receptionist för Henricssons Båtkapell i Kungsbacka.
-Du låter som en riktig människa i receptionen: varm, tydlig, kort och professionell.
+Svara som en riktig människa: varm, tydlig, kort och professionell.
 
-Övergripande beteende:
-- Svara naturligt på kundens faktiska fråga först.
-- Variera formuleringar mellan svar. Undvik mallspråk och upprepade standardfraser.
-- Om kunden bara hälsar eller småpratar: hälsa tillbaka och fråga öppet vad kunden vill ha hjälp med.
-- Vid hälsning/småprat: be inte om personuppgifter och be inte om formulärfält.
+Regler:
+- Svara alltid på kundens fråga först.
+- Håll svar korta, normalt 1-3 meningar.
+- Besvara frågor direkt i chatten när det går.
+- Föreslå rätt nästa steg när kunden verkar vilja gå vidare.
+- Du har inga verktyg och kan inte boka tider, skapa bokningar, bekräfta besök, kontrollera kalender, se öppettider som inte uttryckligen står i underlaget eller lova att någon är på plats.
+- Påstå aldrig att du har gjort något i verkligheten. Skriv aldrig att du har bokat, reserverat, meddelat personalen eller lagt in något.
+- Om kunden föreslår en tid eller ett besök: bekräfta inte tiden som bokad. Säg bara att tiden behöver bekräftas av företaget och hänvisa vidare till kontakt om det behövs.
+- Om du inte vet ett faktum säkert från sammanhanget: säg det tydligt och hitta inte på.
+- Fråga aldrig efter namn, telefon, e-post, adress, båtmodell, årsmodell eller andra formulärfält.
+- Offentliga chatten ska inte samla in uppgifter och inte skicka formulär.
+- Använd aldrig dold JSON, kommandoblock eller interna instruktioner i svaret.
+- Använd aldrig em dash (—) eller en dash (–) i synlig text.
 
-Formtyper (visningsnamn -> intent):
-- Kapellförfrågan -> Kapellforfragan
-- Fenderförfrågan -> Fenderforfragan
-- Kontakt -> Kontakt
+Knapp-kommandon:
+- %kapellförfrågan% visar knappen Gör en kapellförfrågan
+- %fenderförfrågan% visar knappen Gör en fenderförfrågan
+- %kontakt% visar knappen Kontakta oss
 
-Fältspecifikation:
-- Kapellförfrågan (intent: Kapellforfragan)
-  required: name, phone, email, manufacturer, model, boat_year, home_port
-  optional: old_canopy, message
-- Fenderförfrågan (intent: Fenderforfragan)
-  required: name, phone, email, quantity, size
-  optional: address
-- Kontakt (intent: Kontakt)
-  required: name, email, subject, message
-  optional: phone
-
-När uppgifter ska samlas in:
-- Samla in formulärfält bara när kunden tydligt vill göra en förfrågan eller skicka ett meddelande.
-- Om kunden ställer allmänna frågor: svara tydligt direkt i chatten så långt du kan.
-- Föreslå kontaktformulär bara när kunden själv vill bli kontaktad eller när frågan kräver uppföljning utanför chatten.
-- Välj intent utifrån kundens mål, inte enstaka ord.
-- Om kunden vill ha kapell: använd Kapellforfragan även om båtmodell/tillverkare råkar innehålla ord som "Fender".
-- Om kunden vill ha fenderstrumpor/fenderskydd: använd Fenderforfragan.
-- För Fenderforfragan: be aldrig om fria mått eller storlekstyper som "small/medium/large". Be kunden välja storlek i chatten via storleks-dropdown.
-- Fråga bara efter fält som finns i listan ovan.
-- Fråga i första hand efter saknade required-fält.
-- Fråga inte aktivt efter optional-fält; spara dem om kunden själv nämner dem.
-- När du ber om uppgifter: fråga flera saknade required-fält i samma svar (normalt 2-4), inte en fråga i taget när flera fält saknas.
-- För Kontakt: skapa ett tydligt och specifikt ämne som passar meddelandets innehåll. Undvik generiska ämnen som "Kontaktförfrågan" om mer specifik rubrik går att skriva.
-- För Kontakt: när draft.message sätts, renskriv kundens text till korrekt och professionell svenska/engelska, men behåll exakt innebörd, fakta, namn, siffror och önskemål.
-
-Stilregler:
-- Svara på samma språk som kunden använder. Om oklart: svenska.
-- Håll svar korta, 1-3 meningar.
-- Inga metakommentarer eller robotfraser.
-- Uppfinn aldrig uppgifter.
-- HÅRD REGEL: använd aldrig em dash (—) eller en dash (–) i synlig chattext.
-- Om du annars hade använt långt streck: skriv i stället vanligt bindestreck (-), kolon (:) eller punkt (.).
-- Använd inte fasta fraser som "Jag behöver följande information" i varje svar.
-
-Outputprotokoll:
-- Skriv ALLTID synlig chattext till kunden (vanlig text eller markdown).
-- Skriv ALDRIG ren JSON i den synliga chattexten.
-- Om ingen state-uppdatering behövs: skriv ingen kommandodel.
-- Om state ska uppdateras: lägg sist i svaret ett dolt kommandoblock exakt så här:
-  [[CMD]]{...giltig JSON...}[[/CMD]]
-- JSON i kommandoblocket får ENDAST innehålla nycklarna:
-  intent, draft, missing_fields, needs_confirmation, ready_to_submit, summary
-
-Regler för kommandot:
-- Sätt intent först när du gör första sammanfattningen i kommandoblocket.
-- intent ska då vara exakt "Kapellforfragan" eller "Fenderforfragan" eller "Kontakt".
-- ready_to_submit = true först när du har gjort en slutlig sammanfattning och allt som krävs finns.
-- needs_confirmation = false tills alla required-fält finns; sätt needs_confirmation = true först när ready_to_submit = true.
-- Intent, draft och summary ska komma från din egen förståelse av hela konversationen (history + aktuellt meddelande), inte från någon backend-extraktion.
-- I kommandots draft använder du interna nycklar (name, phone, email, manufacturer, model, osv).
-- För intent Kontakt: sätt draft.subject till en kort, specifik ämnesrad (ca 3-8 ord) baserat på kundens ärende.
-- För intent Kontakt: sätt draft.message till en renskriven version av kundens meddelande med samma innehåll.
-- Sätt summary till tom sträng ("") tills alla required-fält finns.
-- Sätt summary först i slutläget när ready_to_submit = true.
-- När du inkluderar kommandoblock med sammanfattning eller ready_to_submit=true: avsluta alltid synlig chattext med en kort bekräftelsefråga, t.ex. "Stämmer detta?".
-- I synlig chattext använder du mänskliga fältnamn på svenska.
-- Lägg sammanfattningen i command.summary när state uppdateras, inte som lång blocktext i synlig chat.
+När du ska använda knapp-kommandon:
+- Använd %kapellförfrågan% när kunden bör gå till kapell-sidan för att komma vidare.
+- Använd %fenderförfrågan% när kunden bör gå till fender-sidan för att komma vidare.
+- Använd %kontakt% när kunden bör gå till kontakt-sidan för att komma vidare.
+- Skriv bara kommandot när du verkligen rekommenderar den vägen.
+- Använd högst ett sådant kommando i samma svar.
+- Lägg kommandot sist på en egen rad.
+- Om ingen knapp behövs: skriv inget kommando alls.
 """
 
 DEFAULT_AI_SETTINGS: Dict[str, str] = {
@@ -768,6 +1045,13 @@ def save_submission_record(submission: Dict[str, Any]) -> None:
     write_json_file(FORM_SUBMISSIONS_FILE, records)
 
 
+def get_submission_notes(row: Dict[str, Any]) -> str:
+    fields = row.get("fields", {})
+    if isinstance(fields, dict):
+        return str(fields.get("__internal_notes", "") or "")
+    return ""
+
+
 def get_mailgun_recipients() -> List[str]:
     if not MAILGUN_TO_RAW:
         return []
@@ -775,26 +1059,141 @@ def get_mailgun_recipients() -> List[str]:
     return [item for item in recipients if item]
 
 
-def build_notification_html(form_type: str, fields: Dict[str, str], submission_id: str, timestamp_iso: str) -> str:
-    rows = []
-    for key, value in fields.items():
-        if key == "__submitted_via":
+FIELD_LABELS_SV: Dict[str, str] = {
+    "name": "Namn",
+    "email": "E-post",
+    "phone": "Telefonnummer",
+    "address": "Adress",
+    "postal_code": "Postnummer",
+    "city": "Ort",
+    "boat_brand": "Båtmärke",
+    "boat_model": "Båtmodell",
+    "boat_year": "Årsmodell",
+    "home_port": "Hemmahamn",
+    "wants_cover": "Önskar kapell",
+    "wants_fender_socks": "Önskar fenderstrumpor",
+    "size": "Storlek",
+    "quantity": "Antal",
+    "subject": "Ämne",
+    "message": "Meddelande",
+}
+
+FORM_TYPE_LABELS_SV: Dict[str, str] = {
+    "Kapellforfragan": "Kapellförfrågan",
+    "Fenderforfragan": "Fenderförfrågan",
+    "Kontakt": "Kontaktärende",
+}
+
+FIELD_ORDER = [
+    "name", "email", "phone", "address", "postal_code", "city",
+    "boat_brand", "boat_model", "boat_year", "home_port",
+    "wants_cover", "wants_fender_socks", "size", "quantity",
+    "subject", "message",
+]
+
+
+def _label(key: str) -> str:
+    return FIELD_LABELS_SV.get(key) or key.replace("_", " ").capitalize()
+
+
+def _humanize_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "Ja" if value else "Nej"
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if s.lower() in ("true", "yes"):
+        return "Ja"
+    if s.lower() in ("false", "no"):
+        return "Nej"
+    return s
+
+
+def build_notification_html(form_type: str, fields: Dict[str, Any], submission_id: str, timestamp_iso: str) -> str:
+    form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
+
+    # Build ordered rows, then any remaining keys not in FIELD_ORDER
+    ordered_keys = [k for k in FIELD_ORDER if k in fields]
+    extra_keys = [k for k in fields if k not in FIELD_ORDER and k != "__submitted_via"]
+    all_keys = ordered_keys + extra_keys
+
+    rows_html = ""
+    for i, key in enumerate(all_keys):
+        raw = fields.get(key, "")
+        val = _humanize_value(raw)
+        if not val:
             continue
-        safe_key = html.escape(str(key))
-        safe_val = html.escape(str(value or ""))
-        rows.append(f"<tr><td style='padding:6px 10px;border:1px solid #ddd;'><strong>{safe_key}</strong></td><td style='padding:6px 10px;border:1px solid #ddd;'>{safe_val}</td></tr>")
-    rows_html = "".join(rows) if rows else "<tr><td style='padding:6px 10px;border:1px solid #ddd;' colspan='2'><em>Inga fält hittades</em></td></tr>"
-    return (
-        "<div style='font-family:Arial,sans-serif;'>"
-        "<h2>Ny formulärförfrågan</h2>"
-        f"<p><strong>Formulär:</strong> {html.escape(form_type)}<br/>"
-        f"<strong>ID:</strong> {html.escape(submission_id)}<br/>"
-        f"<strong>Tid (UTC):</strong> {html.escape(timestamp_iso)}</p>"
-        "<table style='border-collapse:collapse;width:100%;max-width:900px;'>"
-        f"{rows_html}"
-        "</table>"
-        "</div>"
-    )
+        bg = "#ffffff" if i % 2 == 0 else "#f8f9fb"
+        label_cell = (
+            f"<td style='padding:11px 16px;border-bottom:1px solid #e8edf3;"
+            f"background:{bg};font-weight:600;color:#4a5568;"
+            f"font-size:13px;width:38%;white-space:nowrap;'>"
+            f"{html.escape(_label(key))}</td>"
+        )
+        val_cell = (
+            f"<td style='padding:11px 16px;border-bottom:1px solid #e8edf3;"
+            f"background:{bg};color:#1a202c;font-size:14px;"
+            f"word-break:break-word;'>{html.escape(val)}</td>"
+        )
+        rows_html += f"<tr>{label_cell}{val_cell}</tr>"
+
+    if not rows_html:
+        rows_html = (
+            "<tr><td colspan='2' style='padding:12px 16px;color:#718096;"
+            "font-style:italic;'>Inga fält</td></tr>"
+        )
+
+    # Format timestamp nicely
+    try:
+        from datetime import datetime, timezone
+        dt = datetime.fromisoformat(timestamp_iso.replace("Z", "+00:00"))
+        local_str = dt.strftime("%d %b %Y, %H:%M") + " UTC"
+    except Exception:
+        local_str = html.escape(timestamp_iso)
+
+    return f"""<!DOCTYPE html>
+<html lang="sv">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
+<tr><td align="center">
+<table width="100%" style="max-width:580px;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(10,29,51,0.12);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:linear-gradient(135deg,#0f2945 0%,#0a1d33 100%);padding:28px 32px;text-align:center;">
+      <div style="display:inline-block;background:linear-gradient(145deg,#c9a24a,#a8832d);border-radius:10px;padding:8px 14px;margin-bottom:14px;">
+        <span style="color:#0a1d33;font-weight:800;font-size:13px;letter-spacing:0.1em;">HENRICSSONS</span>
+      </div>
+      <div style="color:#ffffff;font-size:22px;font-weight:700;margin-bottom:4px;">Ny {form_label}</div>
+      <div style="color:rgba(255,255,255,0.6);font-size:13px;">{local_str}</div>
+    </td>
+  </tr>
+
+  <!-- Fields table -->
+  <tr>
+    <td style="background:#ffffff;padding:0;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        {rows_html}
+      </table>
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:#f8f9fb;padding:18px 32px;border-top:1px solid #e8edf3;">
+      <p style="margin:0;color:#a0aec0;font-size:12px;text-align:center;">
+        Referens-ID: {html.escape(submission_id)}<br>
+        Henricssonsbåtkapell.se — automatiskt meddelande
+      </p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
 
 
 def send_mailgun_email(*, recipients: List[str], subject: str, text_body: str, html_body: str) -> Tuple[bool, str]:
@@ -835,13 +1234,19 @@ def send_mailgun_submission_notification(submission: Dict[str, Any]) -> None:
         fields = {}
     submission_id = str(submission.get("id", ""))
     timestamp_iso = str(submission.get("timestamp", ""))
-    subject = f"Ny förfrågan: {form_type}"
+    form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
+    subject = f"Ny {form_label} — Henricssons"
+    field_lines = "\n".join(
+        f"  {_label(k)}: {_humanize_value(v)}"
+        for k, v in fields.items()
+        if k != "__submitted_via" and _humanize_value(v)
+    )
     text_body = (
-        f"Ny formulärförfrågan\n\n"
-        f"Formulär: {form_type}\n"
+        f"Ny {form_label}\n"
+        f"{'=' * (len(form_label) + 4)}\n\n"
+        f"{field_lines}\n\n"
+        f"Tid (UTC): {timestamp_iso}\n"
         f"ID: {submission_id}\n"
-        f"Tid (UTC): {timestamp_iso}\n\n"
-        f"Sammanfattning:\n{submission.get('form_summary', '')}"
     )
     html_body = build_notification_html(form_type, fields, submission_id, timestamp_iso)
     ok, info = send_mailgun_email(recipients=recipients, subject=subject, text_body=text_body, html_body=html_body)
@@ -887,6 +1292,7 @@ def get_all_submissions() -> List[Dict[str, Any]]:
                 copy_row["submitted_via"] = copy_row["fields"].get("__submitted_via", "web_form")
             else:
                 copy_row["submitted_via"] = "web_form"
+        copy_row["notes"] = get_submission_notes(copy_row)
         file_normalized.append(copy_row)
 
     db = get_db()
@@ -944,6 +1350,53 @@ def update_submission_status_record(submission_id: str, status: Optional[str], r
                 row["status"] = status
             if read is not None:
                 row["read"] = read
+            found = True
+            break
+    if found:
+        write_json_file(FORM_SUBMISSIONS_FILE, rows)
+    return found
+
+
+def update_submission_notes_record(submission_id: str, notes: str) -> bool:
+    sanitized_notes = str(notes or "").strip()
+    updated = False
+    db = get_db()
+    if db:
+        try:
+            row = db.query(FormSubmission).filter_by(id=submission_id).first()
+            if row:
+                fields = row.fields if isinstance(row.fields, dict) else {}
+                next_fields = dict(fields)
+                if sanitized_notes:
+                    next_fields["__internal_notes"] = sanitized_notes
+                else:
+                    next_fields.pop("__internal_notes", None)
+                row.fields = next_fields
+                db.commit()
+                updated = True
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
+    if updated:
+        return True
+
+    rows = read_json_file(FORM_SUBMISSIONS_FILE, [])
+    if not isinstance(rows, list):
+        return False
+    found = False
+    for row in rows:
+        if isinstance(row, dict) and row.get("id") == submission_id:
+            fields = row.get("fields", {})
+            if not isinstance(fields, dict):
+                fields = {}
+            next_fields = dict(fields)
+            if sanitized_notes:
+                next_fields["__internal_notes"] = sanitized_notes
+            else:
+                next_fields.pop("__internal_notes", None)
+            row["fields"] = next_fields
+            row["notes"] = sanitized_notes
             found = True
             break
     if found:
@@ -1200,6 +1653,13 @@ def sanitize_visible_reply_text(reply: str) -> str:
     return text
 
 
+ROUTE_REPLY_TOKENS = {
+    "Kapellforfragan": "%kapellförfrågan%",
+    "Fenderforfragan": "%fenderförfrågan%",
+    "Kontakt": "%kontakt%",
+}
+
+
 def detect_intent_from_draft(draft: Dict[str, Any]) -> str:
     if not isinstance(draft, dict):
         return ""
@@ -1370,6 +1830,22 @@ def delete_submission_route():
     if not deleted:
         return jsonify(error="Submission not found"), 404
     return jsonify(success=True)
+
+
+@app.route("/api/update_submission_notes", methods=["POST"])
+@admin_required
+def update_submission_notes_route():
+    payload = request.get_json()
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    submission_id = str(payload.get("id", "")).strip()
+    if not submission_id:
+        return jsonify(error="Missing id"), 400
+    notes = str(payload.get("notes", "") or "")
+    updated = update_submission_notes_record(submission_id, notes)
+    if not updated:
+        return jsonify(error="Submission not found"), 404
+    return jsonify(success=True, notes=notes.strip())
 
 
 @app.route("/api/form_prompts", methods=["GET", "POST"])
@@ -1603,7 +2079,12 @@ def assistant_chat():
                 "free_text_disallowed": True,
                 "note_sv": "Storlek väljs av kunden i storleks-dropdownen i chatten.",
                 "note_en": "Size is selected by the customer in the chat size dropdown.",
-            }
+            },
+            "route_actions": {
+                "Kapellforfragan": "/kapellforfragan#contact-form",
+                "Fenderforfragan": "/tillbehor#fenderForm",
+                "Kontakt": "/kontakt#contactForm",
+            },
         },
         "field_spec": {
             "Kapellforfragan": {
@@ -1680,22 +2161,14 @@ def assistant_chat():
         f"- Visible reply must be normal user-facing chat text.\n"
         "- Visible reply text is mandatory and cannot be empty.\n"
         "- Critical style rule: never use em dash (—) or en dash (–) in visible text; use '-' or ':' or '.' instead.\n"
-        f"- Optional hidden command block markers are exactly: {ASSISTANT_COMMAND_START} and {ASSISTANT_COMMAND_END}.\n"
-        "- If command block is present, JSON inside must use keys only: intent, draft, missing_fields, needs_confirmation, ready_to_submit, summary.\n"
-        "- You are the source of truth for intent, draft and summary based on the full conversation context.\n"
-        "- The backend does not infer intent or extract fields from raw customer text.\n"
-        "- Re-evaluate intent on every user message and current state.\n"
-        "- Answer customer questions directly in chat whenever possible; do not default to asking for contact form.\n"
-        "- For Fenderforfragan size: do not ask for free-text measurements or S/M/L style sizes. Ask user to choose size in the chat dropdown.\n"
-        "- When required fields are missing, ask for multiple missing required fields in the same reply (normally 2-4), not one at a time.\n"
-        "- Never put the full field summary in visible chat text; keep it in command.summary only.\n"
-        "- Keep summary as empty string until all required fields are present.\n"
-        "- As soon as all required fields for selected intent are present, set ready_to_submit=true, needs_confirmation=true and include summary.\n"
-        "- For Kapellforfragan, boat_year and home_port are required.\n"
-        "- For Kontakt intent: set draft.subject to a short specific subject inferred from the message. Avoid generic subject lines when a specific one is possible.\n"
-        "- For Kontakt intent: set draft.message to a cleaned, professional rewrite of the user's message in the same language, preserving meaning and facts.\n"
-        "- If command block includes summary or ready_to_submit=true, end visible text with a short confirmation question (example in Swedish: 'Stämmer detta?').\n"
-        "- If you do not need to update state, do not include any command block."
+        "- Answer customer questions directly in chat whenever possible.\n"
+        "- Never pretend to book, reserve, schedule, confirm a visit, confirm a time slot, or perform any real-world action.\n"
+        "- Never claim you checked availability, a calendar, opening hours, or staff presence unless that exact information is explicitly present in the provided context.\n"
+        "- If the customer suggests a time or visit, do not confirm it as booked. State that it must be confirmed by the company.\n"
+        "- Never ask the customer for contact details or other form fields in public chat.\n"
+        "- Never use hidden command blocks or JSON in the reply.\n"
+        "- Only show route buttons by writing one of these exact visible tokens on its own line at the end: %kapellförfrågan% or %fenderförfrågan% or %kontakt%.\n"
+        "- Do not rely on hidden recommended_action or any other hidden command. Only the visible %...% token should trigger a button.\n"
     )
     user_prompt = json.dumps(request_blob, ensure_ascii=False)
     try:
@@ -1726,53 +2199,18 @@ def assistant_chat():
         except Exception:
             pass
 
-    command_data = model_command if isinstance(model_command, dict) else {}
-    model_intent = normalize_intent(str(command_data.get("intent", "")))
-    base_intent = payload_intent if payload_intent in VALID_INTENTS else ""
-    intent = model_intent if model_intent in VALID_INTENTS else base_intent
-
-    parsed_draft: Dict[str, str] = {}
-    raw_model_draft = command_data.get("draft", {})
-    if isinstance(raw_model_draft, dict):
-        for key, value in raw_model_draft.items():
-            key_str = canonicalize_draft_key(str(key))
-            if not key_str:
-                continue
-            parsed_draft[key_str] = str(value or "").strip()[:1000]
-
-    merged_source = dict(draft)
-    merged_source.update(parsed_draft)
-    if intent not in VALID_INTENTS:
-        inferred_from_draft = detect_intent_from_draft(merged_source)
-        intent = inferred_from_draft if inferred_from_draft in VALID_INTENTS else "Kontakt"
-    merged_draft = normalize_draft(intent, merged_source)
-
-    missing_fields = compute_missing_fields(intent, merged_draft)
-    model_ready = bool(command_data.get("ready_to_submit", False))
-    ready_to_submit = bool(intent in VALID_INTENTS and model_ready and not missing_fields)
-    needs_confirmation = bool(command_data.get("needs_confirmation", ready_to_submit)) if ready_to_submit else False
-    confirmed = explicit_confirmation and ready_to_submit
-    summary = str(command_data.get("summary", "") or "").strip()
-    summary = sanitize_visible_reply_text(summary)
+    merged_draft: Dict[str, str] = {}
+    intent = ""
+    missing_fields: List[str] = []
+    ready_to_submit = False
+    needs_confirmation = False
+    confirmed = False
+    summary = ""
     submit_command: Optional[Dict[str, Any]] = None
-    if ready_to_submit:
-        cmd_form_type, cmd_fields = map_draft_to_submission(intent, merged_draft)
-        submit_command = {
-            "action": "assistant_submit",
-            "form_type": cmd_form_type,
-            "fields": cmd_fields,
-            "payload": {
-                "intent": intent,
-                "draft": merged_draft,
-                "confirmed": True,
-            },
-        }
     reply = str(reply or "").strip()
     if not reply:
         return jsonify(error="AI returned empty visible reply"), 502
     response_language = requested_language
-    if ready_to_submit and summary:
-        reply = ensure_confirmation_question(reply, response_language)
     reply = sanitize_visible_reply_text(reply)
 
     return jsonify(
@@ -1787,6 +2225,7 @@ def assistant_chat():
             "confirmed": confirmed,
             "language": response_language,
             "summary": summary,
+            "recommended_action": "",
             "submit_command": submit_command,
         }
     )
@@ -1820,6 +2259,230 @@ def assistant_submit():
         return jsonify(success=True, submission_id=submission_id, form_type=form_type)
     except Exception as exc:
         return jsonify(error=f"Could not submit form: {exc}"), 500
+
+
+@app.route("/robots.txt", methods=["GET"])
+def robots_txt():
+    return Response(
+        f"User-agent: *\nAllow: /\nSitemap: {PUBLIC_BASE_URL}/sitemap.xml\n",
+        mimetype="text/plain",
+    )
+
+
+@app.route("/sitemap.xml", methods=["GET"])
+def sitemap_xml():
+    urls = [absolute_public_url(path) for path in CORE_PUBLIC_PATHS]
+    urls.extend(absolute_public_url(f"/exempel/{item['canonical_slug']}") for item in list_canonical_examples())
+    xml_lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    seen: set[str] = set()
+    for url in urls:
+        if url in seen:
+            continue
+        seen.add(url)
+        xml_lines.append("  <url>")
+        xml_lines.append(f"    <loc>{html.escape(url)}</loc>")
+        xml_lines.append("  </url>")
+    xml_lines.append("</urlset>")
+    return Response("\n".join(xml_lines), mimetype="application/xml")
+
+
+@app.route("/search", methods=["GET"])
+def search_page():
+    query = str(request.args.get("q") or request.args.get("query") or "").strip()
+    query_lower = query.lower()
+    examples = list_canonical_examples()
+    if query_lower:
+        results = [
+            item
+            for item in examples
+            if query_lower in " ".join(
+                [
+                    str(item.get("manufacturer", "")),
+                    str(item.get("model", "")),
+                    str(item.get("category", "")),
+                    str(item.get("variant", "")),
+                    str(item.get("description", "")),
+                ]
+            ).lower()
+        ]
+    else:
+        results = examples[:48]
+
+    result_items: List[str] = []
+    for item in results[:120]:
+        slug = str(item.get("canonical_slug", "") or "").strip()
+        if not slug:
+            continue
+        title_text = " ".join(part for part in [str(item.get("manufacturer", "")).strip(), str(item.get("model", "")).strip()] if part).strip() or slug
+        summary = str(item.get("description", "") or item.get("variant", "") or item.get("delivery", "") or GENERIC_EXAMPLE_DESCRIPTION).strip()
+        result_items.append(
+            f"""
+            <article class="seo-search-item">
+                <div class="seo-kicker">{html.escape(str(item.get('category', '') or 'Exempel'))}</div>
+                <h2 style="margin:0; font-size:1.25rem;"><a href="/exempel/{html.escape(slug)}" style="color:inherit; text-decoration:none;">{html.escape(title_text)}</a></h2>
+                <p style="margin:0; color:#5d5d5d;">{html.escape(summary[:260])}</p>
+                <div><a class="seo-btn" href="/exempel/{html.escape(slug)}">Läs mer</a></div>
+            </article>
+            """
+        )
+
+    content_html = f"""
+    <main class="seo-page">
+        <section class="seo-hero">
+            <div class="seo-breadcrumbs"><a href="/">Start</a><span>/</span><span>Search</span></div>
+            <div class="seo-kicker">Search</div>
+            <h1>Search results</h1>
+            <p>Sök bland exempel på båtkapell, sprayhoods, hamnkapell och andra projekt från Henricssons Båtkapell.</p>
+            <form class="seo-search-form" method="get" action="/search">
+                <input type="search" name="q" value="{html.escape(query)}" placeholder="Sök båt, tillverkare eller modell"/>
+                <button type="submit" class="seo-btn seo-btn-primary">Sök</button>
+            </form>
+            <p style="margin:0; color:#5d5d5d;">{len(results)} träffar{f" för '{html.escape(query)}'" if query else ''}.</p>
+        </section>
+        <section class="seo-search-list">
+            {''.join(result_items) if result_items else '<div class="seo-card"><p style="margin:0;">Inga träffar hittades.</p></div>'}
+        </section>
+    </main>
+    """
+    return render_public_page(
+        title="Search Results",
+        description="Sök bland exempel och projekt från Henricssons Båtkapell.",
+        canonical_path="/search",
+        content_html=content_html,
+    )
+
+
+@app.route("/exempel/<path:slug>", methods=["GET"])
+def example_page(slug: str):
+    clean_slug = slug.strip().rstrip("/")
+    if clean_slug.endswith(".html"):
+        return redirect(f"/exempel/{clean_slug[:-5]}", code=301)
+    if clean_slug in LEGACY_EXAMPLE_REDIRECTS:
+        return redirect(LEGACY_EXAMPLE_REDIRECTS[clean_slug], code=301)
+
+    registry = build_example_registry()
+    item = registry.get(clean_slug)
+    if not item:
+        abort(404)
+
+    canonical_slug = str(item.get("canonical_slug", "") or clean_slug).strip()
+    if clean_slug != canonical_slug:
+        return redirect(f"/exempel/{canonical_slug}", code=301)
+
+    manufacturer = str(item.get("manufacturer", "") or "").strip()
+    model = str(item.get("model", "") or "").strip()
+    full_title = " ".join(part for part in [manufacturer, model] if part).strip() or canonical_slug
+    page_title = f"{full_title} - Henricssons Båtkapell"
+    page_description = str(item.get("description", "") or "").strip() or GENERIC_EXAMPLE_DESCRIPTION
+    image_urls = [image_path_to_site_url(image) for image in item.get("images") or []]
+    if not image_urls:
+        image_urls = ["/logo.png"]
+
+    gallery_html = f"""
+    <div class="seo-gallery">
+        <div class="seo-gallery-main">
+            <img src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="eager"/>
+        </div>
+        <div class="seo-thumbs">
+            {''.join(f'<img src="{html.escape(image)}" alt="{html.escape(full_title)}" loading="lazy"/>' for image in image_urls[:8])}
+        </div>
+    </div>
+    """
+
+    description_parts = []
+    if str(item.get("description", "")).strip():
+        for paragraph in str(item.get("description", "")).strip().splitlines():
+            paragraph = paragraph.strip()
+            if paragraph:
+                description_parts.append(f"<p>{html.escape(paragraph)}</p>")
+    else:
+        description_parts.append(f"<p>{html.escape(GENERIC_EXAMPLE_DESCRIPTION)}</p>")
+
+    meta_html = f"""
+    <div class="seo-meta">
+        <div class="seo-meta-block" style="border-top:0; padding-top:0;">
+            <div class="seo-meta-label">Beskrivning</div>
+            {''.join(description_parts)}
+        </div>
+        <div class="seo-meta-block">
+            <div class="seo-meta-label">Variant</div>
+            <p>{html.escape(str(item.get('variant', '') or '-'))}</p>
+        </div>
+        <div class="seo-meta-block">
+            <div class="seo-meta-label">Leveransinfo</div>
+            <p>{html.escape(str(item.get('delivery', '') or '-'))}</p>
+        </div>
+        <div class="seo-meta-block">
+            <div class="seo-meta-label">Kategori</div>
+            <p>{html.escape(str(item.get('category', '') or '-'))}</p>
+        </div>
+        <div class="seo-cta-row">
+            <a class="seo-btn seo-btn-primary" href="/kapellforfragan">Kapellförfrågan</a>
+            <a class="seo-btn" href="/kontakt">Mer information</a>
+        </div>
+    </div>
+    """
+
+    related: List[Dict[str, Any]] = []
+    for related_item in list_canonical_examples():
+        if str(related_item.get("canonical_slug", "")) == canonical_slug:
+            continue
+        if str(related_item.get("category", "")).strip() == str(item.get("category", "")).strip():
+            related.append(related_item)
+        if len(related) == 3:
+            break
+
+    related_cards = []
+    for related_item in related:
+        related_slug = str(related_item.get("canonical_slug", "")).strip()
+        related_title = " ".join(
+            part for part in [str(related_item.get("manufacturer", "")).strip(), str(related_item.get("model", "")).strip()] if part
+        ).strip() or related_slug
+        related_image = image_path_to_site_url((related_item.get("images") or ["/logo.png"])[0])
+        related_cards.append(
+            f"""
+            <a class="seo-related-card" href="/exempel/{html.escape(related_slug)}">
+                <img src="{html.escape(related_image)}" alt="{html.escape(related_title)}" loading="lazy"/>
+                <div class="seo-related-copy">
+                    <div class="seo-kicker">{html.escape(str(related_item.get('category', '') or 'Exempel'))}</div>
+                    <strong>{html.escape(related_title)}</strong>
+                </div>
+            </a>
+            """
+        )
+
+    content_html = f"""
+    <main class="seo-page">
+        <section class="seo-hero">
+            <div class="seo-breadcrumbs">
+                <a href="/">Start</a><span>/</span><a href="/bilder-och-exempel">Bilder & exempel</a><span>/</span><span>{html.escape(full_title)}</span>
+            </div>
+            <div class="seo-kicker">{html.escape(str(item.get('category', '') or 'Exempel'))}</div>
+            <h1>{html.escape(full_title)}</h1>
+            <p>Exempel på tidigare projekt från Henricssons Båtkapell. Här hittar du bilder, variantinformation och leveransinfo för modellen.</p>
+        </section>
+        <section class="seo-grid">
+            <article class="seo-card">{gallery_html}</article>
+            <aside class="seo-card">{meta_html}</aside>
+        </section>
+        <section class="seo-related">
+            <h2>Fler exempel</h2>
+            <div class="seo-related-grid">
+                {''.join(related_cards) if related_cards else '<div class="seo-card"><p style="margin:0;">Fler exempel publiceras löpande.</p></div>'}
+            </div>
+        </section>
+    </main>
+    """
+    return render_public_page(
+        title=page_title,
+        description=page_description,
+        canonical_path=f"/exempel/{canonical_slug}",
+        content_html=content_html,
+        og_image=image_urls[0],
+    )
 
 
 @app.route("/healthz", methods=["GET"])
@@ -1878,4 +2541,3 @@ if __name__ == "__main__":
     print(f"Starting Flask server on port {port}")
     print(f"Admin API key configured: {'yes' if ADMIN_API_KEY else 'no (localhost only)'}")
     app.run(host="0.0.0.0", port=port, debug=debug_mode)
-
