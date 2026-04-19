@@ -953,6 +953,27 @@ def sanitize_fields(fields: Dict[str, Any], submitted_via: str) -> Dict[str, str
     return clean
 
 
+def field_lookup_key(key: str) -> str:
+    text = str(key or "").strip().lower()
+    text = re.sub(r"^\d+\.\s*", "", text)
+    text = text.replace("å", "a").replace("ä", "a").replace("ö", "o")
+    text = text.replace("-", "_").replace(" ", "_")
+    text = re.sub(r"[^a-z0-9_]", "", text)
+    return DRAFT_KEY_ALIASES.get(text, text)
+
+
+def get_field_value(fields: Dict[str, Any], *names: str) -> str:
+    if not isinstance(fields, dict):
+        return ""
+    wanted = {field_lookup_key(name) for name in names if name}
+    for raw_key, raw_value in fields.items():
+        if field_lookup_key(str(raw_key)) in wanted:
+            value = str(raw_value or "").strip()
+            if value:
+                return value
+    return ""
+
+
 def build_form_summary(form_type: str, fields: Dict[str, str]) -> str:
     lines = [f"Form type: {form_type}", ""]
     for key, value in fields.items():
@@ -1124,8 +1145,11 @@ FIELD_LABELS_SV: Dict[str, str] = {
     "city": "Ort",
     "boat_brand": "Båtmärke",
     "boat_model": "Båtmodell",
+    "manufacturer": "Tillverkare",
+    "model": "Modell",
     "boat_year": "Årsmodell",
     "home_port": "Hemmahamn",
+    "old_canopy": "Tillverkare av befintligt kapell",
     "wants_cover": "Önskar kapell",
     "wants_fender_socks": "Önskar fenderstrumpor",
     "size": "Storlek",
@@ -1406,7 +1430,7 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
     ]
     rows: List[Tuple[str, str]] = []
     for key in summary_keys:
-        value = _humanize_value(fields.get(key, ""))
+        value = _humanize_value(get_field_value(fields, key))
         if not value:
             continue
         if key == "message" and len(value) > 220:
@@ -1674,11 +1698,11 @@ def send_mailgun_customer_confirmation(submission: Dict[str, Any]) -> None:
     if not isinstance(fields, dict):
         return
 
-    customer_email = str(fields.get("email", "") or "").strip()
+    customer_email = get_field_value(fields, "email", "e-post", "e-postadress")
     if not customer_email or "@" not in customer_email:
         return
 
-    customer_name = str(fields.get("name", "") or "").strip()
+    customer_name = get_field_value(fields, "name", "namn")
     form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
     summary_html, summary_text = build_customer_summary(fields)
     subject = f"Tack för att du kontaktade oss - {form_label}"
