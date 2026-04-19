@@ -1497,7 +1497,7 @@ def build_customer_confirmation_html(
       <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Tack för att du kontaktade oss på Henricssons Båtkapell.</p>
       <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Vi har tagit emot din förfrågan och återkommer så snart vi kan med information eller eventuella följdfrågor.</p>
       {summary_html}
-      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Om du vill komplettera din förfrågan under tiden går det bra att svara på detta mejl eller kontakta oss direkt.</p>
+      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Om du vill komplettera din förfrågan under tiden kan du kontakta oss med uppgifterna nedan.</p>
       <div style="margin:18px 0 16px;padding:16px 18px;background:#f7f9fc;border:1px solid #e6ebf2;border-radius:10px;">
         <div style="font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Kontaktuppgifter</div>
         <div style="font-size:14px;line-height:1.8;color:#17212f;">
@@ -1832,8 +1832,7 @@ def send_mailgun_customer_confirmation(submission: Dict[str, Any]) -> None:
         f"Vi har tagit emot din {form_label.lower()} och återkommer så snart vi kan "
         f"med information eller eventuella frågor.\n\n"
         f"{summary_text}"
-        f"Om du vill komplettera din förfrågan under tiden går det bra att svara på detta mejl "
-        f"eller kontakta oss direkt.\n\n"
+        f"Om du vill komplettera din förfrågan under tiden kan du kontakta oss med uppgifterna nedan.\n\n"
         f"Telefon: +46 (0)31 47 18 20\n"
         f"E-post: info@henricssonsbatkapell.se\n"
         f"Adress: Energigatan 17E, 434 37 Kungsbacka\n\n"
