@@ -569,6 +569,11 @@ function ensureFullCalendarLoaded() {
 function buildGrids() {
     const grid1 = $('.grid1');
     const grid2 = $('.grid2');
+    if ($grid1 && typeof $grid1.isotope === 'function') {
+        try {
+            $grid1.isotope('destroy');
+        } catch (_) {}
+    }
     grid1.empty();
     grid2.empty();
     // Sort manufacturers by display name for grid1
@@ -591,7 +596,7 @@ function buildGrids() {
             grid2.append(item);
         });
     }
-    $grid1 = grid1.isotope({ itemSelector: '.grid1-item', layoutMode: 'fitRows', filter: '*' });
+    $grid1 = grid1;
     // Ingen Isotope på grid2 - vi behåller vanlig flex-layout så redigeringsrutan inte överlappas
     bindGridEvents();
 }
@@ -614,7 +619,7 @@ function buildModels() {
 function refreshManufacturerListLayout(showEditor = false) {
     $('.quicksearch').val('');
     buildGrids();
-    $('.grid2').empty();
+    if (!showEditor) $('.grid2').empty();
     if (showEditor) {
         showEditSection();
         return;
@@ -1036,9 +1041,6 @@ function switchTab(tab){
         // Dölj sekundära flikar när vi är i tillverkar-läget
         $('#admin-tabs').hide();
         // Tvinga om-layout av Isotope om den redan initierats för att fixa fastnad animation
-        if($grid1 && typeof $grid1.isotope === 'function') {
-            $grid1.isotope('layout');
-        }
         $('#extras-search').hide();
         editExtrasCat = null; // nollställ
     } else if(tab==='tempproducts'){
@@ -2752,11 +2754,9 @@ $(document).ready(function() {
     // Sökfunktion
     var $quicksearch = $('.quicksearch').keyup(debounce(function() {
         const query = $quicksearch.val().toLowerCase().trim();
-        $grid1.isotope({
-            filter: function() {
-                if (!query) return true;
-                return $(this).text().toLowerCase().indexOf(query) !== -1;
-            }
+        $('.grid1-item').each(function() {
+            const match = !query || $(this).text().toLowerCase().indexOf(query) !== -1;
+            $(this).toggle(match);
         });
         // Nollställ val vid sökning
         selectedManufacturerKey = null;
