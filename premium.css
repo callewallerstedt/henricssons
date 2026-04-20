@@ -1628,3 +1628,214 @@
     .hb-hero-meta .k { font-size: 1.05rem; }
     .hb-finalcta .phone { font-size: 0.98rem; }
 }
+
+/* ============================================================
+   Tillfälliga produkter — product grid + lightbox
+   ============================================================ */
+.hb-premium .hb-tp-empty {
+    text-align: center;
+    padding: 3.5rem 1.5rem;
+    color: var(--muted);
+}
+.hb-premium .hb-tp-empty h2 {
+    font-family: 'Libre Baskerville', serif;
+    color: var(--ink);
+    font-size: clamp(1.4rem, 2.6vw, 1.9rem);
+    margin-bottom: 0.75rem;
+}
+.hb-premium .hb-tp-empty a { color: var(--brass); font-weight: 600; }
+
+.hb-premium .hb-tp-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+}
+@media (max-width: 1000px) {
+    .hb-premium .hb-tp-grid { grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+}
+@media (max-width: 600px) {
+    .hb-premium .hb-tp-grid { grid-template-columns: 1fr; gap: 1.25rem; }
+}
+
+.hb-premium .hb-tp-card {
+    background: var(--white);
+    border: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+.hb-premium .hb-tp-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 24px 46px -28px rgba(12, 26, 43, 0.3);
+}
+
+.hb-premium .hb-tp-media {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    background: var(--cream-2);
+    overflow: hidden;
+}
+.hb-premium .hb-tp-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.6s ease;
+}
+.hb-premium .hb-tp-card:hover .hb-tp-media img { transform: scale(1.04); }
+.hb-premium .hb-tp-media-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: var(--muted);
+    font-size: 0.92rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.hb-premium .hb-tp-media-count {
+    position: absolute;
+    bottom: 0.7rem;
+    right: 0.7rem;
+    background: rgba(12, 26, 43, 0.82);
+    color: #fff;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    border-radius: 2px;
+}
+
+.hb-premium .hb-tp-body {
+    padding: 1.5rem 1.5rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 0.65rem;
+}
+.hb-premium .hb-tp-body h3 {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 1.25rem;
+    color: var(--ink);
+    line-height: 1.3;
+}
+.hb-premium .hb-tp-price {
+    display: inline-block;
+    align-self: flex-start;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--brass-dark);
+    letter-spacing: 0.02em;
+    padding: 0.25rem 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    margin: 0.15rem 0 0.35rem;
+}
+.hb-premium .hb-tp-desc {
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    flex: 1;
+}
+.hb-premium .hb-tp-thumbs {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.25rem;
+    flex-wrap: wrap;
+}
+.hb-premium .hb-tp-thumb {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 1px solid var(--line);
+    background: var(--cream-2);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+}
+.hb-premium .hb-tp-thumb:hover { border-color: var(--brass); transform: translateY(-1px); }
+.hb-premium .hb-tp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hb-premium .hb-tp-cta {
+    margin-top: auto;
+    padding-top: 0.85rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--brass);
+    font-weight: 600;
+    text-decoration: none;
+    align-self: flex-start;
+    border-top: 1px solid var(--line);
+    width: 100%;
+}
+.hb-premium .hb-tp-cta:hover { color: var(--brass-dark); }
+
+/* ---------- Lightbox ---------- */
+.hb-premium .hb-tp-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 14, 26, 0.92);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 2rem;
+}
+.hb-premium .hb-tp-lightbox.is-open { display: flex; }
+.hb-premium .hb-tp-lightbox-inner {
+    max-width: min(1100px, 92vw);
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+.hb-premium #tp-lightbox-img {
+    max-width: 100%;
+    max-height: 80vh;
+    display: block;
+    object-fit: contain;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.hb-premium .hb-tp-lightbox-caption {
+    color: #d9cfbe;
+    font-size: 0.88rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: center;
+}
+.hb-premium .hb-tp-lightbox-close,
+.hb-premium .hb-tp-lightbox-nav {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    font-size: 1.8rem;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background 0.2s, border-color 0.2s;
+    line-height: 1;
+}
+.hb-premium .hb-tp-lightbox-close:hover,
+.hb-premium .hb-tp-lightbox-nav:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.45);
+}
+.hb-premium .hb-tp-lightbox-close { top: 1.5rem; right: 1.5rem; }
+.hb-premium .hb-tp-lightbox-prev { left: 1.5rem; top: 50%; transform: translateY(-50%); }
+.hb-premium .hb-tp-lightbox-next { right: 1.5rem; top: 50%; transform: translateY(-50%); }
+@media (max-width: 600px) {
+    .hb-premium .hb-tp-lightbox { padding: 1rem; }
+    .hb-premium .hb-tp-lightbox-close,
+    .hb-premium .hb-tp-lightbox-nav { width: 40px; height: 40px; font-size: 1.5rem; }
+    .hb-premium .hb-tp-lightbox-close { top: 0.75rem; right: 0.75rem; }
+    .hb-premium .hb-tp-lightbox-prev { left: 0.5rem; }
+    .hb-premium .hb-tp-lightbox-next { right: 0.5rem; }
+}
