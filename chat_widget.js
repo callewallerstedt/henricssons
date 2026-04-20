@@ -121,7 +121,7 @@
         if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
             addCandidate(`${location.protocol}//${location.hostname}:25565`);
         }
-        addCandidate('https://henricssons-api.onrender.com');
+        addCandidate('https://henricssonsbatkapell.onrender.com');
         return candidates;
     }
 

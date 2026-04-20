@@ -206,7 +206,7 @@ def main():
             "delivery": data.get("delivery", ""),
             "category": category,
             "images": images,
-            "source": data.get("source", f"https://www.henricssonsbatkapell.se/exempel/{slug}")
+            "source": data.get("source", f"https://henricssonsbatkapell.se/exempel/{slug}")
         }
     
     # Save to models_meta.json

@@ -9,12 +9,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
     <link rel="icon" href="logo.png">
-    <link rel="canonical" href="https://www.henricssonsbatkapell.se/bilder-och-exempel"/>
+    <link rel="canonical" href="https://henricssonsbatkapell.se/bilder-och-exempel"/>
     <meta property="og:title" content="Bilder och exempel - Henricssons B&aring;tkapell"/>
     <meta property="og:description" content="Vi tillverkar kapell till m&aring;nga typer av b&aring;tar. Med v&aring;rat mallregister med egen tillverkning och tillsammans med v&aring;r import av originalkapell fr&aring;n Norge Finland och Danmark s&aring; t&auml;cker vi ett brett register av modeller"/>
     <meta property="og:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <meta property="og:type" content="website"/>
-    <meta property="og:url" content="https://www.henricssonsbatkapell.se/bilder-och-exempel"/>
+    <meta property="og:url" content="https://henricssonsbatkapell.se/bilder-och-exempel"/>
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="Bilder och exempel - Henricssons B&aring;tkapell"/>
     <meta name="twitter:description" content="Vi tillverkar kapell till m&aring;nga typer av b&aring;tar. Med v&aring;rat mallregister med egen tillverkning och tillsammans med v&aring;r import av originalkapell fr&aring;n Norge Finland och Danmark s&aring; t&auml;cker vi ett brett register av modeller"/>
@@ -238,8 +238,8 @@
             if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
                 return `${location.protocol}//${location.hostname}:25565`;
             }
-            if (location.hostname.endsWith('.onrender.com') && location.hostname !== 'henricssons-api.onrender.com') {
-                return 'https://henricssons-api.onrender.com';
+            if (location.hostname === 'henricssonsbatkapell.onrender.com') {
+                return `${location.protocol}//${location.host}`;
             }
             return `${location.protocol}//${location.host}`;
         })();
@@ -603,6 +603,6 @@
             };
         }
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
+    <script src="/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>

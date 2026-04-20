@@ -1,6 +1,6 @@
 # Henricssons Kapell & Marintextil – Webbsida & Admin-API
 
-Detta repo innehåller både den statiska webbsidan **henricssons.se** och ett litet Flask-API som gör det möjligt att uppdatera innehåll (båtmodeller, bilder, texter m.m.) direkt via ett administratörsgränssnitt. Syftet med README:n är att en ny utvecklare snabbt ska förstå hur allt hänger ihop – lokalt och i produktion (Render).
+Detta repo innehåller den publika webbsidan **henricssonsbatkapell.se** och ett Flask-API som gör det möjligt att uppdatera innehåll (båtmodeller, bilder, texter m.m.) direkt via ett administratörsgränssnitt. Syftet med README:n är att en ny utvecklare snabbt ska förstå hur allt hänger ihop – lokalt och i produktion (Render).
 
 > TL;DR
 > 1. Webbsidan körs som **Static Site** på Render.<br/>

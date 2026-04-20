@@ -18,7 +18,7 @@ Metadata sparas i henricssons_bilder/models_meta.json
 import re, json, pathlib, urllib.parse, concurrent.futures, requests, bs4
 from unidecode import unidecode
 
-BASE     = "https://www.henricssonsbatkapell.se"
+BASE     = "https://henricssonsbatkapell.se"
 START    = f"{BASE}/bilder-och-exempel"
 ROOTDIR  = pathlib.Path("henricssons_bilder")
 THREADS  = 8

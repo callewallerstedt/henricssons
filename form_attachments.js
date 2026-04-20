@@ -350,7 +350,7 @@
             const api =
                 location.hostname === 'localhost' || location.hostname === '127.0.0.1'
                     ? `${location.protocol}//${location.hostname}:25565`
-                    : 'https://henricssons-api.onrender.com';
+                    : `${location.protocol}//${location.host}`;
             const payloadJson = JSON.stringify({ form_type: formType, fields });
             const files = attachmentWidget.getFiles();
             const body = createFormDataPayload(payloadJson, files);

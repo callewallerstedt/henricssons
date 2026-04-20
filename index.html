@@ -10,13 +10,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
     <link rel="icon" href="logo.png">
     <!-- Canonical points to live site to preserve SEO -->
-    <link rel="canonical" href="https://www.henricssonsbatkapell.se/"/>
+    <link rel="canonical" href="https://henricssonsbatkapell.se/"/>
     <!-- Open Graph (identical to live) -->
     <meta property="og:title" content="Henricssons Båtkapell"/>
     <meta property="og:description" content="Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller"/>
     <meta property="og:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <meta property="og:type" content="website"/>
-    <meta property="og:url" content="https://www.henricssonsbatkapell.se/"/>
+    <meta property="og:url" content="https://henricssonsbatkapell.se/"/>
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="Henricssons Båtkapell"/>
     <meta name="twitter:description" content="Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller"/>
@@ -1041,7 +1041,7 @@
             function add(v){ const n = String(v||'').trim().replace(/\/+$/,''); if(!n||seen[n])return; seen[n]=true; bases.push(n); }
             add(`${location.protocol}//${location.host}`);
             if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') add(`${location.protocol}//${location.hostname}:25565`);
-            add('https://henricssons-api.onrender.com');
+            add('https://henricssonsbatkapell.onrender.com');
 
             function sanitize(html){ return window.DOMPurify ? DOMPurify.sanitize(html, {USE_PROFILES:{html:true}}) : html; }
             function parse(md){

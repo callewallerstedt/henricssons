@@ -67,7 +67,7 @@ LOGO_FILE = BASE_DIR / "logo.png"
 IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
 EXAMPLES_META_FILE = BASE_DIR / "examples_meta.json"
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://www.henricssonsbatkapell.se").rstrip("/")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://henricssonsbatkapell.se").rstrip("/")
 PUBLIC_ATTACHMENT_BASE_URL = os.getenv(
     "PUBLIC_ATTACHMENT_BASE_URL",
     os.getenv("PUBLIC_API_BASE_URL", PUBLIC_BASE_URL),
@@ -144,11 +144,7 @@ DEFAULT_ALLOWED_ORIGINS = ",".join(
     [
         "https://henricssonsbatkapell.se",
         "https://www.henricssonsbatkapell.se",
-        "https://henricssons.se",
-        "https://www.henricssons.se",
-        "https://henricssons.onrender.com",
-        "https://henricssons-app.onrender.com",
-        "https://henricssons-api.onrender.com",
+        "https://henricssonsbatkapell.onrender.com",
         "http://localhost:25565",
         "http://127.0.0.1:25565",
         "http://localhost:3000",
@@ -158,16 +154,12 @@ DEFAULT_ALLOWED_ORIGINS = ",".join(
 REQUIRED_ALLOWED_ORIGINS = {
     "https://henricssonsbatkapell.se",
     "https://www.henricssonsbatkapell.se",
-    "https://henricssons.se",
-    "https://www.henricssons.se",
-    "https://henricssons.onrender.com",
-    "https://henricssons-app.onrender.com",
-    "https://henricssons-api.onrender.com",
+    "https://henricssonsbatkapell.onrender.com",
 }
 ALLOWED_ORIGINS = {
     origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",") if origin.strip()
 } | REQUIRED_ALLOWED_ORIGINS
-PRIMARY_PUBLIC_HOST = "www.henricssonsbatkapell.se"
+PRIMARY_PUBLIC_HOST = "henricssonsbatkapell.se"
 PUBLIC_HOST_ALIASES = {"henricssonsbatkapell.se", "www.henricssonsbatkapell.se"}
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024

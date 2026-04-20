@@ -5,7 +5,7 @@ if (!window.boatData || typeof window.boatData !== 'object') {
 const port = '25565';
 const DATA_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? `${location.protocol}//${location.hostname}:${port}`
-    : 'https://henricssons-api.onrender.com';
+    : `${location.protocol}//${location.host}`;
 
 const state = {
     manufacturers: [],

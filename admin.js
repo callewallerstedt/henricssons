@@ -7,14 +7,11 @@ let selectedModelIndex = null;
 let $grid1, $grid2;
 
 // Lägg in omedelbart efter globala variabler
-const KNOWN_API_HOSTS = new Set(['henricssons-api.onrender.com']);
+const KNOWN_API_HOSTS = new Set(['henricssonsbatkapell.onrender.com']);
 const KNOWN_STATIC_HOSTS = new Set([
-    'henricssons.onrender.com',
-    'henricssons-app.onrender.com',
+    'henricssonsbatkapell.onrender.com',
     'henricssonsbatkapell.se',
-    'www.henricssonsbatkapell.se',
-    'henricssons.se',
-    'www.henricssons.se'
+    'www.henricssonsbatkapell.se'
 ]);
 
 let API_BASE;

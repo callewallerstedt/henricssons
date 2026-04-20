@@ -10,16 +10,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
     <link rel="icon" href="logo.png">
-    <link rel="canonical" href="https://www.henricssonsbatkapell.se/tillfalliga-produkter"/>
+    <link rel="canonical" href="https://henricssonsbatkapell.se/tillfalliga-produkter"/>
     <meta property="og:title" content="Tillfälliga produkter - Henricssons Båtkapell"/>
     <meta property="og:description" content="Aktuella tillfälliga produkter med egna delbara sidor och samma premiumkänsla som resten av sajten."/>
-    <meta property="og:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
+    <meta property="og:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <meta property="og:type" content="website"/>
-    <meta property="og:url" content="https://www.henricssonsbatkapell.se/tillfalliga-produkter"/>
+    <meta property="og:url" content="https://henricssonsbatkapell.se/tillfalliga-produkter"/>
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="Tillfälliga produkter - Henricssons Båtkapell"/>
     <meta name="twitter:description" content="Aktuella tillfälliga produkter med egna delbara sidor och samma premiumkänsla som resten av sajten."/>
-    <meta name="twitter:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
+    <meta name="twitter:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
 </head>
 <body class="hb-premium">
@@ -119,9 +119,9 @@
     (function () {
         function resolveApiBase() {
             const sameOrigin = `${location.protocol}//${location.host}`;
-            const staticRenderHosts = new Set(['henricssons.onrender.com', 'henricssons-app.onrender.com']);
-            if (staticRenderHosts.has(location.hostname)) {
-                return 'https://henricssons-api.onrender.com';
+            const renderHosts = new Set(['henricssonsbatkapell.onrender.com']);
+            if (renderHosts.has(location.hostname)) {
+                return sameOrigin;
             }
             return sameOrigin;
         }
@@ -199,6 +199,6 @@
             });
     })();
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
+    <script src="/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>
