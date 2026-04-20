@@ -117,6 +117,7 @@
     <script src="form_attachments.js?v=20260419d"></script>
     <script>
         const kapellAttachmentWidget = window.HenricssonsAttachments ? window.HenricssonsAttachments.create('#kapellAttachments', { label: 'Bifoga bilder på båten/kapellet (valfritt)', helper: 'Ladda upp här' }) : { getFiles: () => [], reset: () => {} };
+        const kapellFormStartedAt = Date.now();
         document.querySelector('.contact-form').addEventListener('submit', async function (e) {
             e.preventDefault();
             const form = e.currentTarget;
@@ -125,6 +126,7 @@
             btn.disabled = true; btn.textContent = 'Skickar...';
             const fields = {};
             new FormData(form).forEach((value, key) => { fields[key.replace(/^\d+\.\s*/, '')] = value; });
+            fields.__form_started_at = String(kapellFormStartedAt);
             const api = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? `${location.protocol}//${location.hostname}:25565` : 'https://henricssons-api.onrender.com';
             const payload = JSON.stringify({ form_type: form.dataset.subject || 'Kapellförfrågan', fields });
             try {

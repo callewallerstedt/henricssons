@@ -7,17 +7,47 @@ let selectedModelIndex = null;
 let $grid1, $grid2;
 
 // Lägg in omedelbart efter globala variabler
+const KNOWN_API_HOSTS = new Set(['henricssons-api.onrender.com']);
+const KNOWN_STATIC_HOSTS = new Set([
+    'henricssons.onrender.com',
+    'henricssons-app.onrender.com',
+    'henricssonsbatkapell.se',
+    'www.henricssonsbatkapell.se',
+    'henricssons.se',
+    'www.henricssons.se'
+]);
+
 let API_BASE;
 function resolveApiBase() {
+    if (window.HENRICSSONS_API_BASE) {
+        return String(window.HENRICSSONS_API_BASE).replace(/\/+$/, '');
+    }
+
+    if (location.protocol === 'file:') {
+        return 'http://127.0.0.1:25565';
+    }
+
     const sameOrigin = `${location.protocol}//${location.host}`;
-    const staticRenderHosts = new Set(['henricssons.onrender.com', 'henricssons-app.onrender.com']);
-    if (staticRenderHosts.has(location.hostname)) {
+    if (KNOWN_API_HOSTS.has(location.hostname)) {
+        return sameOrigin;
+    }
+
+    if (KNOWN_STATIC_HOSTS.has(location.hostname)) {
         return 'https://henricssons-api.onrender.com';
     }
+
+    if ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') && location.port !== '25565') {
+        return `${location.protocol}//${location.hostname}:25565`;
+    }
+
     return sameOrigin;
 }
 API_BASE = resolveApiBase();
 console.log('API_BASE initialized to:', API_BASE, 'from location:', location.href);
+
+if (KNOWN_STATIC_HOSTS.has(location.hostname) && /^\/admin(?:\.html)?\/?$/i.test(location.pathname)) {
+    window.location.replace(new URL('/admin', API_BASE).toString());
+}
 
 let ADMIN_API_KEY = localStorage.getItem('adminApiKey') || '';
 const STATUS_FLOW = ['nya-inskick', 'vantar-pa-svar', 'i-produktion', 'redo-for-leverans'];
@@ -134,7 +164,9 @@ async function adminFetch(url, options = {}) {
     const response = await fetch(url, opts);
     if (response.status === 401 || response.status === 403) {
         try { localStorage.removeItem('adminApiKey'); } catch (_) {}
-        window.location.href = '/admin';
+        const loginUrl = new URL('/admin', API_BASE);
+        loginUrl.searchParams.set('auth', 'required');
+        window.location.href = loginUrl.toString();
         return response;
     }
     return response;

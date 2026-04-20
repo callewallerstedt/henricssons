@@ -68,6 +68,10 @@ IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
 EXAMPLES_META_FILE = BASE_DIR / "examples_meta.json"
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://henricssons.onrender.com").rstrip("/")
+PUBLIC_ATTACHMENT_BASE_URL = os.getenv(
+    "PUBLIC_ATTACHMENT_BASE_URL",
+    os.getenv("PUBLIC_API_BASE_URL", "https://henricssons-api.onrender.com"),
+).rstrip("/")
 GENERIC_EXAMPLE_DESCRIPTION = (
     "Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning "
     "och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi "
@@ -151,9 +155,18 @@ DEFAULT_ALLOWED_ORIGINS = ",".join(
         "http://127.0.0.1:3000",
     ]
 )
+REQUIRED_ALLOWED_ORIGINS = {
+    "https://henricssonsbatkapell.se",
+    "https://www.henricssonsbatkapell.se",
+    "https://henricssons.se",
+    "https://www.henricssons.se",
+    "https://henricssons.onrender.com",
+    "https://henricssons-app.onrender.com",
+    "https://henricssons-api.onrender.com",
+}
 ALLOWED_ORIGINS = {
     origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",") if origin.strip()
-}
+} | REQUIRED_ALLOWED_ORIGINS
 PRIMARY_PUBLIC_HOST = "www.henricssonsbatkapell.se"
 PUBLIC_HOST_ALIASES = {"henricssonsbatkapell.se", "www.henricssonsbatkapell.se"}
 
@@ -2384,7 +2397,7 @@ def send_mailgun_submission_notification(
         cid = f"attachment-{att.get('id', idx)}{ext}"
         att_id = att.get('id', '')
         token = sign_attachment_token(int(att_id)) if isinstance(att_id, int) or (isinstance(att_id, str) and att_id.isdigit()) else ""
-        public_url = f"{PUBLIC_BASE_URL}/api/attachment/{att_id}"
+        public_url = f"{PUBLIC_ATTACHMENT_BASE_URL}/api/attachment/{att_id}"
         if token:
             public_url = f"{public_url}?token={token}"
         enriched.append({
@@ -3075,7 +3088,7 @@ def add_cors_headers(response):
     if origin and (origin in ALLOWED_ORIGINS or origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1")):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Admin-Key, Authorization"
 
     # Force UTF-8 charset for textual responses to avoid mojibake in browsers.
