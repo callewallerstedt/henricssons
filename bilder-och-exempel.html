@@ -49,6 +49,25 @@
         .hb-premium #fullscreenModal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: none; align-items: center; justify-content: center; z-index: 3000; cursor: pointer; }
         .hb-premium #fullscreenModal.open { display: flex; }
         .hb-premium #fullscreenModal img { max-width: 95%; max-height: 95%; object-fit: contain; }
+        .hb-premium .hb-item > a.is-placeholder-thumb {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .hb-premium .hb-item > a.is-placeholder-thumb img,
+        .hb-premium .hb-item img.is-placeholder-image {
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transform: none;
+        }
+        .hb-premium .hb-item:hover > a.is-placeholder-thumb img,
+        .hb-premium .hb-item:hover img.is-placeholder-image {
+            transform: none;
+        }
         .hb-premium #fullscreenModal .fullscreen-close { position: absolute; top: 20px; right: 30px; font-size: 32px; font-weight: 700; cursor: pointer; color: #fff; background: rgba(0,0,0,0.5); width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border: none; }
         @media (max-width: 768px) {
             .hb-premium #bildModal .slider { width: 100%; height: 320px; }
@@ -243,6 +262,54 @@
             }
             return `${location.protocol}//${location.host}`;
         })();
+        const LEGACY_PUBLIC_HOSTS = new Set([
+            'www.henricssonsbatkapell.se',
+            'henricssonsbatkapell.se',
+            'henricssonsbatkapell.onrender.com',
+            'henricssons-api.onrender.com',
+            'henricssons.onrender.com',
+            'henricssons-app.onrender.com'
+        ]);
+
+        function normalizeLegacyUrl(value) {
+            const raw = String(value || '').trim();
+            if (!raw || raw.startsWith('data:')) return raw;
+            if (!/^https?:\/\//i.test(raw)) return raw;
+            try {
+                const parsed = new URL(raw);
+                if (!LEGACY_PUBLIC_HOSTS.has(parsed.hostname.toLowerCase())) return raw;
+                return `${API_BASE}${parsed.pathname}${parsed.search}${parsed.hash}`;
+            } catch (_) {
+                return raw;
+            }
+        }
+
+        function normalizeImageUrl(value) {
+            const raw = normalizeLegacyUrl(String(value || '').trim().replace(/\\/g, '/'));
+            if (!raw) return `${API_BASE}/logo.png`;
+            if (raw.startsWith('data:')) return raw;
+            if (/^https?:\/\//i.test(raw)) return raw;
+            const clean = raw.replace(/^\.?\//, '');
+            if (clean === 'logo.png') return `${API_BASE}/logo.png`;
+            if (clean.startsWith('assets/') || clean.startsWith('henricssons_bilder/')) {
+                return `${API_BASE}/${clean}`;
+            }
+            return `${API_BASE}/henricssons_bilder/${clean.replace(/^henricssons_bilder\//, '')}`;
+        }
+
+        function extractExampleSlug(source, fallbackSlug) {
+            const raw = normalizeLegacyUrl(source);
+            if (!raw) return String(fallbackSlug || '').trim();
+            try {
+                const parsed = /^https?:\/\//i.test(raw) ? new URL(raw) : new URL(raw, API_BASE);
+                const match = String(parsed.pathname || '').match(/\/exempel\/([^/?#]+)/i);
+                if (match && match[1]) return decodeURIComponent(match[1]);
+            } catch (_) {
+                const match = String(raw).match(/\/exempel\/([^/?#]+)/i);
+                if (match && match[1]) return match[1];
+            }
+            return String(fallbackSlug || '').trim();
+        }
 
         function buildExamplePath(item) {
             const slug = String(item && item.slug || '').trim();
@@ -282,19 +349,9 @@
                         'Sunbrella Plus Kollektion v\u00e4vprover': { label: 'Sunbrella Plus Kollektion v\u00e4vprover', key: 'sunbrella' }
                     };
                     const map = catMap[item.category] || { label: '\u00d6vrigt', key: 'other' };
-                    const imgs = (item.images && item.images.length ? item.images : []).map(img => {
-                        if (img.startsWith('data:')) return img;
-                        const clean = img.replace(/\\/g, '/').replace(/^\.?\//, '');
-                        if (clean.startsWith('assets/') || clean.startsWith('henricssons_bilder/') || clean === 'logo.png') return clean;
-                        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return 'henricssons_bilder/' + clean;
-                        return `${API_BASE}/henricssons_bilder/` + clean.replace(/^henricssons_bilder\//, '');
-                    });
-                    const finalImgs = imgs.length ? imgs : ['logo.png'];
-                    let detailSlug = slug;
-                    if (item.source) {
-                        const m = String(item.source).match(/\/exempel\/([^/?#]+)/i);
-                        if (m && m[1]) detailSlug = m[1];
-                    }
+                    const imgs = (item.images && item.images.length ? item.images : []).map(normalizeImageUrl);
+                    const finalImgs = imgs.length ? imgs : [`${API_BASE}/logo.png`];
+                    const detailSlug = extractExampleSlug(item.source, slug);
                     bilderexData.push({
                         namn: item.model,
                         tillverkare: item.manufacturer || '',
@@ -511,6 +568,7 @@
                 const div = document.createElement('div');
                 div.className = 'hb-item';
                 const thumb = (item.images && item.images.length) ? item.images[0] : 'logo.png';
+                const isPlaceholderThumb = /(?:^|\/)logo\.png(?:$|[?#])/i.test(String(thumb || ''));
                 const safeThumb = escapeHtml(thumb);
                 const safeNamn = escapeHtml(item.namn);
                 const safeTillverkare = escapeHtml(item.tillverkare);
@@ -520,8 +578,8 @@
                 const loading = i < 8 ? 'eager' : 'lazy';
                 const priority = i < 8 ? 'high' : 'low';
                 div.innerHTML = `
-                    <a href="${safeExamplePath}">
-                        <img src="${safeThumb}" alt="${safeNamn}" loading="${loading}" decoding="async" fetchpriority="${priority}" onerror="this.style.display='none'"/>
+                    <a href="${safeExamplePath}"${isPlaceholderThumb ? ' class="is-placeholder-thumb"' : ''}>
+                        <img src="${safeThumb}" alt="${safeNamn}" class="${isPlaceholderThumb ? 'is-placeholder-image' : ''}" loading="${loading}" decoding="async" fetchpriority="${priority}" onerror="this.style.display='none'"/>
                     </a>
                     <div class="caption">
                         <div class="cat">${safeKategori}</div>

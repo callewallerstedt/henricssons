@@ -1307,7 +1307,14 @@
     display: block;
     transition: transform 0.5s ease;
 }
+.hb-item > a.is-placeholder-thumb {
+    padding: 1.25rem;
+}
+.hb-item > a.is-placeholder-thumb img {
+    object-fit: contain;
+}
 .hb-item:hover img { transform: scale(1.04); }
+.hb-item:hover > a.is-placeholder-thumb img { transform: none; }
 .hb-item .caption {
     padding: 1rem 1.1rem 1.2rem;
     display: flex;
@@ -1868,7 +1875,6 @@
 .hb-premium .hb-tp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .hb-premium .hb-tp-cta {
     margin-top: auto;
-    padding-top: 0.85rem;
     font-size: 0.78rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -1876,7 +1882,6 @@
     font-weight: 600;
     text-decoration: none;
     align-self: flex-start;
-    border-top: 1px solid var(--line);
     width: 100%;
 }
 .hb-premium .hb-tp-cta:hover { color: var(--brass-dark); }

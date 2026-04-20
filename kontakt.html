@@ -137,6 +137,29 @@
     <script>
         const contactAttachmentWidget = window.HenricssonsAttachments ? window.HenricssonsAttachments.create('#contactAttachments', { label: 'Bifoga bilder (valfritt)', helper: 'Ladda upp här' }) : { getFiles: () => [], reset: () => {} };
         const contactFormStartedAt = Date.now();
+        (function prefillProductContact() {
+            const params = new URLSearchParams(window.location.search);
+            const product = (params.get('product') || '').trim();
+            const slug = (params.get('product_slug') || '').trim();
+            if (!product && !slug) return;
+
+            const subjectInput = document.getElementById('subject');
+            const messageInput = document.getElementById('message');
+            const productUrl = slug ? `${window.location.origin}/tillfalliga-produkter/${encodeURIComponent(slug)}` : '';
+
+            if (subjectInput && !subjectInput.value.trim()) {
+                subjectInput.value = product || 'Tillfällig produkt';
+            }
+            if (messageInput && !messageInput.value.trim()) {
+                const messageLines = [
+                    product ? `Jag är intresserad av: ${product}` : 'Jag är intresserad av en tillfällig produkt.',
+                    productUrl ? `Länk: ${productUrl}` : '',
+                    '',
+                    'Meddelande:'
+                ].filter((line) => line !== '');
+                messageInput.value = messageLines.join('\n');
+            }
+        })();
         document.getElementById('contactForm').addEventListener('submit', async function (e) {
             e.preventDefault();
             const form = e.currentTarget;

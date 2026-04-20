@@ -25,6 +25,7 @@
     <style>
         .hb-content-split .side-image.hb-about-image {
             aspect-ratio: auto;
+            max-height: none;
             overflow: visible;
             background: var(--cream-2);
             padding: 1rem;
@@ -34,6 +35,13 @@
             height: auto;
             object-fit: contain;
             display: block;
+        }
+        @media (max-width: 900px) {
+            .hb-content-split .side-image.hb-about-image {
+                position: static;
+                max-height: none;
+                padding: 0.75rem;
+            }
         }
     </style>
 </head>
