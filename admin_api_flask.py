@@ -14,7 +14,7 @@ from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 import requests
 from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_from_directory
@@ -618,6 +618,36 @@ def list_canonical_examples() -> List[Dict[str, Any]]:
     return items
 
 
+def build_contact_example_href(manufacturer: str, model: str, canonical_slug: str) -> str:
+    params: Dict[str, str] = {}
+    manufacturer = str(manufacturer or "").strip()
+    model = str(model or "").strip()
+    canonical_slug = str(canonical_slug or "").strip()
+    if manufacturer:
+        params["manufacturer"] = manufacturer
+    if model:
+        params["model"] = model
+    if canonical_slug:
+        params["example"] = f"/exempel/{canonical_slug}"
+    query = urlencode(params)
+    return f"/kontakt?{query}" if query else "/kontakt"
+
+
+def build_kapell_example_href(manufacturer: str, model: str, canonical_slug: str) -> str:
+    params: Dict[str, str] = {}
+    manufacturer = str(manufacturer or "").strip()
+    model = str(model or "").strip()
+    canonical_slug = str(canonical_slug or "").strip()
+    if manufacturer:
+        params["manufacturer"] = manufacturer
+    if model:
+        params["model"] = model
+    if canonical_slug:
+        params["example"] = f"/exempel/{canonical_slug}"
+    query = urlencode(params)
+    return f"/kapellforfragan?{query}" if query else "/kapellforfragan"
+
+
 def render_public_page(title: str, description: str, canonical_path: str, content_html: str, og_image: str = "/logo.png") -> str:
     canonical_url = absolute_public_url(canonical_path)
     og_image_url = og_image if og_image.startswith("http://") or og_image.startswith("https://") else absolute_public_url(og_image)
@@ -646,7 +676,7 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
     <meta name="twitter:image" content="{{ og_image_url }}"/>
     <style>
         .seo-shell { min-height: 100vh; background: #f7f4ee; }
-        .seo-page { max-width: 1180px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+        .seo-page { max-width: 1180px; margin: 0 auto; padding: 5.5rem 1.25rem 4rem; }
         .seo-hero { display: grid; gap: 1.25rem; margin-bottom: 2rem; }
         .seo-kicker { color: #8b6f18; font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
         .seo-breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; color: #5d5d5d; font-size: 0.92rem; margin-bottom: 1rem; }
@@ -655,18 +685,30 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         .seo-grid { display: grid; gap: 2rem; grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr); align-items: start; }
         .seo-card { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); box-shadow: 0 16px 40px rgba(10, 35, 66, 0.08); padding: 1.5rem; }
         .seo-gallery { display: grid; gap: 0.9rem; }
-        .seo-gallery-main img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #ece7da; }
-        .seo-thumbs { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 0.75rem; }
-        .seo-thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #ece7da; }
+        .seo-gallery-stage { position: relative; background: #ece7da; min-height: 420px; display: flex; align-items: center; justify-content: center; padding: 1rem 4.25rem; }
+        .seo-gallery-main img { width: 100%; max-width: 100%; max-height: 540px; object-fit: contain; display: block; background: #ece7da; }
+        .seo-gallery-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border: 1px solid rgba(10, 35, 66, 0.16); background: rgba(255,255,255,0.92); color: #0a2342; font-size: 1.8rem; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background 0.15s, border-color 0.15s; }
+        .seo-gallery-nav:hover { background: #fff; border-color: #c8a93f; }
+        .seo-gallery-nav:disabled { opacity: 0.3; cursor: default; }
+        .seo-gallery-prev { left: 1rem; }
+        .seo-gallery-next { right: 1rem; }
+        .seo-thumbs { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 84px)); gap: 0.55rem; justify-content: start; }
+        .seo-thumb { border: 1px solid rgba(10, 35, 66, 0.12); background: #f4efe4; padding: 0.25rem; cursor: pointer; transition: border-color 0.15s; }
+        .seo-thumb:hover { border-color: rgba(200, 169, 63, 0.6); }
+        .seo-thumb.is-active { border-color: #c8a93f; box-shadow: inset 0 0 0 1px #c8a93f; }
+        .seo-thumb img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #ece7da; }
         .seo-meta { display: grid; gap: 0.9rem; }
         .seo-meta-block { border-top: 1px solid rgba(10, 35, 66, 0.08); padding-top: 0.9rem; }
         .seo-meta-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8b6f18; font-weight: 700; margin-bottom: 0.35rem; }
         .seo-cta-row { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-top: 1.2rem; }
-        .seo-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 1.2rem; text-decoration: none; font-weight: 700; letter-spacing: 0.03em; border: 1px solid #0a2342; color: #0a2342; background: #fff; }
+        .seo-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 1.5rem; text-decoration: none; font-weight: 700; letter-spacing: 0.03em; border: 2px solid #0a2342; color: #0a2342; background: #fff; transition: background 0.15s, color 0.15s; }
+        .seo-btn:hover { background: #0a2342; color: #fff; }
         .seo-btn.seo-btn-primary { background: #c8a93f; border-color: #c8a93f; color: #0a2342; }
+        .seo-btn.seo-btn-primary:hover { background: #b8952e; border-color: #b8952e; color: #0a2342; }
         .seo-related { margin-top: 2.5rem; }
         .seo-related-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-        .seo-related-card { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); text-decoration: none; color: #0a2342; overflow: hidden; }
+        .seo-related-card { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); text-decoration: none; color: #0a2342; overflow: hidden; transition: box-shadow 0.15s, transform 0.15s; }
+        .seo-related-card:hover { box-shadow: 0 8px 24px rgba(10, 35, 66, 0.12); transform: translateY(-2px); }
         .seo-related-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #ece7da; }
         .seo-related-copy { padding: 1rem; }
         .seo-search-form { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.2rem 0 1.8rem; }
@@ -675,7 +717,10 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         .seo-search-item { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); padding: 1rem 1.1rem; display: grid; gap: 0.35rem; }
         @media (max-width: 900px) {
             .seo-grid { grid-template-columns: 1fr; }
-            .seo-page { padding-top: 2rem; }
+            .seo-page { padding-top: 4rem; }
+            .seo-gallery-stage { min-height: 320px; padding-inline: 3.5rem; }
+            .seo-gallery-main img { max-height: 360px; }
+            .seo-thumbs { grid-template-columns: repeat(auto-fit, minmax(60px, 72px)); }
         }
     </style>
 </head>
@@ -3491,13 +3536,26 @@ def example_page(slug: str):
     if not image_urls:
         image_urls = ["/logo.png"]
 
+    has_multiple = len(image_urls) > 1
+    gallery_images = "".join(
+        f'<button type="button" class="seo-thumb{" is-active" if index == 0 else ""}" data-gallery-index="{index}" aria-label="Visa bild {index + 1}">'
+        f'<img src="{html.escape(image)}" alt="{html.escape(full_title)}" loading="lazy"/></button>'
+        for index, image in enumerate(image_urls[:8])
+    )
+    nav_style = "" if has_multiple else ' style="display:none"'
+    thumbs_style = "" if has_multiple else ' style="display:none"'
+
     gallery_html = f"""
     <div class="seo-gallery">
-        <div class="seo-gallery-main">
-            <img src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="eager"/>
+        <div class="seo-gallery-stage">
+            <button type="button" class="seo-gallery-nav seo-gallery-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
+            <div class="seo-gallery-main">
+                <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="eager"/>
+            </div>
+            <button type="button" class="seo-gallery-nav seo-gallery-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
         </div>
-        <div class="seo-thumbs">
-            {''.join(f'<img src="{html.escape(image)}" alt="{html.escape(full_title)}" loading="lazy"/>' for image in image_urls[:8])}
+        <div class="seo-thumbs"{thumbs_style}>
+            {gallery_images}
         </div>
     </div>
     """
@@ -3530,8 +3588,8 @@ def example_page(slug: str):
             <p>{html.escape(str(item.get('category', '') or '-'))}</p>
         </div>
         <div class="seo-cta-row">
-            <a class="seo-btn seo-btn-primary" href="/kapellforfragan">Kapellförfrågan</a>
-            <a class="seo-btn" href="/kontakt">Mer information</a>
+            <a class="seo-btn seo-btn-primary" href="{html.escape(build_kapell_example_href(manufacturer, model, canonical_slug))}">Kapellförfrågan</a>
+            <a class="seo-btn" href="{html.escape(build_contact_example_href(manufacturer, model, canonical_slug))}">Mer information</a>
         </div>
     </div>
     """
@@ -3568,7 +3626,7 @@ def example_page(slug: str):
     <main class="seo-page">
         <section class="seo-hero">
             <div class="seo-breadcrumbs">
-                <a href="/">Start</a><span>/</span><a href="/bilder-och-exempel">Bilder & exempel</a><span>/</span><span>{html.escape(full_title)}</span>
+                <a href="/">Start</a><span>/</span><a href="/bilder-och-exempel">Bilder &amp; exempel</a><span>/</span><span>{html.escape(full_title)}</span>
             </div>
             <div class="seo-kicker">{html.escape(str(item.get('category', '') or 'Exempel'))}</div>
             <h1>{html.escape(full_title)}</h1>
@@ -3585,6 +3643,27 @@ def example_page(slug: str):
             </div>
         </section>
     </main>
+    <script>
+        (function () {{
+            const images = {json.dumps(image_urls[:8])};
+            if (images.length < 2) return;
+            const mainImage = document.getElementById('seoGalleryMainImage');
+            const thumbs = Array.from(document.querySelectorAll('.seo-thumb'));
+            const prevButton = document.querySelector('.seo-gallery-prev');
+            const nextButton = document.querySelector('.seo-gallery-next');
+            let currentIndex = 0;
+
+            function render(index) {{
+                currentIndex = (index + images.length) % images.length;
+                if (mainImage) mainImage.src = images[currentIndex];
+                thumbs.forEach((thumb, i) => thumb.classList.toggle('is-active', i === currentIndex));
+            }}
+
+            thumbs.forEach((thumb, index) => thumb.addEventListener('click', () => render(index)));
+            if (prevButton) prevButton.addEventListener('click', () => render(currentIndex - 1));
+            if (nextButton) nextButton.addEventListener('click', () => render(currentIndex + 1));
+        }})();
+    </script>
     """
     return render_public_page(
         title=page_title,
