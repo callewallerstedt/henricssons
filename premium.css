@@ -951,6 +951,10 @@
     color: var(--brass-dark);
     font-weight: 600;
 }
+.hb-form-card > .hb-btn,
+.hb-form-card > .hb-btn-primary {
+    margin-top: 2rem;
+}
 .hb-form-progress {
     display: none;
     margin: 1rem 0 0.4rem;
@@ -1584,6 +1588,8 @@
     .hb-form-card { padding: 1.25rem 1.1rem; }
     .hb-form-card h2 { font-size: 1.3rem; }
     .hb-form-card .subtitle { font-size: 0.9rem; margin-bottom: 1.25rem; }
+    .hb-form-card > .hb-btn,
+    .hb-form-card > .hb-btn-primary { margin-top: 1.5rem; }
     .hb-form-row input,
     .hb-form-row textarea,
     .hb-form-row select,

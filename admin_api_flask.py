@@ -67,10 +67,10 @@ LOGO_FILE = BASE_DIR / "logo.png"
 IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
 EXAMPLES_META_FILE = BASE_DIR / "examples_meta.json"
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://henricssons.onrender.com").rstrip("/")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://www.henricssonsbatkapell.se").rstrip("/")
 PUBLIC_ATTACHMENT_BASE_URL = os.getenv(
     "PUBLIC_ATTACHMENT_BASE_URL",
-    os.getenv("PUBLIC_API_BASE_URL", "https://henricssons-api.onrender.com"),
+    os.getenv("PUBLIC_API_BASE_URL", PUBLIC_BASE_URL),
 ).rstrip("/")
 GENERIC_EXAMPLE_DESCRIPTION = (
     "Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning "

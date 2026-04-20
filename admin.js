@@ -33,7 +33,7 @@ function resolveApiBase() {
     }
 
     if (KNOWN_STATIC_HOSTS.has(location.hostname)) {
-        return 'https://henricssons-api.onrender.com';
+        return sameOrigin;
     }
 
     if ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') && location.port !== '25565') {
@@ -44,10 +44,6 @@ function resolveApiBase() {
 }
 API_BASE = resolveApiBase();
 console.log('API_BASE initialized to:', API_BASE, 'from location:', location.href);
-
-if (KNOWN_STATIC_HOSTS.has(location.hostname) && /^\/admin(?:\.html)?\/?$/i.test(location.pathname)) {
-    window.location.replace(new URL('/admin', API_BASE).toString());
-}
 
 let ADMIN_API_KEY = localStorage.getItem('adminApiKey') || '';
 const STATUS_FLOW = ['nya-inskick', 'vantar-pa-svar', 'i-produktion', 'redo-for-leverans'];
@@ -311,7 +307,7 @@ let statusItems = {
     'todo': []
 };
 let nyaInskickSortOrder = 'newest'; // 'newest' or 'oldest'
-let currentFormFilter = 'all'; // 'all', 'Kapellförfrågan', 'Fenderförfrågan', 'Kontakt'
+let currentFormFilter = 'all'; // 'all', 'Kapellförfrågan', 'Fenderförfrågan', 'Dynsatsförfrågan', 'Kontakt'
 let chatbotPrompt = 'Du är en hjälpsam assistent för Henricssons Båtkapell. Du hjälper till med frågor om båtkapell, beställningar och allmän service.';
 let currentEditingItem = null;
 let statusFoldersLoading = false;
