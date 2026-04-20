@@ -126,7 +126,8 @@ async function refreshSubmissionAttachments(item) {
 async function adminFetch(url, options = {}) {
     const opts = { ...options };
     opts.headers = { ...(options.headers || {}) };
-    opts.credentials = 'include';
+    const requestOrigin = new URL(url, location.href).origin;
+    opts.credentials = requestOrigin === location.origin ? 'include' : 'omit';
     if (ADMIN_API_KEY) {
         opts.headers['X-Admin-Key'] = ADMIN_API_KEY;
     }
