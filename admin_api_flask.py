@@ -2236,12 +2236,24 @@ def build_notification_html(
 </html>"""
 
 
+_FORM_TYPE_COPY: Dict[str, Dict[str, str]] = {
+    "Kontakt": {
+        "received": "Vi har tagit emot ditt meddelande och &#229;terkommer s&#229; snart vi kan.",
+        "followup": "Om du vill till&#228;gga n&#229;got eller har fler fr&#229;gor &#228;r du v&#228;lkommen att svara p&#229; detta e-postmeddelande eller kontakta oss direkt p&#229; uppgifterna nedan.",
+    },
+}
+_FORM_TYPE_COPY_DEFAULT: Dict[str, str] = {
+    "received": "Vi har tagit emot din f&#246;rfr&#229;gan och &#229;terkommer s&#229; snart vi kan med information eller eventuella f&#246;ljdfr&#229;gor.",
+    "followup": "Om du vill komplettera din f&#246;rfr&#229;gan eller har fr&#229;gor &#228;r du v&#228;lkommen att svara p&#229; detta e-postmeddelande eller kontakta oss direkt p&#229; uppgifterna nedan.",
+}
+
+
 def build_customer_confirmation_html(
     form_type: str,
     customer_name: str,
     summary_html: str = "",
 ) -> str:
-    form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
+    copy = _FORM_TYPE_COPY.get(form_type, _FORM_TYPE_COPY_DEFAULT)
     safe_name = html.escape((customer_name or "").strip())
     greeting = f"Hej {safe_name}," if safe_name else "Hej,"
     html_doc = f"""<!DOCTYPE html>
@@ -2262,7 +2274,6 @@ def build_customer_confirmation_html(
       <img src="cid:henricssons-logo" alt="Henricssons B&#229;tkapell" width="156" style="display:block;width:156px;height:auto;border:0;margin:0 auto 20px;">
       <div style="width:40px;height:1px;background:#b28a4c;margin:0 auto 16px;"></div>
       <div style="color:#f5f0e6;font-size:11px;font-family:Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;">Tack f&#246;r din f&#246;rfr&#229;gan</div>
-      <div style="color:#b28a4c;font-size:12px;font-family:Arial,Helvetica,sans-serif;letter-spacing:0.1em;margin-top:6px;">{form_label}</div>
     </td>
   </tr>
 
@@ -2271,9 +2282,9 @@ def build_customer_confirmation_html(
     <td style="padding:36px 40px 28px;background:#ffffff;">
       <p style="margin:0 0 16px;font-size:16px;line-height:1.75;color:#0c1a2b;">{greeting}</p>
       <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Tack f&#246;r att du kontaktade oss p&#229; Henricssons B&#229;tkapell.</p>
-      <p style="margin:0 0 20px;font-size:15px;line-height:1.75;color:#1b2e47;">Vi har tagit emot din f&#246;rfr&#229;gan och &#229;terkommer s&#229; snart vi kan med information eller eventuella f&#246;ljdfr&#229;gor.</p>
+      <p style="margin:0 0 20px;font-size:15px;line-height:1.75;color:#1b2e47;">{copy["received"]}</p>
       {summary_html}
-      <p style="margin:0 0 28px;font-size:15px;line-height:1.75;color:#1b2e47;">Om du vill komplettera din f&#246;rfr&#229;gan under tiden &#228;r du v&#228;lkommen att kontakta oss direkt.</p>
+      <p style="margin:0 0 28px;font-size:15px;line-height:1.75;color:#1b2e47;">{copy["followup"]}</p>
 
       <!-- Contact box -->
       <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;border-top:2px solid #b28a4c;margin-bottom:28px;">
@@ -2281,9 +2292,9 @@ def build_customer_confirmation_html(
           <td style="padding:20px 22px;">
             <div style="font-size:10px;font-family:Arial,Helvetica,sans-serif;color:#b28a4c;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;margin-bottom:12px;">Kontakta oss</div>
             <div style="font-size:14px;line-height:2;color:#0c1a2b;font-family:Arial,Helvetica,sans-serif;">
-              &#9990;&nbsp; <a href="tel:+46314718200" style="color:#0c1a2b;text-decoration:none;">+46 (0)31 47 18 20</a><br>
-              &#9993;&nbsp; <a href="mailto:info@henricssonsbatkapell.se" style="color:#b28a4c;text-decoration:none;">info@henricssonsbatkapell.se</a><br>
-              &#8962;&nbsp; Energigatan 17E, 434 37 Kungsbacka
+              <a href="tel:+46314718200" style="color:#0c1a2b;text-decoration:none;">+46 (0)31 47 18 20</a><br>
+              <a href="mailto:info@henricssonsbatkapell.se" style="color:#b28a4c;text-decoration:none;">info@henricssonsbatkapell.se</a><br>
+              Energigatan 17E, 434 37 Kungsbacka
             </div>
           </td>
         </tr>
@@ -2297,7 +2308,7 @@ def build_customer_confirmation_html(
   <tr>
     <td style="background:#0c1a2b;padding:16px 40px;">
       <p style="margin:0;color:#6b7788;font-size:11px;font-family:Arial,Helvetica,sans-serif;text-align:center;line-height:1.6;letter-spacing:0.04em;">
-        Detta &#228;r en automatisk bekr&#228;ftelse. Svara inte p&#229; detta e-postmeddelande.
+        Du kan svara p&#229; detta e-postmeddelande s&#229; h&#246;r du fr&#229;n oss.
       </p>
     </td>
   </tr>
@@ -2346,7 +2357,7 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
 
     summary_html = (
         '<div style="margin:24px 0 20px;padding:20px 22px;background:#eae2d2;border-left:3px solid #b28a4c;">'
-        '<div style="font-size:10px;color:#b28a4c;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:14px;">Din f&#246;rfr&#229;gan</div>'
+        '<div style="font-size:10px;color:#b28a4c;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:14px;">Sammanfattning</div>'
         + "".join(
             f'<div style="font-size:13px;line-height:1.8;color:#0c1a2b;border-bottom:1px solid #d9cfbe;padding:5px 0;">'
             f'<span style="color:#6b7788;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;">{html.escape(label)}</span>'
