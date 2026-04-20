@@ -2,13 +2,24 @@
 <html lang="sv">
 <head>
     <meta charset="utf-8"/>
-    <title>Tillfälliga Produkter - Henricssons Båtkapell</title>
+    <title>Tillfälliga produkter - Henricssons Båtkapell</title>
+    <meta name="description" content="Aktuella tillfälliga produkter från Henricssons Båtkapell med egna delbara produktsidor, bildgalleri och premiumpresentation."/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
     <link rel="icon" href="logo.png">
+    <link rel="canonical" href="https://www.henricssonsbatkapell.se/tillfalliga-produkter"/>
+    <meta property="og:title" content="Tillfälliga produkter - Henricssons Båtkapell"/>
+    <meta property="og:description" content="Aktuella tillfälliga produkter med egna delbara sidor och samma premiumkänsla som resten av sajten."/>
+    <meta property="og:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
+    <meta property="og:type" content="website"/>
+    <meta property="og:url" content="https://www.henricssonsbatkapell.se/tillfalliga-produkter"/>
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="Tillfälliga produkter - Henricssons Båtkapell"/>
+    <meta name="twitter:description" content="Aktuella tillfälliga produkter med egna delbara sidor och samma premiumkänsla som resten av sajten."/>
+    <meta name="twitter:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
 </head>
 <body class="hb-premium">
     <div class="hb-top"><div class="wrap"><div class="hb-top-left"><span>Familjeföretag sedan 1967 · Kungsbacka</span></div><div class="hb-top-right"><a href="tel:+46314718200">+46 (0)31 47 18 20</a><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></div></div></div>
@@ -16,10 +27,15 @@
 
     <section class="hb-pagehero">
         <div class="hb-pagehero-bg"><img src="bakgrundhav.webp" alt=""/></div>
-        <div class="wrap"><span class="eyebrow">Övriga produkter</span><span class="rule"></span><h1>Tillfälliga <em>produkter</em></h1><p class="lead">Här samlar vi produkter och erbjudanden som dyker upp under kortare perioder.</p></div>
+        <div class="wrap">
+            <span class="eyebrow">Övriga produkter</span>
+            <span class="rule"></span>
+            <h1>Tillfälliga <em>produkter</em></h1>
+            <p class="lead">Ett urval av aktuella produkter.</p>
+        </div>
     </section>
 
-    <section class="hb-section">
+    <section class="hb-section hb-section--tight">
         <div class="wrap">
             <div id="tp-loading" class="hb-tp-empty">Laddar produkter...</div>
             <div id="tp-empty" class="hb-tp-empty" style="display:none;">
@@ -30,16 +46,20 @@
         </div>
     </section>
 
-    <!-- Lightbox -->
-    <div id="tp-lightbox" class="hb-tp-lightbox" role="dialog" aria-modal="true" aria-hidden="true">
-        <button class="hb-tp-lightbox-close" aria-label="Stäng">×</button>
-        <button class="hb-tp-lightbox-nav hb-tp-lightbox-prev" aria-label="Föregående">‹</button>
-        <button class="hb-tp-lightbox-nav hb-tp-lightbox-next" aria-label="Nästa">›</button>
-        <div class="hb-tp-lightbox-inner">
-            <img id="tp-lightbox-img" src="" alt="">
-            <div id="tp-lightbox-caption" class="hb-tp-lightbox-caption"></div>
+    <section class="hb-section hb-finalcta">
+        <div class="hb-finalcta-bg"><img src="bakgrundhav.webp" alt=""/></div>
+        <div class="wrap">
+            <span class="eyebrow" style="color: var(--brass);">Behöver du mer information?</span>
+            <span class="rule"></span>
+            <h2>Fråga om en <em>specifik produkt</em></h2>
+            <p>Gå in på produkten och dela länken vidare, eller kontakta oss direkt så hjälper vi dig vidare.</p>
+            <div class="hb-ctas">
+                <a href="/kontakt" class="hb-btn hb-btn-primary"><span>Kontakta oss</span></a>
+                <a href="/kapellforfragan" class="hb-btn hb-btn-ghost">Kapellförfrågan</a>
+            </div>
+            <div class="phone">eller ring direkt · <a href="tel:+46314718200">+46 (0)31 47 18 20</a></div>
         </div>
-    </div>
+    </section>
 
     <footer class="hb-footer">
         <div class="wrap">
@@ -96,30 +116,18 @@
     </footer>
     <script>
     (function () {
-        const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-            ? `${location.protocol}//${location.host}`
-            : 'https://henricssons.onrender.com';
+        const API_BASE = `${location.protocol}//${location.host}`;
         const grid = document.getElementById('tp-grid');
         const loading = document.getElementById('tp-loading');
         const empty = document.getElementById('tp-empty');
-        const lightbox = document.getElementById('tp-lightbox');
-        const lightboxImg = document.getElementById('tp-lightbox-img');
-        const lightboxCaption = document.getElementById('tp-lightbox-caption');
-        let lightboxState = { images: [], index: 0, title: '' };
 
-        function escHtml(s) {
-            return String(s || '')
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-        }
-
-        function renderProducts(products) {
-            grid.innerHTML = '';
-            if (!products.length) {
-                empty.style.display = 'block';
-                return;
-            }
-            products.forEach(p => grid.appendChild(renderProductCard(p)));
+        function escHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         function renderProductCard(product) {
@@ -128,88 +136,50 @@
             const images = Array.isArray(product.images) ? product.images : [];
             const primary = images[0];
             const imgSrc = primary ? `${API_BASE}${primary.url}` : '';
-            const descHtml = escHtml(product.description || '').replace(/\n/g, '<br>');
+            const href = product.href || '/tillfalliga-produkter';
+            const description = String(product.description || '').trim();
+            const shortDescription = description.length > 170 ? `${description.slice(0, 167).trimEnd()}...` : description;
+            const descHtml = escHtml(shortDescription).replace(/\n/g, '<br>');
             card.innerHTML = `
-                <div class="hb-tp-media">
-                    ${imgSrc ? `<img src="${imgSrc}" alt="${escHtml(product.title || '')}" loading="lazy">` : '<div class="hb-tp-media-empty">Ingen bild</div>'}
-                    ${images.length > 1 ? `<div class="hb-tp-media-count">+${images.length - 1}</div>` : ''}
-                </div>
-                <div class="hb-tp-body">
-                    <h3>${escHtml(product.title || 'Utan titel')}</h3>
-                    ${product.price ? `<div class="hb-tp-price">${escHtml(product.price)}</div>` : ''}
-                    ${product.description ? `<p class="hb-tp-desc">${descHtml}</p>` : ''}
-                    ${images.length > 1 ? `<div class="hb-tp-thumbs"></div>` : ''}
-                    <a href="/kontakt" class="hb-tp-cta">Fråga om denna →</a>
-                </div>
+                <a class="hb-tp-card-link" href="${escHtml(href)}" aria-label="Visa ${escHtml(product.title || 'produkt')}">
+                    <div class="hb-tp-media">
+                        ${imgSrc ? `<img src="${imgSrc}" alt="${escHtml(product.title || '')}" loading="lazy">` : '<div class="hb-tp-media-empty">Ingen bild</div>'}
+                        ${images.length > 1 ? `<div class="hb-tp-media-count">${images.length} bilder</div>` : ''}
+                    </div>
+                    <div class="hb-tp-body">
+                        <h3>${escHtml(product.title || 'Utan titel')}</h3>
+                        ${product.price ? `<div class="hb-tp-price">${escHtml(product.price)}</div>` : ''}
+                        ${description ? `<p class="hb-tp-desc">${descHtml}</p>` : ''}
+                        <div class="hb-tp-actions">
+                            <span class="hb-tp-cta">Läs mer</span>
+                        </div>
+                    </div>
+                </a>
             `;
-            if (images.length) {
-                const mediaEl = card.querySelector('.hb-tp-media');
-                mediaEl.style.cursor = 'zoom-in';
-                mediaEl.addEventListener('click', () => openLightbox(images, 0, product.title));
-            }
-            if (images.length > 1) {
-                const thumbs = card.querySelector('.hb-tp-thumbs');
-                images.slice(0, 6).forEach((img, i) => {
-                    const t = document.createElement('button');
-                    t.type = 'button';
-                    t.className = 'hb-tp-thumb';
-                    t.innerHTML = `<img src="${API_BASE}${img.url}" alt="" loading="lazy">`;
-                    t.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        openLightbox(images, i, product.title);
-                    });
-                    thumbs.appendChild(t);
-                });
-            }
             return card;
         }
 
-        function openLightbox(images, index, title) {
-            lightboxState = { images, index, title: title || '' };
-            updateLightbox();
-            lightbox.classList.add('is-open');
-            lightbox.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
+        function renderProducts(products) {
+            grid.innerHTML = '';
+            if (!products.length) {
+                empty.style.display = 'block';
+                return;
+            }
+            products.forEach(product => grid.appendChild(renderProductCard(product)));
         }
 
-        function closeLightbox() {
-            lightbox.classList.remove('is-open');
-            lightbox.setAttribute('aria-hidden', 'true');
-            document.body.style.overflow = '';
+        const nav = document.getElementById('hbNav');
+        if (nav) {
+            nav.querySelectorAll('a').forEach((link) => {
+                link.addEventListener('click', () => {
+                    nav.classList.remove('is-open');
+                });
+            });
         }
-
-        function updateLightbox() {
-            const { images, index, title } = lightboxState;
-            if (!images || !images.length) return;
-            const img = images[index];
-            lightboxImg.src = `${API_BASE}${img.url}`;
-            lightboxCaption.textContent = `${title ? title + ' · ' : ''}${index + 1} / ${images.length}`;
-            const multi = images.length > 1;
-            lightbox.querySelector('.hb-tp-lightbox-prev').style.display = multi ? '' : 'none';
-            lightbox.querySelector('.hb-tp-lightbox-next').style.display = multi ? '' : 'none';
-        }
-
-        function navLightbox(delta) {
-            const n = lightboxState.images.length;
-            if (!n) return;
-            lightboxState.index = (lightboxState.index + delta + n) % n;
-            updateLightbox();
-        }
-
-        lightbox.querySelector('.hb-tp-lightbox-close').addEventListener('click', closeLightbox);
-        lightbox.querySelector('.hb-tp-lightbox-prev').addEventListener('click', () => navLightbox(-1));
-        lightbox.querySelector('.hb-tp-lightbox-next').addEventListener('click', () => navLightbox(1));
-        lightbox.addEventListener('click', (e) => { if (e.target === lightbox) closeLightbox(); });
-        document.addEventListener('keydown', (e) => {
-            if (!lightbox.classList.contains('is-open')) return;
-            if (e.key === 'Escape') closeLightbox();
-            else if (e.key === 'ArrowLeft') navLightbox(-1);
-            else if (e.key === 'ArrowRight') navLightbox(1);
-        });
 
         fetch(`${API_BASE}/api/temp_products`)
-            .then(r => r.ok ? r.json() : [])
-            .then(products => {
+            .then((response) => response.ok ? response.json() : [])
+            .then((products) => {
                 loading.style.display = 'none';
                 renderProducts(Array.isArray(products) ? products : []);
             })

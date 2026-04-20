@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode, urlparse
 
 import requests
-from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_from_directory, has_request_context
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON as SQLJSON, LargeBinary, String, Text, create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -545,6 +545,14 @@ def repair_mojibake_text(text: str) -> str:
 
 
 def absolute_public_url(path: str) -> str:
+    if has_request_context():
+        current_host_url = (request.host_url or "").rstrip("/")
+        current_host = (request.host or "").split(":")[0].strip().lower()
+        if current_host_url and (current_host in {"localhost", "127.0.0.1", "::1"} or is_local_request()):
+            if not path or path == "/":
+                return current_host_url
+            clean_local = path if path.startswith("/") else f"/{path}"
+            return f"{current_host_url}{clean_local}"
     if not path or path == "/":
         return PUBLIC_BASE_URL
     clean = path if path.startswith("/") else f"/{path}"
@@ -715,6 +723,8 @@ def build_kapell_example_href(manufacturer: str, model: str, canonical_slug: str
 def render_public_page(title: str, description: str, canonical_path: str, content_html: str, og_image: str = "/logo.png") -> str:
     canonical_url = absolute_public_url(canonical_path)
     og_image_url = og_image if og_image.startswith("http://") or og_image.startswith("https://") else absolute_public_url(og_image)
+    examples_active = canonical_path == "/bilder-och-exempel" or canonical_path.startswith("/exempel/") or canonical_path.startswith("/search")
+    temp_products_active = canonical_path == "/tillfalliga-produkter" or canonical_path.startswith("/tillfalliga-produkter/")
     return render_template_string(
         """<!DOCTYPE html>
 <html lang="sv">
@@ -726,7 +736,6 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css?v=20260420b">
     <link rel="icon" href="/logo.png">
     <link rel="canonical" href="{{ canonical_url }}"/>
     <meta property="og:title" content="{{ title }}"/>
@@ -738,128 +747,560 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
     <meta name="twitter:title" content="{{ title }}"/>
     <meta name="twitter:description" content="{{ description }}"/>
     <meta name="twitter:image" content="{{ og_image_url }}"/>
+    <link rel="stylesheet" href="/premium.css?v=20260420b">
     <style>
-        .seo-shell { min-height: 100vh; background: #f7f4ee; }
-        .seo-page { max-width: 1180px; margin: 0 auto; padding: 5.5rem 1.25rem 4rem; }
-        .seo-hero { display: grid; gap: 1.25rem; margin-bottom: 2rem; }
-        .seo-kicker { color: #8b6f18; font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
-        .seo-breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; color: #5d5d5d; font-size: 0.92rem; margin-bottom: 1rem; }
-        .seo-breadcrumbs a { color: inherit; text-decoration: none; }
-        .seo-breadcrumbs a:hover { text-decoration: underline; }
-        .seo-grid { display: grid; gap: 2rem; grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr); align-items: start; }
-        .seo-card { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); box-shadow: 0 16px 40px rgba(10, 35, 66, 0.08); padding: 1.5rem; }
-        .seo-gallery { display: grid; gap: 0.9rem; }
-        .seo-gallery-stage { position: relative; background: #ece7da; min-height: 420px; display: flex; align-items: center; justify-content: center; padding: 1rem 4.25rem; }
-        .seo-gallery-main img { width: 100%; max-width: 100%; max-height: 540px; object-fit: contain; display: block; background: #ece7da; }
-        .seo-gallery-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border: 1px solid rgba(10, 35, 66, 0.16); background: rgba(255,255,255,0.92); color: #0a2342; font-size: 1.8rem; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background 0.15s, border-color 0.15s; }
-        .seo-gallery-nav:hover { background: #fff; border-color: #c8a93f; }
-        .seo-gallery-nav:disabled { opacity: 0.3; cursor: default; }
+        .seo-page {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4.5rem 1.5rem 4rem;
+        }
+        .seo-hero {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        }
+        .seo-breadcrumbs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            color: var(--muted);
+            font-size: 0.88rem;
+            letter-spacing: 0.04em;
+        }
+        .seo-breadcrumbs a {
+            color: var(--muted);
+            text-decoration: none;
+        }
+        .seo-breadcrumbs a:hover {
+            color: var(--ink);
+            text-decoration: underline;
+        }
+        .seo-kicker {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.22em;
+            color: var(--brass);
+            font-weight: 600;
+        }
+        .seo-hero h1 {
+            font-size: clamp(2rem, 4.2vw, 3.2rem);
+            line-height: 1.12;
+            max-width: 820px;
+        }
+        .seo-hero p {
+            max-width: 760px;
+            color: var(--muted);
+            font-size: 1rem;
+            line-height: 1.75;
+        }
+        .seo-grid {
+            display: grid;
+            gap: 2rem;
+            grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
+            align-items: start;
+        }
+        .seo-card {
+            background: var(--white);
+            border: 1px solid rgba(12, 26, 43, 0.09);
+            box-shadow: 0 18px 42px rgba(12, 26, 43, 0.08);
+            padding: 1.5rem;
+        }
+        .seo-card p,
+        .seo-card li {
+            color: var(--muted);
+        }
+        .seo-gallery {
+            display: grid;
+            gap: 0.9rem;
+        }
+        .seo-gallery-stage {
+            position: relative;
+            min-height: 420px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 4.25rem;
+            background: var(--cream-2);
+            overflow: hidden;
+        }
+        .seo-gallery-main {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-height: 420px;
+            cursor: zoom-in;
+            overflow: hidden;
+        }
+        .seo-gallery-main img {
+            width: 100%;
+            max-width: 100%;
+            height: 100%;
+            min-height: 420px;
+            object-fit: contain;
+            object-position: center;
+            display: block;
+            background: var(--cream-2);
+        }
+        .seo-gallery-expand {
+            position: absolute;
+            right: 1rem;
+            bottom: 1rem;
+            border: 0;
+            background: rgba(12, 26, 43, 0.82);
+            color: var(--white);
+            padding: 0.75rem 1rem;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        .seo-gallery-expand:hover {
+            background: rgba(178, 138, 76, 0.92);
+        }
+        .seo-gallery-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 48px;
+            height: 48px;
+            border: 1px solid rgba(12, 26, 43, 0.16);
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--ink);
+            font-size: 1.8rem;
+            line-height: 1;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+        }
+        .seo-gallery-nav:hover {
+            background: var(--white);
+            border-color: var(--brass);
+            color: var(--brass);
+        }
+        .seo-gallery-nav:disabled {
+            opacity: 0.3;
+            cursor: default;
+        }
         .seo-gallery-prev { left: 1rem; }
         .seo-gallery-next { right: 1rem; }
-        .seo-thumbs { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 84px)); gap: 0.55rem; justify-content: start; }
-        .seo-thumb { border: 1px solid rgba(10, 35, 66, 0.12); background: #f4efe4; padding: 0.25rem; cursor: pointer; transition: border-color 0.15s; }
-        .seo-thumb:hover { border-color: rgba(200, 169, 63, 0.6); }
-        .seo-thumb.is-active { border-color: #c8a93f; box-shadow: inset 0 0 0 1px #c8a93f; }
-        .seo-thumb img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #ece7da; }
-        .seo-meta { display: grid; gap: 0.9rem; }
-        .seo-meta-block { border-top: 1px solid rgba(10, 35, 66, 0.08); padding-top: 0.9rem; }
-        .seo-meta-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8b6f18; font-weight: 700; margin-bottom: 0.35rem; }
-        .seo-cta-row { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-top: 1.2rem; }
-        .seo-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 1.5rem; text-decoration: none; font-weight: 700; letter-spacing: 0.03em; border: 2px solid #0a2342; color: #0a2342; background: #fff; transition: background 0.15s, color 0.15s; }
-        .seo-btn:hover { background: #0a2342; color: #fff; }
-        .seo-btn.seo-btn-primary { background: #c8a93f; border-color: #c8a93f; color: #0a2342; }
-        .seo-btn.seo-btn-primary:hover { background: #b8952e; border-color: #b8952e; color: #0a2342; }
-        .seo-related { margin-top: 2.5rem; }
-        .seo-related-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-        .seo-related-card { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); text-decoration: none; color: #0a2342; overflow: hidden; transition: box-shadow 0.15s, transform 0.15s; }
-        .seo-related-card:hover { box-shadow: 0 8px 24px rgba(10, 35, 66, 0.12); transform: translateY(-2px); }
-        .seo-related-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #ece7da; }
-        .seo-related-copy { padding: 1rem; }
-        .seo-search-form { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.2rem 0 1.8rem; }
-        .seo-search-form input { flex: 1 1 260px; min-height: 48px; padding: 0 1rem; border: 1px solid rgba(10, 35, 66, 0.16); font: inherit; }
-        .seo-search-list { display: grid; gap: 0.9rem; }
-        .seo-search-item { background: #fff; border: 1px solid rgba(10, 35, 66, 0.08); padding: 1rem 1.1rem; display: grid; gap: 0.35rem; }
+        .seo-thumbs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(64px, 84px));
+            gap: 0.55rem;
+            justify-content: start;
+        }
+        .seo-thumb {
+            border: 1px solid rgba(12, 26, 43, 0.12);
+            background: var(--cream);
+            padding: 0.25rem;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .seo-thumb:hover { border-color: rgba(178, 138, 76, 0.6); }
+        .seo-thumb.is-active {
+            border-color: var(--brass);
+            box-shadow: inset 0 0 0 1px var(--brass);
+        }
+        .seo-thumb img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: contain;
+            display: block;
+            background: var(--cream-2);
+        }
+        .seo-meta {
+            display: grid;
+            gap: 0.9rem;
+        }
+        .seo-meta-block {
+            border-top: 1px solid rgba(12, 26, 43, 0.08);
+            padding-top: 0.9rem;
+        }
+        .seo-meta-label {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--brass);
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+        }
+        .seo-cta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            margin-top: 1.2rem;
+        }
+        .seo-btn,
+        button.seo-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 0.9rem 1.5rem;
+            border: 1px solid var(--ink);
+            background: transparent;
+            color: var(--ink);
+            text-decoration: none;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }
+        .seo-btn:hover,
+        button.seo-btn:hover {
+            background: var(--ink);
+            color: var(--cream);
+        }
+        .seo-btn.seo-btn-primary,
+        button.seo-btn.seo-btn-primary {
+            background: var(--brass);
+            color: var(--white);
+            border-color: var(--brass);
+        }
+        .seo-btn.seo-btn-primary:hover,
+        button.seo-btn.seo-btn-primary:hover {
+            background: var(--ink);
+            color: var(--cream);
+            border-color: var(--ink);
+        }
+        .seo-related {
+            margin-top: 2.75rem;
+        }
+        .seo-related h2 {
+            font-size: clamp(1.7rem, 3vw, 2.3rem);
+            margin-bottom: 1.25rem;
+        }
+        .seo-related-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+        .seo-related-card {
+            background: var(--white);
+            border: 1px solid rgba(12, 26, 43, 0.08);
+            color: var(--ink);
+            overflow: hidden;
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .seo-related-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 18px 38px rgba(12, 26, 43, 0.12);
+        }
+        .seo-related-card img {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            display: block;
+            background: var(--cream-2);
+        }
+        .seo-related-copy {
+            padding: 1rem;
+            display: grid;
+            gap: 0.45rem;
+        }
+        .seo-related-copy strong {
+            color: var(--ink);
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+        .seo-search-form {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin: 1.2rem 0 1.8rem;
+        }
+        .seo-search-form input {
+            flex: 1 1 260px;
+            min-height: 48px;
+            padding: 0 1rem;
+            border: 1px solid rgba(12, 26, 43, 0.16);
+            font: inherit;
+            background: var(--white);
+            color: var(--ink);
+        }
+        .seo-search-form input:focus {
+            outline: none;
+            border-color: var(--brass);
+        }
+        .seo-search-list {
+            display: grid;
+            gap: 0.9rem;
+        }
+        .seo-search-item {
+            background: var(--white);
+            border: 1px solid rgba(12, 26, 43, 0.08);
+            padding: 1.1rem 1.2rem;
+            display: grid;
+            gap: 0.35rem;
+        }
+        .seo-search-item h2 a {
+            color: var(--ink);
+            text-decoration: none;
+        }
+        .seo-search-item h2 a:hover { color: var(--brass); }
+        .seo-lightbox {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(5, 10, 18, 0.96);
+            z-index: 2200;
+            padding: 4rem 1.5rem 2rem;
+        }
+        .seo-lightbox.is-open {
+            display: flex;
+        }
+        .seo-lightbox-stage {
+            position: relative;
+            max-width: min(92vw, 1500px);
+            max-height: 82vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .seo-lightbox-stage img {
+            max-width: 100%;
+            max-height: 82vh;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+        .seo-lightbox-close,
+        .seo-lightbox-nav,
+        .seo-lightbox-fullscreen {
+            border: 0;
+            cursor: pointer;
+        }
+        .seo-lightbox-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 52px;
+            height: 52px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.12);
+            color: var(--white);
+            font-size: 2rem;
+            line-height: 1;
+            z-index: 2;
+        }
+        .seo-lightbox-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .seo-lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 56px;
+            height: 56px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.12);
+            color: var(--white);
+            font-size: 2rem;
+            z-index: 2;
+        }
+        .seo-lightbox-nav:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .seo-lightbox-prev { left: 1rem; }
+        .seo-lightbox-next { right: 1rem; }
+        .seo-lightbox-actions {
+            position: absolute;
+            left: 50%;
+            bottom: 1rem;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 0.75rem;
+            z-index: 2;
+        }
+        .seo-lightbox-fullscreen {
+            background: rgba(255, 255, 255, 0.14);
+            color: var(--white);
+            padding: 0.85rem 1.1rem;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+        .seo-lightbox-fullscreen:hover {
+            background: rgba(178, 138, 76, 0.92);
+        }
         @media (max-width: 900px) {
             .seo-grid { grid-template-columns: 1fr; }
-            .seo-page { padding-top: 4rem; }
+            .seo-page { padding-top: 3rem; }
             .seo-gallery-stage { min-height: 320px; padding-inline: 3.5rem; }
-            .seo-gallery-main img { max-height: 360px; }
+            .seo-gallery-main,
+            .seo-gallery-main img { min-height: 320px; }
             .seo-thumbs { grid-template-columns: repeat(auto-fit, minmax(60px, 72px)); }
+        }
+        @media (max-width: 640px) {
+            .seo-page { padding: 2.5rem 1rem 3rem; }
+            .seo-gallery-stage { min-height: 280px; padding-inline: 3rem; }
+            .seo-gallery-main,
+            .seo-gallery-main img { min-height: 280px; }
+            .seo-hero h1 { font-size: 1.8rem; }
+            .seo-cta-row,
+            .seo-search-form { flex-direction: column; }
+            .seo-btn,
+            button.seo-btn { width: 100%; }
+            .seo-gallery-expand { left: 1rem; right: auto; bottom: 0.8rem; }
+            .seo-lightbox { padding: 4.5rem 1rem 1.25rem; }
+            .seo-lightbox-close {
+                top: 0.75rem;
+                right: 0.75rem;
+                width: 46px;
+                height: 46px;
+                font-size: 1.7rem;
+            }
+            .seo-lightbox-nav {
+                width: 46px;
+                height: 46px;
+                font-size: 1.7rem;
+            }
+            .seo-lightbox-prev { left: 0.5rem; }
+            .seo-lightbox-next { right: 0.5rem; }
+            .seo-lightbox-actions {
+                left: 1rem;
+                right: 1rem;
+                transform: none;
+                justify-content: center;
+            }
         }
     </style>
 </head>
-<body class="seo-shell">
-    <header class="header">
-        <nav class="navbar">
-            <a href="/" class="nav-logo">
-                <img src="/logo.png" alt="Henricssons Båtkapell Logo"/>
-            </a>
-            <button class="menu-btn" aria-label="Toggle menu">
-                <span class="menu-line"></span>
-                <span class="menu-line"></span>
-                <span class="menu-line"></span>
+<body class="hb-premium">
+    <div class="hb-top">
+        <div class="wrap">
+            <div class="hb-top-left"><span>Familjeföretag sedan 1967 &middot; Kungsbacka</span></div>
+            <div class="hb-top-right">
+                <a href="tel:+46314718200">+46 (0)31 47 18 20</a>
+                <a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a>
+            </div>
+        </div>
+    </div>
+
+    <header class="hb-header">
+        <div class="wrap hb-nav">
+            <a href="/" class="hb-logo"><img src="/logo.png" alt="Henricssons Båtkapell"/></a>
+            <button class="hb-burger" aria-label="Meny" onclick="document.getElementById('hbNav').classList.toggle('is-open')">
+                <span></span><span></span><span></span>
             </button>
-            <div class="nav-menu">
-                <a href="/om-oss" class="nav-link">Om oss</a>
-                <a href="/kapellforfragan" class="nav-link">Kapellförfrågan</a>
-                <a href="/bilder-och-exempel" class="nav-link">Bilder & exempel</a>
-                <details class="nav-dropdown">
-                    <summary class="nav-summary">Övriga produkter</summary>
-                    <div class="nav-submenu">
+            <nav class="hb-nav-links" id="hbNav">
+                <a href="/om-oss">Om oss</a>
+                <a href="/bilder-och-exempel"{% if examples_active %} class="active"{% endif %}>Bilder &amp; exempel</a>
+                <details class="hb-nav-dropdown">
+                    <summary class="hb-nav-summary{% if temp_products_active %} active{% endif %}">Övriga produkter</summary>
+                    <div class="hb-nav-submenu">
                         <a href="/tillbehor">Fenderstrumpor</a>
                         <a href="/dynsatser">Dynsatser</a>
-                        <a href="/tillfalliga-produkter">Tillfälliga produkter</a>
+                        <a href="/tillfalliga-produkter"{% if temp_products_active %} class="active"{% endif %}>Tillfälliga produkter</a>
                     </div>
                 </details>
-                <a href="/kontakt" class="nav-link">Kontakt</a>
-            </div>
-        </nav>
+                <a href="/kontakt">Kontakt</a>
+                <a href="/kapellforfragan" class="hb-nav-cta">Kapellförfrågan</a>
+            </nav>
+        </div>
     </header>
-    <div class="cta-line--nav"></div>
-    <div class="nav-rugged-border"></div>
 
     {{ content_html | safe }}
 
-    <footer class="footer">
-        <div class="footer-content">
-            <div class="footer-section">
-                <img src="/logo.png" alt="Henricssons Båtkapell Logo" class="footer-logo"/>
-                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
-                <p>Vi gör kapell till många olika typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller</p>
+    <section class="hb-section hb-finalcta">
+        <div class="hb-finalcta-bg"><img src="/bakgrundhav.webp" alt=""/></div>
+        <div class="wrap">
+            <span class="eyebrow" style="color: var(--brass);">Behöver du nytt kapell?</span>
+            <span class="rule"></span>
+            <h2>Ta nästa steg med en <em>förfrågan</em></h2>
+            <p>Utgå från modellen du tittar på eller skicka en fri förfrågan. Vi återkommer med vägledning och offert.</p>
+            <div class="hb-ctas">
+                <a href="/kapellforfragan" class="hb-btn hb-btn-primary"><span>Skicka kapellförfrågan</span></a>
+                <a href="/kontakt" class="hb-btn hb-btn-ghost">Kontakta oss</a>
             </div>
-            <div class="footer-section">
-                <h2 style="text-align:left;">Partners</h2>
-                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
-                <div class="partners-grid">
-                    <img src="/assets/jens sagen.png" alt="Jens Sagen" class="partner-logo"/>
-                    <img src="/assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" class="partner-logo"/>
-                    <img src="/assets/Varuste.png" alt="VA Varuste" class="partner-logo"/>
-                    <img src="/assets/schultz.png" alt="Schultz Kalecher" class="partner-logo"/>
-                    <img src="/assets/mpvenekuomo.png" alt="MP Venekuomu" class="partner-logo" style="grid-column: span 2;"/>
-                </div>
-            </div>
-            <div class="footer-section">
-                <h2 style="text-align:left;">Kontakt</h2>
-                <div class="divider" style="margin-left:0; margin-right:auto;"></div>
-                <p>
-                    +46 (0)31 471820<br/>
-                    Energigatan 17E<br/>
-                    434 37 Kungsbacka<br/>
-                    <a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a>
-                </p>
-                <div class="credit-rating">
-                    <img src="/KV.svg" alt="Kreditvärdighet" class="credit-logo"/>
-                    <div class="credit-text">
-                        <div class="credit-title">HÖGSTA KREDITVÄRDIGHET</div>
-                        <div class="credit-company">Henricssons Båtkapell AB</div>
-                        <div class="credit-details">556799-2192 | 2025-11-25</div>
+            <div class="phone">eller ring direkt &middot; <a href="tel:+46314718200">+46 (0)31 47 18 20</a></div>
+        </div>
+    </section>
+
+    <footer class="hb-footer">
+        <div class="wrap">
+            <div class="grid">
+                <div class="brand">
+                    <img src="/logo.png" alt="Henricssons Båtkapell"/>
+                    <p>Familjeföretag i Kungsbacka sedan 1967. Vi tillverkar kapell till motorbåtar och segelbåtar och importerar originalkapell från Norge, Finland och Danmark.</p>
+                    <div class="credit">
+                        <img src="/KV.svg" alt="Högsta kreditvärdighet"/>
+                        <div class="t">
+                            <strong>HÖGSTA KREDITVÄRDIGHET</strong><br/>
+                            Henricssons Båtkapell AB<br/>
+                            556799-2192
+                        </div>
                     </div>
                 </div>
+                <div>
+                    <h5>Navigera</h5>
+                    <ul>
+                        <li><a href="/om-oss">Om oss</a></li>
+                        <li><a href="/kapellforfragan">Kapellförfrågan</a></li>
+                        <li><a href="/bilder-och-exempel">Bilder &amp; exempel</a></li>
+                        <li><a href="/tillbehor">Fenderstrumpor</a></li>
+                        <li><a href="/dynsatser">Dynsatser</a></li>
+                        <li><a href="/tillfalliga-produkter">Tillfälliga produkter</a></li>
+                        <li><a href="/kontakt">Kontakt</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h5>Kontakt</h5>
+                    <ul>
+                        <li><a href="tel:+46314718200">+46 (0)31 47 18 20</a></li>
+                        <li><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></li>
+                        <li>Energigatan 17E</li>
+                        <li>434 37 Kungsbacka</li>
+                    </ul>
+                </div>
+                <div>
+                    <h5>Partners</h5>
+                    <ul>
+                        <li>Jens Sagen</li>
+                        <li>Helly Hansen</li>
+                        <li>VA Varuste</li>
+                        <li>Schultz Kalecher</li>
+                        <li>MP Venekuomu</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="hb-footer-bottom">
+                <div>&copy; Henricssons Båtkapell AB &middot; Org.nr 556799-2192</div>
+                <div>Kungsbacka, Sverige</div>
             </div>
         </div>
     </footer>
-    <script src="/script.js?v=20260420b"></script>
     <script src="/chat_widget.js?v=20260420a"></script>
+    <script>
+        (function () {
+            const nav = document.getElementById('hbNav');
+            if (!nav) return;
+            nav.querySelectorAll('a').forEach((link) => {
+                link.addEventListener('click', () => {
+                    nav.classList.remove('is-open');
+                });
+            });
+        })();
+    </script>
 </body>
 </html>""",
         title=title,
@@ -867,6 +1308,8 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         canonical_url=canonical_url,
         og_image_url=og_image_url,
         content_html=content_html,
+        examples_active=examples_active,
+        temp_products_active=temp_products_active,
     )
 
 
@@ -1261,6 +1704,23 @@ def is_form_rate_limited(ip: str) -> bool:
     return False
 
 
+EMAIL_ADDRESS_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def is_valid_email_address(value: Any) -> bool:
+    email = str(value or "").strip()
+    if not email or len(email) > 254:
+        return False
+    if not EMAIL_ADDRESS_RE.match(email):
+        return False
+    local_part, _, domain = email.rpartition("@")
+    if not local_part or not domain:
+        return False
+    if domain.startswith(".") or domain.endswith(".") or ".." in email:
+        return False
+    return True
+
+
 def validate_public_form_submission(fields: Dict[str, Any], submitted_via: str) -> Optional[Tuple[Dict[str, Any], int]]:
     if submitted_via != "web_form":
         return None
@@ -1280,6 +1740,10 @@ def validate_public_form_submission(fields: Dict[str, Any], submitted_via: str) 
         started_at = 0
     if not started_at or time.time() - started_at < FORM_MIN_SECONDS:
         return {"error": "Formuläret skickades för snabbt. Försök igen."}, 400
+
+    customer_email = get_field_value(fields, "email", "e-post", "e-postadress")
+    if customer_email and not is_valid_email_address(customer_email):
+        return {"error": "Ange en giltig e-postadress."}, 400
 
     return None
 
@@ -1975,7 +2439,7 @@ def send_mailgun_customer_confirmation(submission: Dict[str, Any]) -> None:
         return
 
     customer_email = get_field_value(fields, "email", "e-post", "e-postadress")
-    if not customer_email or "@" not in customer_email:
+    if not is_valid_email_address(customer_email):
         return
 
     customer_name = get_field_value(fields, "name", "namn")
@@ -2927,6 +3391,50 @@ TEMP_PRODUCT_MAX_IMAGES = 12
 TEMP_PRODUCT_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
+def slugify_temp_product(value: Any, fallback: str = "produkt") -> str:
+    raw = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_value = raw.encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_value.lower()).strip("-")
+    return slug or fallback
+
+
+def enrich_temp_products(products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    used_slugs: set[str] = set()
+    enriched: List[Dict[str, Any]] = []
+    for item in products:
+        product = dict(item)
+        base_slug = slugify_temp_product(product.get("title"), fallback=f"produkt-{product.get('id') or 'x'}")
+        slug = base_slug
+        suffix = 2
+        while slug in used_slugs:
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+        used_slugs.add(slug)
+        product["slug"] = slug
+        product["href"] = f"/tillfalliga-produkter/{slug}"
+        images = product.get("images") if isinstance(product.get("images"), list) else []
+        product["images"] = images
+        product["primary_image_url"] = images[0]["url"] if images else ""
+        product["share_title"] = f"{str(product.get('title') or 'Tillfällig produkt').strip()} - Henricssons Båtkapell"
+        description = str(product.get("description") or "").strip()
+        product["share_description"] = (description[:157].rstrip() + "...") if len(description) > 160 else description
+        enriched.append(product)
+    return enriched
+
+
+def get_public_temp_products() -> List[Dict[str, Any]]:
+    return enrich_temp_products(_fetch_temp_products())
+
+
+def get_temp_product_by_slug(slug: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
+    products = get_public_temp_products()
+    clean_slug = str(slug or "").strip().strip("/")
+    for product in products:
+        if product.get("slug") == clean_slug:
+            return product, products
+    return None, products
+
+
 def _fetch_temp_products(include_images: bool = True) -> List[Dict[str, Any]]:
     db = get_db()
     if not db:
@@ -2952,7 +3460,7 @@ def _fetch_temp_products(include_images: bool = True) -> List[Dict[str, Any]]:
 
 @app.route("/api/temp_products", methods=["GET"])
 def list_temp_products_public():
-    return jsonify(_fetch_temp_products())
+    return jsonify(get_public_temp_products())
 
 
 @app.route("/api/temp_products", methods=["POST"])
@@ -3582,11 +4090,23 @@ def example_page(slug: str):
             <button type="button" class="seo-gallery-nav seo-gallery-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
             <div class="seo-gallery-main">
                 <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="eager"/>
+                <button type="button" class="seo-gallery-expand" aria-label="Öppna bilden större">Öppna större</button>
             </div>
             <button type="button" class="seo-gallery-nav seo-gallery-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
         </div>
         <div class="seo-thumbs"{thumbs_style}>
             {gallery_images}
+        </div>
+        <div class="seo-lightbox" id="seoGalleryLightbox" aria-hidden="true">
+            <button type="button" class="seo-lightbox-close" aria-label="Stäng">&times;</button>
+            <button type="button" class="seo-lightbox-nav seo-lightbox-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
+            <div class="seo-lightbox-stage">
+                <img id="seoLightboxImage" src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="eager"/>
+            </div>
+            <button type="button" class="seo-lightbox-nav seo-lightbox-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
+            <div class="seo-lightbox-actions">
+                <button type="button" class="seo-lightbox-fullscreen" id="seoLightboxFullscreen">Fullskärm</button>
+            </div>
         </div>
     </div>
     """
@@ -3680,6 +4200,215 @@ def example_page(slug: str):
     <script>
         (function () {{
             const images = {json.dumps(image_urls[:8])};
+            const mainImage = document.getElementById('seoGalleryMainImage');
+            const thumbs = Array.from(document.querySelectorAll('.seo-thumb'));
+            const prevButton = document.querySelector('.seo-gallery-prev');
+            const nextButton = document.querySelector('.seo-gallery-next');
+            const expandButton = document.querySelector('.seo-gallery-expand');
+            const lightbox = document.getElementById('seoGalleryLightbox');
+            const lightboxImage = document.getElementById('seoLightboxImage');
+            const lightboxClose = document.querySelector('.seo-lightbox-close');
+            const lightboxPrev = document.querySelector('.seo-lightbox-prev');
+            const lightboxNext = document.querySelector('.seo-lightbox-next');
+            const lightboxFullscreen = document.getElementById('seoLightboxFullscreen');
+            const imageAlt = {json.dumps(full_title)};
+            let currentIndex = 0;
+
+            function render(index) {{
+                currentIndex = (index + images.length) % images.length;
+                if (mainImage) {{
+                    mainImage.src = images[currentIndex];
+                    mainImage.alt = imageAlt;
+                }}
+                if (lightboxImage) {{
+                    lightboxImage.src = images[currentIndex];
+                    lightboxImage.alt = imageAlt;
+                }}
+                thumbs.forEach((thumb, i) => thumb.classList.toggle('is-active', i === currentIndex));
+            }}
+
+            function openLightbox(index) {{
+                if (!lightbox) return;
+                render(typeof index === 'number' ? index : currentIndex);
+                lightbox.classList.add('is-open');
+                lightbox.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            }}
+
+            function closeLightbox() {{
+                if (!lightbox) return;
+                lightbox.classList.remove('is-open');
+                lightbox.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }}
+
+            thumbs.forEach((thumb, index) => thumb.addEventListener('click', () => render(index)));
+            if (prevButton && images.length > 1) prevButton.addEventListener('click', () => render(currentIndex - 1));
+            if (nextButton && images.length > 1) nextButton.addEventListener('click', () => render(currentIndex + 1));
+            if (mainImage) mainImage.addEventListener('click', () => openLightbox(currentIndex));
+            if (expandButton) expandButton.addEventListener('click', () => openLightbox(currentIndex));
+            if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
+            if (lightboxPrev && images.length > 1) lightboxPrev.addEventListener('click', () => render(currentIndex - 1));
+            if (lightboxNext && images.length > 1) lightboxNext.addEventListener('click', () => render(currentIndex + 1));
+            if (lightbox) {{
+                lightbox.addEventListener('click', event => {{
+                    if (event.target === lightbox) closeLightbox();
+                }});
+            }}
+            if (lightboxFullscreen) {{
+                if (!document.fullscreenEnabled || !lightbox) {{
+                    lightboxFullscreen.style.display = 'none';
+                }} else {{
+                    lightboxFullscreen.addEventListener('click', async () => {{
+                        try {{
+                            if (!document.fullscreenElement) {{
+                                await lightbox.requestFullscreen();
+                            }} else {{
+                                await document.exitFullscreen();
+                            }}
+                        }} catch (error) {{
+                            console.warn('Fullscreen unavailable', error);
+                        }}
+                    }});
+                }}
+            }}
+            document.addEventListener('keydown', event => {{
+                if (lightbox && lightbox.classList.contains('is-open')) {{
+                    if (event.key === 'Escape') {{
+                        closeLightbox();
+                        return;
+                    }}
+                    if (images.length > 1 && event.key === 'ArrowLeft') render(currentIndex - 1);
+                    if (images.length > 1 && event.key === 'ArrowRight') render(currentIndex + 1);
+                }}
+            }});
+
+            render(0);
+        }})();
+    </script>
+    """
+    return render_public_page(
+        title=page_title,
+        description=page_description,
+        canonical_path=f"/exempel/{canonical_slug}",
+        content_html=content_html,
+        og_image=image_urls[0],
+    )
+
+
+@app.route("/tillfalliga-produkter/<path:slug>", methods=["GET"])
+def temp_product_page(slug: str):
+    clean_slug = slug.strip().rstrip("/")
+    if clean_slug.endswith(".html"):
+        return redirect(f"/tillfalliga-produkter/{clean_slug[:-5]}", code=301)
+
+    product, products = get_temp_product_by_slug(clean_slug)
+    if not product:
+        abort(404)
+
+    canonical_slug = str(product.get("slug") or "").strip()
+    if clean_slug != canonical_slug:
+        return redirect(f"/tillfalliga-produkter/{canonical_slug}", code=301)
+
+    title_text = str(product.get("title") or "Tillfällig produkt").strip()
+    description_text = str(product.get("description") or "").strip()
+    price_text = str(product.get("price") or "").strip()
+    images = [absolute_public_url(img.get("url", "")) for img in product.get("images", []) if img.get("url")]
+    image_urls = images or [absolute_public_url("/logo.png")]
+    lead_text = description_text or "En aktuell produkt från Henricssons Båtkapell med delbar produktsida och bildgalleri."
+    page_title = f"{title_text} - Tillfälliga produkter - Henricssons Båtkapell"
+    page_description = product.get("share_description") or lead_text[:160]
+    contact_query = urlencode({"product": title_text, "product_slug": canonical_slug})
+    contact_href = f"/kontakt?{contact_query}" if contact_query else "/kontakt"
+
+    related_cards: List[str] = []
+    for related in products:
+        if related.get("slug") == canonical_slug:
+            continue
+        related_title = html.escape(str(related.get("title") or "Tillfällig produkt"))
+        related_href = html.escape(str(related.get("href") or "/tillfalliga-produkter"))
+        related_description = html.escape(str(related.get("share_description") or ""))
+        related_price = html.escape(str(related.get("price") or ""))
+        related_image = html.escape(absolute_public_url(str(related.get("primary_image_url") or "/logo.png")))
+        related_cards.append(
+            f"""
+            <a class="seo-related-card" href="{related_href}">
+                <img src="{related_image}" alt="{related_title}">
+                <div class="seo-related-copy">
+                    <strong>{related_title}</strong>
+                    {f'<span class="seo-related-price">{related_price}</span>' if related_price else ''}
+                    <span>{related_description}</span>
+                </div>
+            </a>
+            """
+        )
+        if len(related_cards) >= 3:
+            break
+
+    nav_style = "" if len(image_urls) > 1 else ' style="display:none;"'
+    thumbs_html = "".join(
+        f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(url)}" alt="{html.escape(title_text)} bild {idx + 1}"></button>'
+        for idx, url in enumerate(image_urls[:10])
+    )
+    gallery_html = f"""
+    <div class="seo-gallery">
+        <div class="seo-gallery-stage">
+            <button type="button" class="seo-gallery-nav seo-gallery-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
+            <div class="seo-gallery-main">
+                <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(title_text)}">
+            </div>
+            <button type="button" class="seo-gallery-nav seo-gallery-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
+        </div>
+        {f'<div class="seo-thumbs">{thumbs_html}</div>' if len(image_urls) > 1 else ''}
+    </div>
+    """
+
+    meta_html = f"""
+    <div class="seo-meta">
+        {f'<div class="seo-meta-block"><div class="seo-meta-label">Pris</div><p style="margin:0;">{html.escape(price_text)}</p></div>' if price_text else ''}
+        <div class="seo-meta-block">
+            <div class="seo-meta-label">Om produkten</div>
+            <p style="margin:0;">{html.escape(description_text or 'Kontakta oss för mer information om denna produkt.')}</p>
+        </div>
+        <div class="seo-meta-block">
+            <div class="seo-meta-label">Delbar länk</div>
+            <p style="margin:0;">Skicka den här sidan direkt till kunden eller använd den som referens i kontaktformuläret.</p>
+        </div>
+        <div class="seo-cta-row">
+            <a class="seo-btn seo-btn-primary" href="{html.escape(contact_href)}">Fråga om produkten</a>
+            <a class="seo-btn" href="/tillfalliga-produkter">Till alla produkter</a>
+        </div>
+    </div>
+    """
+
+    content_html = f"""
+    <main class="seo-page">
+        <section class="seo-hero">
+            <nav class="seo-breadcrumbs" aria-label="Brödsmulor">
+                <a href="/">Hem</a>
+                <span>/</span>
+                <a href="/tillfalliga-produkter">Tillfälliga produkter</a>
+                <span>/</span>
+                <span>{html.escape(title_text)}</span>
+            </nav>
+            <span class="seo-kicker">Övriga produkter</span>
+            <h1>{html.escape(title_text)}</h1>
+            <p>{html.escape(lead_text)}</p>
+        </section>
+        <section class="seo-grid">
+            <article class="seo-card">{gallery_html}</article>
+            <aside class="seo-card">{meta_html}</aside>
+        </section>
+        <section class="seo-related">
+            <h2>Fler tillfälliga produkter</h2>
+            <div class="seo-related-grid">
+                {''.join(related_cards) if related_cards else '<div class="seo-card"><p style="margin:0;">Fler produkter publiceras löpande.</p></div>'}
+            </div>
+        </section>
+    </main>
+    <script>
+        (function () {{
+            const images = {json.dumps(image_urls[:10])};
             if (images.length < 2) return;
             const mainImage = document.getElementById('seoGalleryMainImage');
             const thumbs = Array.from(document.querySelectorAll('.seo-thumb'));
@@ -3702,7 +4431,7 @@ def example_page(slug: str):
     return render_public_page(
         title=page_title,
         description=page_description,
-        canonical_path=f"/exempel/{canonical_slug}",
+        canonical_path=f"/tillfalliga-produkter/{canonical_slug}",
         content_html=content_html,
         og_image=image_urls[0],
     )
