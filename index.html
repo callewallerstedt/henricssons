@@ -21,6 +21,7 @@
     <meta name="twitter:title" content="Henricssons Båtkapell"/>
     <meta name="twitter:description" content="Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi ett brett register av modeller"/>
     <meta name="twitter:image" content="https://henricssonsbatkapell.se/logo.png"/>
+    <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
 
     <style>
     /* ==========================================================
@@ -759,7 +760,7 @@
     <!-- Header -->
     <header class="hb-header">
         <div class="wrap hb-nav">
-            <a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell"/></a>
+            <a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell" decoding="async"/></a>
             <button class="hb-burger" aria-label="Meny" onclick="document.getElementById('hbNav').classList.toggle('is-open')">
                 <span></span><span></span><span></span>
             </button>
@@ -794,7 +795,7 @@
 
     <!-- HERO -->
     <section class="hb-hero">
-        <div class="hb-hero-bg"><img src="bakgrundhav.webp" alt=""/></div>
+        <div class="hb-hero-bg"><img src="bakgrundhav.webp" alt="" fetchpriority="high" decoding="async"/></div>
         <div class="hb-hero-overlay"></div>
         <div class="wrap">
             <span class="eyebrow">Handgjorda båtkapell · Sedan 1967</span>
@@ -825,7 +826,7 @@
     <section class="hb-section hb-intro">
         <div class="wrap">
             <div class="image">
-                <img src="omossbild.png" alt="Henricssons båtkapell"/>
+                <img src="assets/optimized/omossbild.webp" alt="Henricssons båtkapell" loading="lazy" decoding="async"/>
                 <span class="badge">Sedan 1967</span>
             </div>
             <div>
@@ -856,7 +857,7 @@
             </div>
             <div class="hb-service-grid">
                 <article class="hb-card">
-                    <div class="media"><img src="assets/model_images/610-cruiser/610-cruiser_01.jpg" alt="Kapell till motorbåt"/></div>
+                    <div class="media"><img src="assets/model_images/610-cruiser/610-cruiser_01.jpg" alt="Kapell till motorbåt" loading="lazy" decoding="async"/></div>
                     <div class="body">
                         <h3>Motorbåtar</h3>
                         <p>Brett program av standardmallar och originalkapell. Vi täcker de flesta vanliga modellerna och hittar lösningar för de mer ovanliga.</p>
@@ -864,7 +865,7 @@
                     </div>
                 </article>
                 <article class="hb-card">
-                    <div class="media"><img src="assets/model_images/sprayhood-och-sittbrunnskapell/sprayhood-och-sittbrunnskapell_01.jpeg" alt="Kapell till segelbåt"/></div>
+                    <div class="media"><img src="assets/model_images/sprayhood-och-sittbrunnskapell/sprayhood-och-sittbrunnskapell_01.jpeg" alt="Kapell till segelbåt" loading="lazy" decoding="async"/></div>
                     <div class="body">
                         <h3>Segelbåtar</h3>
                         <p>Sprayhoods, sittbrunnskapell, rulliga kapellösningar och mer. Stort mallregister och samarbetspartners för specialmodeller.</p>
@@ -872,7 +873,7 @@
                     </div>
                 </article>
                 <article class="hb-card">
-                    <div class="media"><img src="assets/model_images/540-cabin-cruiser-med-rf-racke-pa-vindrutan/540-cabin-cruiser-med-rf-racke-pa-vindrutan_01.jpg" alt="Skräddarsytt båtkapell"/></div>
+                    <div class="media"><img src="assets/model_images/540-cabin-cruiser-med-rf-racke-pa-vindrutan/540-cabin-cruiser-med-rf-racke-pa-vindrutan_01.jpg" alt="Skräddarsytt båtkapell" loading="lazy" decoding="async"/></div>
                     <div class="body">
                         <h3>Skräddarsytt</h3>
                         <p>För båtar utanför vårt mallregister kan vi malla båten i hamn eller hos oss och bygga kapellet efter din båt och dina önskemål.</p>
@@ -923,11 +924,11 @@
         <div class="wrap">
             <div class="label"><span class="eyebrow">Partners &amp; leverantörer</span></div>
             <div class="hb-partners-row">
-                <img src="assets/jens sagen.png" alt="Jens Sagen"/>
-                <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen"/>
-                <img src="assets/Varuste.png" alt="VA Varuste"/>
-                <img src="assets/schultz.png" alt="Schultz Kalecher"/>
-                <img src="assets/mpvenekuomo.png" alt="MP Venekuomu"/>
+                <img src="assets/jens sagen.png" alt="Jens Sagen" loading="lazy" decoding="async"/>
+                <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" loading="lazy" decoding="async"/>
+                <img src="assets/Varuste.png" alt="VA Varuste" loading="lazy" decoding="async"/>
+                <img src="assets/schultz.png" alt="Schultz Kalecher" loading="lazy" decoding="async"/>
+                <img src="assets/mpvenekuomo.png" alt="MP Venekuomu" loading="lazy" decoding="async"/>
             </div>
         </div>
     </section>
@@ -945,19 +946,19 @@
                 <a href="/bilder-och-exempel" class="hb-btn hb-btn-dark">Se hela galleriet</a>
             </div>
             <div class="hb-gallery-grid">
-                <a href="/bilder-och-exempel"><img src="assets/model_images/540-cruiser/540-cruiser_01.jpg" alt="540 Cruiser kapell"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/9000-targa/9000-targa_01.jpeg" alt="9000 Targa kapell"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/760-dc-hamnkapell-original/760-dc_01.jpg" alt="760 DC hamnkapell"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/108-sprayhood-for-22mm-bagar/108-sprayhood-for-22mm-bagar_01.jpg" alt="Sprayhood segelbåt"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/625-dc-2-delat-originalkapell/625-dc-2-delat-originalkapell_01.jpg" alt="625 DC originalkapell"/></a>
-                <a href="/bilder-och-exempel"><img src="assets/model_images/540-cabin-cruiser-med-rf-racke-pa-vindrutan/540-cabin-cruiser-med-rf-racke-pa-vindrutan_01.jpg" alt="540 Cabin Cruiser kapell"/></a>
+                <a href="/bilder-och-exempel"><img src="assets/model_images/540-cruiser/540-cruiser_01.jpg" alt="540 Cruiser kapell" loading="lazy" decoding="async"/></a>
+                <a href="/bilder-och-exempel"><img src="assets/model_images/9000-targa/9000-targa_01.jpeg" alt="9000 Targa kapell" loading="lazy" decoding="async"/></a>
+                <a href="/bilder-och-exempel"><img src="assets/optimized/760-dc_01.webp" alt="760 DC hamnkapell" loading="lazy" decoding="async"/></a>
+                <a href="/bilder-och-exempel"><img src="assets/optimized/108-sprayhood-for-22mm-bagar_01.webp" alt="Sprayhood segelbåt" loading="lazy" decoding="async"/></a>
+                <a href="/bilder-och-exempel"><img src="assets/model_images/625-dc-2-delat-originalkapell/625-dc-2-delat-originalkapell_01.jpg" alt="625 DC originalkapell" loading="lazy" decoding="async"/></a>
+                <a href="/bilder-och-exempel"><img src="assets/model_images/540-cabin-cruiser-med-rf-racke-pa-vindrutan/540-cabin-cruiser-med-rf-racke-pa-vindrutan_01.jpg" alt="540 Cabin Cruiser kapell" loading="lazy" decoding="async"/></a>
             </div>
         </div>
     </section>
 
     <!-- FINAL CTA -->
     <section class="hb-section hb-finalcta">
-        <div class="hb-finalcta-bg"><img src="bakgrundhav.webp" alt=""/></div>
+        <div class="hb-finalcta-bg"><img src="bakgrundhav.webp" alt="" loading="lazy" decoding="async"/></div>
         <div class="wrap">
             <span class="eyebrow" style="color: var(--brass);">Redo när du är</span>
             <span class="rule"></span>
@@ -976,10 +977,10 @@
         <div class="wrap">
             <div class="grid">
                 <div class="brand">
-                    <img src="logo.png" alt="Henricssons Båtkapell"/>
+                    <img src="logo.png" alt="Henricssons Båtkapell" loading="lazy" decoding="async"/>
                     <p>Familjeföretag i Kungsbacka sedan 1967. Vi tillverkar kapell till motorbåtar och segelbåtar och importerar originalkapell från Norge, Finland och Danmark.</p>
                     <div class="credit">
-                        <img src="KV.svg" alt="Högsta kreditvärdighet"/>
+                        <img src="KV.svg" alt="Högsta kreditvärdighet" loading="lazy" decoding="async"/>
                         <div class="t">
                             <strong>HÖGSTA KREDITVÄRDIGHET</strong><br/>
                             Henricssons Båtkapell AB<br/>
@@ -1026,8 +1027,8 @@
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
     <script>
         // Announcement loader (same endpoints as live site)
         (function () {
@@ -1075,6 +1076,6 @@
             }).catch(() => {});
         })();
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a"></script>
+    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>

@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
     <link rel="icon" href="logo.png">
+    <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
 </head>
 <body class="hb-premium">
     <div class="hb-top">
@@ -19,7 +20,7 @@
     </div>
     <header class="hb-header">
         <div class="wrap hb-nav">
-            <a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell"/></a>
+            <a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell" decoding="async"/></a>
             <button class="hb-burger" aria-label="Meny" onclick="document.getElementById('hbNav').classList.toggle('is-open')"><span></span><span></span><span></span></button>
             <nav class="hb-nav-links" id="hbNav">
                 <a href="/om-oss">Om oss</a>
@@ -39,7 +40,7 @@
     </header>
 
     <section class="hb-pagehero">
-        <div class="hb-pagehero-bg"><img src="bakgrundhav.webp" alt=""/></div>
+        <div class="hb-pagehero-bg"><img src="bakgrundhav.webp" alt="" fetchpriority="high" decoding="async"/></div>
         <div class="wrap">
             <span class="eyebrow">Kontakt</span>
             <span class="rule"></span>
@@ -82,10 +83,10 @@
         <div class="wrap">
             <div class="grid">
                 <div class="brand">
-                    <img src="logo.png" alt="Henricssons Båtkapell"/>
+                    <img src="logo.png" alt="Henricssons Båtkapell" loading="lazy" decoding="async"/>
                     <p>Familjeföretag i Kungsbacka sedan 1967. Vi tillverkar kapell till motorbåtar och segelbåtar och importerar originalkapell från Norge, Finland och Danmark.</p>
                     <div class="credit">
-                        <img src="KV.svg" alt="Högsta kreditvärdighet"/>
+                        <img src="KV.svg" alt="Högsta kreditvärdighet" loading="lazy" decoding="async"/>
                         <div class="t">
                             <strong>HÖGSTA KREDITVÄRDIGHET</strong><br/>
                             Henricssons Båtkapell AB<br/>
@@ -179,6 +180,6 @@
             });
         }
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a"></script>
+    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>

@@ -24,7 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
         preselectFormFields();
 
         if (!state.refreshTimer) {
-            state.refreshTimer = setInterval(refreshBoatData, 30000);
+            state.refreshTimer = setInterval(() => {
+                if (!document.hidden) refreshBoatData();
+            }, 300000);
         }
     });
 });
@@ -134,13 +136,13 @@ async function loadBoatData({ showAlertOnFailure = false } = {}) {
 
 async function fetchBoatData(cacheBuster) {
     const urls = [
-        `${DATA_BASE}/boat_data.json?v=${cacheBuster}`,
-        `boat_data.json?v=${cacheBuster}`
+        `${DATA_BASE}/boat_data.json`,
+        'boat_data.json'
     ];
 
     for (const url of urls) {
         try {
-            const response = await fetch(url, { cache: 'no-store' });
+            const response = await fetch(url, { cache: cacheBuster ? 'no-cache' : 'default' });
             if (response.ok) {
                 return response.json();
             }
@@ -216,6 +218,7 @@ function renderManufacturers() {
         return;
     }
 
+    const fragment = document.createDocumentFragment();
     matches.forEach((manufacturer) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -227,8 +230,9 @@ function renderManufacturers() {
             button.classList.add('selected-t');
         }
 
-        grid.appendChild(button);
+        fragment.appendChild(button);
     });
+    grid.appendChild(fragment);
 }
 
 function renderModels() {
@@ -254,6 +258,7 @@ function renderModels() {
         return;
     }
 
+    const fragment = document.createDocumentFragment();
     selectedManufacturer.models.forEach((modelName) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -265,8 +270,9 @@ function renderModels() {
             button.classList.add('selected-m');
         }
 
-        grid.appendChild(button);
+        fragment.appendChild(button);
     });
+    grid.appendChild(fragment);
 }
 
 function createEmptyState(message) {

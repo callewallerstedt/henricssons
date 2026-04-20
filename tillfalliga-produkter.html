@@ -20,13 +20,14 @@
     <meta name="twitter:title" content="Tillfälliga produkter - Henricssons Båtkapell"/>
     <meta name="twitter:description" content="Aktuella tillfälliga produkter med egna delbara sidor och samma premiumkänsla som resten av sajten."/>
     <meta name="twitter:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
+    <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
 </head>
 <body class="hb-premium">
     <div class="hb-top"><div class="wrap"><div class="hb-top-left"><span>Familjeföretag sedan 1967 · Kungsbacka</span></div><div class="hb-top-right"><a href="tel:+46314718200">+46 (0)31 47 18 20</a><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></div></div></div>
-    <header class="hb-header"><div class="wrap hb-nav"><a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell"/></a><button class="hb-burger" aria-label="Meny" onclick="document.getElementById('hbNav').classList.toggle('is-open')"><span></span><span></span><span></span></button><nav class="hb-nav-links" id="hbNav"><a href="/om-oss">Om oss</a><a href="/bilder-och-exempel">Bilder &amp; exempel</a><details class="hb-nav-dropdown"><summary class="hb-nav-summary active">Övriga produkter</summary><div class="hb-nav-submenu"><a href="/tillbehor">Fenderstrumpor</a><a href="/dynsatser">Dynsatser</a><a href="/tillfalliga-produkter" class="active">Tillfälliga produkter</a></div></details><a href="/kontakt">Kontakt</a><a href="/kapellforfragan" class="hb-nav-cta">Kapellförfrågan</a></nav></div></header>
+    <header class="hb-header"><div class="wrap hb-nav"><a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons Båtkapell" decoding="async"/></a><button class="hb-burger" aria-label="Meny" onclick="document.getElementById('hbNav').classList.toggle('is-open')"><span></span><span></span><span></span></button><nav class="hb-nav-links" id="hbNav"><a href="/om-oss">Om oss</a><a href="/bilder-och-exempel">Bilder &amp; exempel</a><details class="hb-nav-dropdown"><summary class="hb-nav-summary active">Övriga produkter</summary><div class="hb-nav-submenu"><a href="/tillbehor">Fenderstrumpor</a><a href="/dynsatser">Dynsatser</a><a href="/tillfalliga-produkter" class="active">Tillfälliga produkter</a></div></details><a href="/kontakt">Kontakt</a><a href="/kapellforfragan" class="hb-nav-cta">Kapellförfrågan</a></nav></div></header>
 
     <section class="hb-pagehero">
-        <div class="hb-pagehero-bg"><img src="bakgrundhav.webp" alt=""/></div>
+        <div class="hb-pagehero-bg"><img src="bakgrundhav.webp" alt="" fetchpriority="high" decoding="async"/></div>
         <div class="wrap">
             <span class="eyebrow">Övriga produkter</span>
             <span class="rule"></span>
@@ -47,7 +48,7 @@
     </section>
 
     <section class="hb-section hb-finalcta">
-        <div class="hb-finalcta-bg"><img src="bakgrundhav.webp" alt=""/></div>
+        <div class="hb-finalcta-bg"><img src="bakgrundhav.webp" alt="" loading="lazy" decoding="async"/></div>
         <div class="wrap">
             <span class="eyebrow" style="color: var(--brass);">Behöver du mer information?</span>
             <span class="rule"></span>
@@ -65,10 +66,10 @@
         <div class="wrap">
             <div class="grid">
                 <div class="brand">
-                    <img src="logo.png" alt="Henricssons Båtkapell"/>
+                    <img src="logo.png" alt="Henricssons Båtkapell" loading="lazy" decoding="async"/>
                     <p>Familjeföretag i Kungsbacka sedan 1967. Vi tillverkar kapell till motorbåtar och segelbåtar och importerar originalkapell från Norge, Finland och Danmark.</p>
                     <div class="credit">
-                        <img src="KV.svg" alt="Högsta kreditvärdighet"/>
+                        <img src="KV.svg" alt="Högsta kreditvärdighet" loading="lazy" decoding="async"/>
                         <div class="t">
                             <strong>HÖGSTA KREDITVÄRDIGHET</strong><br/>
                             Henricssons Båtkapell AB<br/>
@@ -152,7 +153,7 @@
             card.innerHTML = `
                 <a class="hb-tp-card-link" href="${escHtml(href)}" aria-label="Visa ${escHtml(product.title || 'produkt')}">
                     <div class="hb-tp-media">
-                        ${imgSrc ? `<img src="${imgSrc}" alt="${escHtml(product.title || '')}" loading="lazy">` : '<div class="hb-tp-media-empty">Ingen bild</div>'}
+                        ${imgSrc ? `<img src="${imgSrc}" alt="${escHtml(product.title || '')}" loading="lazy" decoding="async">` : '<div class="hb-tp-media-empty">Ingen bild</div>'}
                         ${images.length > 1 ? `<div class="hb-tp-media-count">${images.length} bilder</div>` : ''}
                     </div>
                     <div class="hb-tp-body">
@@ -198,6 +199,6 @@
             });
     })();
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a"></script>
+    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>

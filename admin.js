@@ -172,6 +172,45 @@ async function adminFetch(url, options = {}) {
     return response;
 }
 
+let attachmentImageObserver = null;
+
+function loadAttachmentPreviewImage(img, loadingEl, url, immediate = false) {
+    const startLoad = () => {
+        if (img[0].dataset.loadingStarted === 'true') return;
+        img[0].dataset.loadingStarted = 'true';
+        adminFetch(url).then(r => r.ok ? r.blob() : null).then(blob => {
+            if (!blob) throw new Error('empty attachment blob');
+            const objectUrl = URL.createObjectURL(blob);
+            img.attr('src', objectUrl);
+            img.css('display', 'block');
+            loadingEl.remove();
+        }).catch(err => {
+            console.warn('Kunde inte ladda bilaga', err);
+            loadingEl.text('Kunde inte ladda bild').css({ color: '#b91c1c', background: '#fee2e2' });
+        });
+    };
+
+    if (immediate || !('IntersectionObserver' in window)) {
+        startLoad();
+        return;
+    }
+
+    if (!attachmentImageObserver) {
+        attachmentImageObserver = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                attachmentImageObserver.unobserve(entry.target);
+                const $img = $(entry.target);
+                loadAttachmentPreviewImage($img, $img.data('loadingEl'), $img.data('attachmentUrl'), true);
+            });
+        }, { rootMargin: '240px 0px' });
+    }
+
+    img.data('loadingEl', loadingEl);
+    img.data('attachmentUrl', url);
+    attachmentImageObserver.observe(img[0]);
+}
+
 async function updateSubmissionStatusOnServer(item, status, readFlag) {
     if (!item || !item.is_form_submission || !item.form_id) return true;
     try {
@@ -258,6 +297,9 @@ let activeTab = 'dashboard';
 let activeExtrasKey = null;
 let selectedExtraIndex = null;
 let editExtrasCat = null; // håller vilken kategori som redigeras när vi är i "Visa alla"
+let extrasLoaded = false;
+let extrasLoadingPromise = null;
+let fullCalendarLoadingPromise = null;
 
 // Dashboard variables
 let calendar = null;
@@ -440,12 +482,66 @@ function fetchExtras() {
                 extrasData.sunbrella
             );
             console.log('Extras data processed successfully. Total items:', extrasData.all.length);
+            extrasLoaded = true;
         })
         .catch(err => {
             console.error('Could not load models_meta.json', err);
             console.error('Error details:', err.message);
             extrasData = {};
         });
+}
+
+function ensureExtrasLoaded() {
+    if (extrasLoaded) return Promise.resolve();
+    if (extrasLoadingPromise) return extrasLoadingPromise;
+    extrasLoadingPromise = fetchExtras().finally(() => {
+        extrasLoadingPromise = null;
+    });
+    return extrasLoadingPromise;
+}
+
+function loadScriptOnce(src, globalName) {
+    if (globalName && window[globalName]) return Promise.resolve();
+    const existing = document.querySelector(`script[data-dynamic-src="${src}"]`);
+    if (existing) {
+        return new Promise((resolve, reject) => {
+            existing.addEventListener('load', resolve, { once: true });
+            existing.addEventListener('error', reject, { once: true });
+        });
+    }
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.defer = true;
+        script.dataset.dynamicSrc = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
+function loadStyleOnce(href) {
+    if (document.querySelector(`link[data-dynamic-href="${href}"]`)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        link.dataset.dynamicHref = href;
+        link.onload = resolve;
+        link.onerror = reject;
+        document.head.appendChild(link);
+    });
+}
+
+function ensureFullCalendarLoaded() {
+    if (window.FullCalendar) return Promise.resolve();
+    if (!fullCalendarLoadingPromise) {
+        fullCalendarLoadingPromise = Promise.all([
+            loadStyleOnce('https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css'),
+            loadScriptOnce('https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js', 'FullCalendar')
+        ]);
+    }
+    return fullCalendarLoadingPromise;
 }
 
 function buildGrids() {
@@ -728,6 +824,7 @@ function switchTab(tab){
     activeTab = tab;
     $('.tab-btn').removeClass('active');
     $(`.tab-btn[data-tab="${tab}"]`).addClass('active');
+    $('#settings-section').removeClass('active');
 
     if(tab==='dashboard'){
         $('#dashboard-section').addClass('active');
@@ -770,6 +867,19 @@ function switchTab(tab){
         $('#extras-search').hide();
         loadAiSettings();
         initAdvancedTestChat();
+    } else if(tab==='settings'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
+        $('#settings-section').addClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('#tempproducts-section').hide();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        loadMailgunSettings();
     } else if(tab==='calendar'){
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').addClass('active');
@@ -826,8 +936,13 @@ function switchTab(tab){
         activeExtrasKey = tab;
         selectedExtraIndex = null;
         editExtrasCat = null;
-        buildExtrasList();
-        showExtrasEdit();
+        $('.grid-extras').html('<div class="folder-loading-state"><span class="folder-loading-spinner" aria-hidden="true"></span><span>Laddar...</span></div>');
+        $('#extras-edit-section').show().addClass('editing').html('<h2>Redigera bild/exempel</h2><p>Laddar poster...</p>');
+        ensureExtrasLoaded().then(() => {
+            if (activeExtrasKey !== tab) return;
+            buildExtrasList();
+            showExtrasEdit();
+        });
     }
 }
 
@@ -1134,7 +1249,7 @@ function initDashboard() {
     initFormFilters();
 }
 
-function initCalendar() {
+async function initCalendar() {
     const calendarEl = document.getElementById('calendar');
     if (!calendarEl) return;
     
@@ -1143,6 +1258,9 @@ function initCalendar() {
     }
     
     try {
+        calendarEl.innerHTML = '<div class="folder-loading-state"><span class="folder-loading-spinner" aria-hidden="true"></span><span>Laddar kalender...</span></div>';
+        await ensureFullCalendarLoaded();
+        calendarEl.innerHTML = '';
         calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: 'dayGridMonth',
             headerToolbar: {
@@ -1334,6 +1452,11 @@ function bindAdvancedSettings() {
     $('#reload-ai-settings-btn').off('click').on('click', loadAiSettings);
 }
 
+function bindSettings() {
+    $('#save-mailgun-settings-btn').off('click').on('click', saveMailgunSettings);
+    $('#reload-mailgun-settings-btn').off('click').on('click', loadMailgunSettings);
+}
+
 function loadAiSettings() {
     return adminFetch(`${API_BASE}/api/ai_settings`)
         .then(r => {
@@ -1394,6 +1517,52 @@ function saveAiSettings() {
         console.error('Error saving ai settings:', err);
         $('#prompts-edit-error').text('Nätverksfel vid sparning.').show();
         $('#prompts-edit-success').hide();
+    });
+}
+
+function loadMailgunSettings() {
+    return adminFetch(`${API_BASE}/api/mailgun_settings`)
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(data => {
+            const recipients = Array.isArray(data.recipients) ? data.recipients.join('\n') : String(data.to || '');
+            $('#mailgun-to').val(recipients);
+            $('#settings-edit-error').hide();
+        })
+        .catch(err => {
+            console.error('Kunde inte ladda Mailgun-inställningar', err);
+            $('#settings-edit-error').text('Kunde inte ladda Mailgun-inställningar: ' + err.message).show();
+            $('#settings-edit-success').hide();
+        });
+}
+
+function saveMailgunSettings() {
+    const to = ($('#mailgun-to').val() || '').trim();
+    adminFetch(`${API_BASE}/api/mailgun_settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to })
+    })
+    .then(r => {
+        if (!r.ok) {
+            return r.json().catch(() => ({})).then(data => {
+                throw new Error(data.error || ('HTTP ' + r.status));
+            });
+        }
+        return r.json();
+    })
+    .then(data => {
+        const recipients = Array.isArray(data.recipients) ? data.recipients.join('\n') : to;
+        $('#mailgun-to').val(recipients);
+        $('#settings-edit-success').text('Mailgun-inställningar sparade.').show();
+        $('#settings-edit-error').hide();
+    })
+    .catch(err => {
+        console.error('Kunde inte spara Mailgun-inställningar', err);
+        $('#settings-edit-error').text('Kunde inte spara Mailgun-inställningar: ' + err.message).show();
+        $('#settings-edit-success').hide();
     });
 }
 
@@ -2165,17 +2334,7 @@ async function viewFormSubmission(status, index) {
                     cursor: 'pointer',
                     background: '#e2e8f0'
                 });
-                // Fetch with admin header immediately, then use a blob URL for the thumbnail.
-                adminFetch(url).then(r => r.ok ? r.blob() : null).then(blob => {
-                    if (!blob) throw new Error('empty attachment blob');
-                    const objectUrl = URL.createObjectURL(blob);
-                    img.attr('src', objectUrl);
-                    img.css('display', 'block');
-                    loading.remove();
-                }).catch(err => {
-                    console.warn('Kunde inte ladda bilaga', err);
-                    loading.text('Kunde inte ladda bild').css({ color: '#b91c1c', background: '#fee2e2' });
-                });
+                loadAttachmentPreviewImage(img, loading, url);
                 img.on('click', () => {
                     const src = img.attr('src');
                     if (!src) return;
@@ -2249,65 +2408,83 @@ async function viewFormSubmission(status, index) {
 
     infoColumn.append(formSection);
 
-    // AI Proposed Response section (RIGHT COLUMN)
+    renderAiResponsePanel(responseColumn, item, status, index, modal);
+
+    modal.addClass('active');
+}
+
+function renderAiResponsePanel(responseColumn, item, status, index, modal) {
+    responseColumn.empty();
+    const responseSection = $('<div>').addClass('form-section');
+    responseSection.append($('<h3>').text('AI-svar'));
+
+    const responseDiv = $('<div>').addClass('proposed-response');
     if (item.proposed_response) {
-        const responseSection = $('<div>').addClass('form-section');
-        responseSection.append($('<h3>').text('Föreslaget svar (AI-genererat)'));
-        const responseDiv = $('<div>').addClass('proposed-response');
-        // Use marked.js if available to render markdown
         if (typeof marked !== 'undefined') {
             responseDiv.html(sanitizeHtml(marked.parse(item.proposed_response)));
         } else {
             responseDiv.text(item.proposed_response);
         }
-        responseSection.append(responseDiv);
+    } else {
+        responseDiv
+            .css({ color: '#666', fontStyle: 'italic' })
+            .text('Inget AI-svar skapat ännu.');
+    }
+    responseSection.append(responseDiv);
 
-        // Add action buttons for the AI response
-        const actionButtons = $('<div>').addClass('response-actions').css('margin-top', '1rem');
-        actionButtons.append($('<button>').addClass('btn').text('Kopiera svar').on('click', function() {
+    const actionButtons = $('<div>').addClass('response-actions').css('margin-top', '1rem');
+    const createButton = $('<button>')
+        .addClass('btn')
+        .text(item.proposed_response ? 'Skapa nytt AI-svar' : 'Skapa AI-svar')
+        .on('click', async function() {
+            if (!item.form_id) return;
+            const button = $(this);
+            const originalText = button.text();
+            button.prop('disabled', true).text('Skapar...');
+            try {
+                const res = await adminFetch(`${API_BASE}/api/generate_submission_response`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: item.form_id })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || ('HTTP ' + res.status));
+                }
+                item.proposed_response = data.proposed_response || '';
+                saveStatusItems();
+                renderAiResponsePanel(responseColumn, item, status, index, modal);
+            } catch (err) {
+                alert('Kunde inte skapa AI-svar: ' + (err.message || err));
+                button.prop('disabled', false).text(originalText);
+            }
+        });
+    actionButtons.append(createButton);
+
+    if (item.proposed_response) {
+        actionButtons.append($('<button>').addClass('btn btn-secondary').css('margin-left', '0.5rem').text('Kopiera svar').on('click', function() {
             navigator.clipboard.writeText(item.proposed_response).then(() => {
-                $(this).text('Kopierat!').css('background', '#28a745');
-                setTimeout(() => {
-                    $(this).text('Kopiera svar').css('background', '');
-                }, 2000);
+                $(this).text('Kopierat!');
+                setTimeout(() => $(this).text('Kopiera svar'), 2000);
             });
         }));
-        actionButtons.append($('<button>').addClass('btn btn-secondary').css('margin-left', '0.5rem').text('Redigera').on('click', function() {
-            // Make the response editable
-            if (responseDiv.attr('contenteditable') === 'true') {
-                responseDiv.attr('contenteditable', 'false');
-                $(this).text('Redigera');
-                // Save changes if needed
-            } else {
-                responseDiv.attr('contenteditable', 'true').focus();
-                $(this).text('Spara');
-            }
-        }));
-        const nextStatus = getNextStatus(status);
-        if (nextStatus) {
-            actionButtons.append($('<button>').addClass('btn').css('margin-left', '0.5rem').text(`Flytta till ${getStatusDisplayName(nextStatus)}`).on('click', async function() {
-                statusItems[status].splice(index, 1);
-                if (!statusItems[nextStatus]) statusItems[nextStatus] = [];
-                statusItems[nextStatus].push(item);
-                item.read = true;
-                saveStatusItems();
-                renderStatusFolders();
-                await updateSubmissionStatusOnServer(item, nextStatus, true);
-                modal.removeClass('active');
-            }));
-        }
-        responseSection.append(actionButtons);
-
-        responseColumn.append(responseSection);
-    } else {
-        // No AI response available
-        const noResponseDiv = $('<div>').addClass('form-section');
-        noResponseDiv.append($('<h3>').text('AI-svar'));
-        noResponseDiv.append($('<p>').text('Inget föreslaget svar tillgängligt.').css('color', '#666'));
-        responseColumn.append(noResponseDiv);
     }
-    
-    modal.addClass('active');
+
+    const nextStatus = getNextStatus(status);
+    if (nextStatus) {
+        actionButtons.append($('<button>').addClass('btn btn-secondary').css('margin-left', '0.5rem').text(`Flytta till ${getStatusDisplayName(nextStatus)}`).on('click', async function() {
+            statusItems[status].splice(index, 1);
+            if (!statusItems[nextStatus]) statusItems[nextStatus] = [];
+            statusItems[nextStatus].push(item);
+            item.read = true;
+            saveStatusItems();
+            renderStatusFolders();
+            await updateSubmissionStatusOnServer(item, nextStatus, true);
+            modal.removeClass('active');
+        }));
+    }
+    responseSection.append(actionButtons);
+    responseColumn.append(responseSection);
 }
 
 function editStatusItem(status, index) {
@@ -2372,6 +2549,8 @@ $(document).ready(function() {
             switchTab('texts');
         } else if(prim==='advanced'){
             switchTab('advanced');
+        } else if(prim==='settings'){
+            switchTab('settings');
         } else if(prim==='calendar'){
             switchTab('calendar');
         } else if(prim==='boats'){
@@ -2385,12 +2564,13 @@ $(document).ready(function() {
         }
     });
 
-    Promise.all([fetchManufacturers(), fetchExtras()]).then(()=>{
+    fetchManufacturers().then(()=>{
         switchTab('dashboard');
         $('#admin-tabs').hide(); // sekundära flikar dolda initialt
         $('#extras-search').hide();
     });
     bindAdvancedSettings();
+    bindSettings();
 
     // Tab buttons
     $(document).on('click', '.tab-btn', function(){
@@ -2558,12 +2738,28 @@ function updateAnnouncementPreview() {
     const previewEl = $('#announcement-preview');
     
     if (!text.trim()) {
-        previewEl.html('<p style="color: #666; font-style: italic;">Förhandsvisning visas här när du skriver...</p>');
+        previewEl.html('<div class="announcement-preview-empty">Förhandsvisning visas här när du skriver...</div>');
         return;
     }
     
     const html = parseMarkdownForPreview(text);
-    previewEl.html(html);
+    previewEl.html(`
+        <div class="announcement-preview-topbar"></div>
+        <div class="announcement-preview-header">
+            <div class="announcement-preview-logo"></div>
+            <div class="announcement-preview-nav"></div>
+        </div>
+        <div class="announcement-preview-band">
+            <div class="announcement-preview-wrap">
+                <span class="announcement-preview-tag">Aktuellt</span>
+                <div class="announcement-preview-content">
+                    <div class="announcement-preview-body">${html}</div>
+                    <span class="announcement-preview-cta">Kapellförfrågan</span>
+                </div>
+                <span class="announcement-preview-close">×</span>
+            </div>
+        </div>
+    `);
 }
 
 // Functions for editing announcement text

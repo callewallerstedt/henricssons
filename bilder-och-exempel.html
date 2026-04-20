@@ -20,6 +20,7 @@
     <meta name="twitter:description" content="Vi tillverkar kapell till m&aring;nga typer av b&aring;tar. Med v&aring;rat mallregister med egen tillverkning och tillsammans med v&aring;r import av originalkapell fr&aring;n Norge Finland och Danmark s&aring; t&auml;cker vi ett brett register av modeller"/>
     <meta name="twitter:image" content="https://henricssonsbatkapell.se/logo.png"/>
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
+    <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
 
     <style>
         /* Modal kept minimal and on-brand */
@@ -76,7 +77,7 @@
     <!-- Header -->
     <header class="hb-header">
         <div class="wrap hb-nav">
-            <a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons B&aring;tkapell"/></a>
+            <a href="/" class="hb-logo"><img src="logo.png" alt="Henricssons B&aring;tkapell" decoding="async"/></a>
             <button class="hb-burger" aria-label="Meny" onclick="document.getElementById('hbNav').classList.toggle('is-open')">
                 <span></span><span></span><span></span>
             </button>
@@ -99,7 +100,7 @@
 
     <!-- Page hero -->
     <section class="hb-pagehero">
-        <div class="hb-pagehero-bg"><img src="bakgrundhav.webp" alt=""/></div>
+        <div class="hb-pagehero-bg"><img src="bakgrundhav.webp" alt="" fetchpriority="high" decoding="async"/></div>
         <div class="wrap">
             <span class="eyebrow">Referenser</span>
             <span class="rule"></span>
@@ -126,7 +127,7 @@
             <button type="button" class="modal-close" aria-label="St&auml;ng" data-close-modal="true">&times;</button>
             <div class="slider">
                 <button type="button" class="slide-left" aria-label="F&ouml;reg&aring;ende bild">&#8249;</button>
-                <img id="modalMainImage" class="slider-main" src="" alt=""/>
+                <img id="modalMainImage" class="slider-main" src="" alt="" decoding="async"/>
                 <button type="button" class="slide-right" aria-label="N&auml;sta bild">&#8250;</button>
             </div>
             <div id="modalThumbs" class="thumb-row"></div>
@@ -148,12 +149,12 @@
 
     <div id="fullscreenModal" aria-hidden="true">
         <button type="button" class="fullscreen-close" aria-label="St&auml;ng">&times;</button>
-        <img id="fullscreenImage" src="" alt=""/>
+        <img id="fullscreenImage" src="" alt="" decoding="async"/>
     </div>
 
     <!-- Final CTA -->
     <section class="hb-section hb-finalcta">
-        <div class="hb-finalcta-bg"><img src="bakgrundhav.webp" alt=""/></div>
+        <div class="hb-finalcta-bg"><img src="bakgrundhav.webp" alt="" loading="lazy" decoding="async"/></div>
         <div class="wrap">
             <span class="eyebrow" style="color: var(--brass);">Hittat en modell du gillar?</span>
             <span class="rule"></span>
@@ -172,10 +173,10 @@
         <div class="wrap">
             <div class="grid">
                 <div class="brand">
-                    <img src="logo.png" alt="Henricssons B&aring;tkapell"/>
+                    <img src="logo.png" alt="Henricssons B&aring;tkapell" loading="lazy" decoding="async"/>
                     <p>Familjef&ouml;retag i Kungsbacka sedan 1967. Vi tillverkar kapell till motorb&aring;tar och segelb&aring;tar och importerar originalkapell fr&aring;n Norge, Finland och Danmark.</p>
                     <div class="credit">
-                        <img src="KV.svg" alt="H&ouml;gsta kreditv&auml;rdighet"/>
+                        <img src="KV.svg" alt="H&ouml;gsta kreditv&auml;rdighet" loading="lazy" decoding="async"/>
                         <div class="t">
                             <strong>H&Ouml;GSTA KREDITV&Auml;RDIGHET</strong><br/>
                             Henricssons B&aring;tkapell AB<br/>
@@ -227,6 +228,11 @@
         var extrasData = {};
         let bilderexModalIndex = 0;
         let bilderexModalItem = null;
+        let bilderexFilteredItems = [];
+        let bilderexRenderedCount = 0;
+        let bilderexObserver = null;
+        const BILDEREX_INITIAL_BATCH = 48;
+        const BILDEREX_BATCH_SIZE = 48;
 
         const API_BASE = (() => {
             if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
@@ -356,6 +362,8 @@
                 const thumb = document.createElement('img');
                 thumb.src = src;
                 thumb.alt = `${els.mainImage.alt} ${index + 1}`;
+                thumb.loading = 'lazy';
+                thumb.decoding = 'async';
                 if (index === bilderexModalIndex) thumb.classList.add('active');
                 thumb.addEventListener('click', () => {
                     bilderexModalIndex = index;
@@ -484,7 +492,22 @@
                 grid.innerHTML = '<div class="hb-no-results">Inga tr\u00e4ffar</div>';
                 return;
             }
-            items.forEach(item => {
+            bilderexFilteredItems = items;
+            bilderexRenderedCount = 0;
+            if (bilderexObserver) {
+                bilderexObserver.disconnect();
+                bilderexObserver = null;
+            }
+            bilderexAppendGalleryItems(grid, BILDEREX_INITIAL_BATCH);
+            bilderexObserveGalleryEnd(grid);
+        }
+
+        function bilderexAppendGalleryItems(grid, count) {
+            const start = bilderexRenderedCount;
+            const end = Math.min(start + count, bilderexFilteredItems.length);
+            const fragment = document.createDocumentFragment();
+            for (let i = start; i < end; i += 1) {
+                const item = bilderexFilteredItems[i];
                 const div = document.createElement('div');
                 div.className = 'hb-item';
                 const thumb = (item.images && item.images.length) ? item.images[0] : 'logo.png';
@@ -494,9 +517,11 @@
                 const safeKategori = escapeHtml(item.kategori || '');
                 const examplePath = buildExamplePath(item);
                 const safeExamplePath = escapeHtml(examplePath);
+                const loading = i < 8 ? 'eager' : 'lazy';
+                const priority = i < 8 ? 'high' : 'low';
                 div.innerHTML = `
                     <a href="${safeExamplePath}">
-                        <img src="${safeThumb}" alt="${safeNamn}" loading="lazy" onerror="this.style.display='none'"/>
+                        <img src="${safeThumb}" alt="${safeNamn}" loading="${loading}" decoding="async" fetchpriority="${priority}" onerror="this.style.display='none'"/>
                     </a>
                     <div class="caption">
                         <div class="cat">${safeKategori}</div>
@@ -507,24 +532,54 @@
                         </div>
                     </div>
                 `;
-                grid.appendChild(div);
-            });
+                fragment.appendChild(div);
+            }
+            bilderexRenderedCount = end;
+            grid.querySelector('[data-bilderex-sentinel]')?.remove();
+            grid.appendChild(fragment);
+        }
+
+        function bilderexObserveGalleryEnd(grid) {
+            if (bilderexRenderedCount >= bilderexFilteredItems.length) return;
+            const sentinel = document.createElement('div');
+            sentinel.className = 'hb-no-results';
+            sentinel.dataset.bilderexSentinel = 'true';
+            sentinel.textContent = 'Laddar fler exempel...';
+            grid.appendChild(sentinel);
+            if (!('IntersectionObserver' in window)) {
+                bilderexAppendGalleryItems(grid, bilderexFilteredItems.length);
+                return;
+            }
+            bilderexObserver = new IntersectionObserver(entries => {
+                if (!entries.some(entry => entry.isIntersecting)) return;
+                bilderexAppendGalleryItems(grid, BILDEREX_BATCH_SIZE);
+                if (bilderexRenderedCount >= bilderexFilteredItems.length) {
+                    bilderexObserver.disconnect();
+                    bilderexObserver = null;
+                    grid.querySelector('[data-bilderex-sentinel]')?.remove();
+                } else {
+                    grid.appendChild(sentinel);
+                }
+            }, { rootMargin: '900px 0px' });
+            bilderexObserver.observe(sentinel);
         }
 
         document.addEventListener('DOMContentLoaded', function () {
             bilderexInitModal();
             loadExtrasData();
-            setInterval(loadExtrasData, 30000);
+            setInterval(() => {
+                if (!document.hidden) loadExtrasData();
+            }, 300000);
         });
         function loadExtrasData() {
-            const url = `${API_BASE}/henricssons_bilder/models_meta.json?v=` + Date.now();
-            fetch(url).then(r => r.ok ? r.json() : Promise.reject())
+            const url = `${API_BASE}/henricssons_bilder/models_meta.json`;
+            fetch(url, { cache: 'no-cache' }).then(r => r.ok ? r.json() : Promise.reject())
                 .catch(() => fetch('henricssons_bilder/models_meta.json').then(r => r.json()))
                 .catch(() => fetch('examples_meta.json').then(r => r.json()))
                 .then(json => {
                 const oldData = JSON.stringify(extrasData);
                 extrasData = json || {};
-                if (oldData !== JSON.stringify(extrasData)) {
+                if (oldData !== JSON.stringify(extrasData) && window.bilderexInitialized) {
                     buildData();
                     bilderexRenderFilters();
                     bilderexApplyFilter();
@@ -534,12 +589,20 @@
                     buildData();
                     bilderexRenderFilters();
                     bilderexApplyFilter();
-                    document.getElementById('bilderex-search').addEventListener('input', bilderexApplyFilter);
+                    document.getElementById('bilderex-search').addEventListener('input', debounce(bilderexApplyFilter, 120));
                     window.bilderexInitialized = true;
                 }
             });
         }
+
+        function debounce(fn, wait) {
+            let timer = null;
+            return function (...args) {
+                window.clearTimeout(timer);
+                timer = window.setTimeout(() => fn.apply(this, args), wait);
+            };
+        }
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a"></script>
+    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>

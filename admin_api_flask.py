@@ -1530,6 +1530,48 @@ def save_form_prompts(data: Dict[str, str]) -> None:
             db.close()
     write_json_file(FORM_PROMPTS_FILE, normalized)
 
+
+def normalize_recipient_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        candidates = value
+    else:
+        candidates = re.split(r"[,\n;]+", str(value or ""))
+    recipients: List[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        email = str(candidate or "").strip().lower()
+        if not email or not is_valid_email_address(email) or email in seen:
+            continue
+        recipients.append(email)
+        seen.add(email)
+    return recipients
+
+
+def load_mailgun_settings() -> Dict[str, Any]:
+    data = get_site_content("mailgun_settings")
+    recipients: List[str] = []
+    if isinstance(data, dict):
+        recipients = normalize_recipient_list(data.get("to") or data.get("recipients"))
+    if not recipients:
+        recipients = normalize_recipient_list(MAILGUN_TO_RAW)
+    return {
+        "to": ", ".join(recipients),
+        "recipients": recipients,
+    }
+
+
+def save_mailgun_settings(data: Dict[str, Any]) -> Dict[str, Any]:
+    recipients = normalize_recipient_list(data.get("to") or data.get("recipients"))
+    if not recipients:
+        raise ValueError("Minst en giltig e-postadress krävs.")
+    payload = {
+        "to": ", ".join(recipients),
+        "recipients": recipients,
+    }
+    set_site_content("mailgun_settings", payload)
+    return payload
+
+
 def safe_json_loads(text: str) -> Optional[Dict[str, Any]]:
     if not text:
         return None
@@ -1807,28 +1849,11 @@ def generate_submission_metadata(
     form_type: str,
     fields: Dict[str, str],
     form_summary: str,
-) -> Tuple[str, str, str]:
+) -> Tuple[str, str]:
     category = "Allman fraga"
     title = f"{form_type}: {fields.get('1. Namn', fields.get('Namn', 'Kund'))}"
     if len(title) > 70:
         title = title[:67] + "..."
-
-    prompts = load_form_prompts()
-    system_prompt = prompts.get(normalize_form_type(form_type), prompts["Kontakt"])
-    email_rules = (
-        "Obligatoriska regler för mejlsvar:\n"
-        f"1) Börja ALLTID exakt med: {EMAIL_REQUIRED_OPENING}\n"
-        "2) Svara kort, tydligt och professionellt på svenska.\n"
-        "3) Driv affären framåt: föreslå tydligt nästa steg.\n"
-        "4) Om relevant information saknas: fråga efter den i en kort punktlista (max 3 punkter).\n"
-        "5) Undvik fluff och långa stycken.\n"
-        f"6) Avsluta ALLTID exakt med:\n{EMAIL_REQUIRED_CLOSING}\n"
-        "7) Returnera endast själva mejltexten."
-    )
-    response_system_prompt = f"{system_prompt}\n\n{email_rules}"
-    proposed_response = finalize_email_reply(
-        "Vi har tagit emot din förfrågan och återkommer med nästa steg inom kort."
-    )
 
     category_prompt = (
         "Categorize this customer message into one of: "
@@ -1839,12 +1864,6 @@ def generate_submission_metadata(
         "Create a short subject line (max 60 chars) for this customer message.\n\n"
         f"{form_summary}\n\nOnly return the title."
     )
-    response_prompt = (
-        "Skriv ett kort svenskt mejlsvar enligt systeminstruktionerna.\n"
-        "Målet är att ta ärendet till nästa tydliga steg och öka chansen till avslut.\n\n"
-        f"{form_summary}"
-    )
-
     try:
         category_resp = get_openai_response(category_prompt, "You classify incoming service inquiries.", 0.6, 120)
         candidate = category_resp.strip()
@@ -1861,13 +1880,37 @@ def generate_submission_metadata(
     except Exception:
         pass
 
-    try:
-        generated = get_openai_response(response_prompt, response_system_prompt, 0.6, 550, model=CHAT_MODEL)
-        proposed_response = finalize_email_reply(generated)
-    except Exception:
-        proposed_response = finalize_email_reply(proposed_response)
+    return category, title
 
-    return category, title, proposed_response
+
+def generate_submission_ai_response(form_type: str, fields: Dict[str, Any], form_summary: str = "") -> str:
+    safe_fields = sanitize_fields(fields, submitted_via=str(fields.get("__submitted_via", "web_form")) if isinstance(fields, dict) else "web_form")
+    summary = form_summary or build_form_summary(form_type, safe_fields)
+    prompts = load_form_prompts()
+    system_prompt = prompts.get(normalize_form_type(form_type), prompts["Kontakt"])
+    email_rules = (
+        "Obligatoriska regler för mejlsvar:\n"
+        f"1) Börja ALLTID exakt med: {EMAIL_REQUIRED_OPENING}\n"
+        "2) Svara kort, tydligt och professionellt på svenska.\n"
+        "3) Driv affären framåt: föreslå tydligt nästa steg.\n"
+        "4) Om relevant information saknas: fråga efter den i en kort punktlista (max 3 punkter).\n"
+        "5) Undvik fluff och långa stycken.\n"
+        f"6) Avsluta ALLTID exakt med:\n{EMAIL_REQUIRED_CLOSING}\n"
+        "7) Returnera endast själva mejltexten."
+    )
+    response_prompt = (
+        "Skriv ett kort svenskt mejlsvar enligt systeminstruktionerna.\n"
+        "Målet är att ta ärendet till nästa tydliga steg och öka chansen till avslut.\n\n"
+        f"{summary}"
+    )
+    generated = get_openai_response(
+        response_prompt,
+        f"{system_prompt}\n\n{email_rules}",
+        0.6,
+        550,
+        model=CHAT_MODEL,
+    )
+    return finalize_email_reply(generated)
 
 
 def save_submission_record(submission: Dict[str, Any]) -> None:
@@ -1919,10 +1962,7 @@ def get_submission_notes(row: Dict[str, Any]) -> str:
 
 
 def get_mailgun_recipients() -> List[str]:
-    if not MAILGUN_TO_RAW:
-        return []
-    recipients = [item.strip() for item in MAILGUN_TO_RAW.split(",")]
-    return [item for item in recipients if item]
+    return load_mailgun_settings()["recipients"]
 
 
 FIELD_LABELS_SV: Dict[str, str] = {
@@ -2369,7 +2409,7 @@ def send_mailgun_submission_notification(
         fields = {}
     submission_id = str(submission.get("id", ""))
     timestamp_iso = str(submission.get("timestamp", ""))
-    proposed_response = str(submission.get("proposed_response", "") or "").strip()
+    proposed_response = ""
     form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
     subject = f"Ny {form_label} — Henricssons"
     field_lines = "\n".join(
@@ -2417,7 +2457,7 @@ def send_mailgun_submission_notification(
             f"  - {a['filename']} ({max(1, int(a['size']/1024))} KB) {a['public_url']}"
             for a in enriched
         )
-    ai_reply_lines = f"\nAI-utkast till svar:\n{proposed_response}\n" if proposed_response else ""
+    ai_reply_lines = ""
     text_body = (
         f"Ny {form_label}\n"
         f"{'=' * (len(form_label) + 4)}\n\n"
@@ -2499,7 +2539,7 @@ def process_form_submission(
     normalized_form_type = display_form_type(form_type)
     safe_fields = sanitize_fields(fields, submitted_via=submitted_via)
     form_summary = build_form_summary(normalized_form_type, safe_fields)
-    category, title, proposed_response = generate_submission_metadata(normalized_form_type, safe_fields, form_summary)
+    category, title = generate_submission_metadata(normalized_form_type, safe_fields, form_summary)
     submission_id = f"form_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{os.urandom(4).hex()}"
     submission = {
         "id": submission_id,
@@ -2508,7 +2548,7 @@ def process_form_submission(
         "title": title,
         "fields": safe_fields,
         "form_summary": form_summary,
-        "proposed_response": proposed_response,
+        "proposed_response": "",
         "timestamp": datetime.utcnow().isoformat(),
         "status": "nya-inskick",
         "read": False,
@@ -2765,6 +2805,38 @@ def update_submission_notes_record(submission_id: str, notes: str) -> bool:
                 next_fields.pop("__internal_notes", None)
             row["fields"] = next_fields
             row["notes"] = sanitized_notes
+            found = True
+            break
+    if found:
+        write_json_file(FORM_SUBMISSIONS_FILE, rows)
+    return found
+
+
+def update_submission_response_record(submission_id: str, proposed_response: str) -> bool:
+    response_text = str(proposed_response or "").strip()
+    updated = False
+    db = get_db()
+    if db:
+        try:
+            row = db.query(FormSubmission).filter_by(id=submission_id).first()
+            if row:
+                row.proposed_response = response_text
+                db.commit()
+                updated = True
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
+    if updated:
+        return True
+
+    rows = read_json_file(FORM_SUBMISSIONS_FILE, [])
+    if not isinstance(rows, list):
+        return False
+    found = False
+    for row in rows:
+        if isinstance(row, dict) and row.get("id") == submission_id:
+            row["proposed_response"] = response_text
             found = True
             break
     if found:
@@ -3104,11 +3176,21 @@ def add_cors_headers(response):
         response.headers["Content-Type"] = f"{response.mimetype}; charset=utf-8"
 
     path_lower = (request.path or "").lower()
-    if request.method == "GET" and not path_lower.startswith("/api/"):
-        if path_lower == "/" or path_lower.endswith((".html", ".js", ".css", ".json")):
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    existing_cache_control = response.headers.get("Cache-Control", "").lower().strip()
+    has_explicit_cache_control = existing_cache_control and existing_cache_control != "no-cache"
+    if request.method == "GET" and not path_lower.startswith("/api/") and not has_explicit_cache_control:
+        if path_lower in {"/admin", "/admin.html"}:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
+        elif path_lower == "/" or path_lower.endswith(".html"):
+            response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+        elif path_lower.endswith((".css", ".js")):
+            response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
+        elif path_lower.endswith(".json"):
+            response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+        elif path_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico")):
+            response.headers["Cache-Control"] = "public, max-age=604800, stale-while-revalidate=2592000"
     return response
 
 
@@ -3289,6 +3371,33 @@ def update_submission_notes_route():
     return jsonify(success=True, notes=notes.strip())
 
 
+@app.route("/api/generate_submission_response", methods=["POST"])
+@admin_required
+def generate_submission_response_route():
+    payload = request.get_json()
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    submission_id = str(payload.get("id", "")).strip()
+    if not submission_id:
+        return jsonify(error="Missing id"), 400
+
+    submission = next((row for row in get_all_submissions() if str(row.get("id", "")) == submission_id), None)
+    if not submission:
+        return jsonify(error="Submission not found"), 404
+    fields = submission.get("fields", {})
+    if not isinstance(fields, dict):
+        fields = {}
+    form_type = str(submission.get("form_type", "Kontakt") or "Kontakt")
+    form_summary = str(submission.get("form_summary", "") or "")
+    try:
+        response_text = generate_submission_ai_response(form_type, fields, form_summary)
+    except Exception as exc:
+        return jsonify(error=f"AI unavailable: {exc}"), 502
+    if not update_submission_response_record(submission_id, response_text):
+        return jsonify(error="Submission not found"), 404
+    return jsonify(success=True, proposed_response=response_text)
+
+
 @app.route("/api/form_prompts", methods=["GET", "POST"])
 @admin_required
 def form_prompts():
@@ -3364,6 +3473,23 @@ def page_texts():
     write_json_file(PAGE_TEXTS_FILE, data)
     set_site_content("page_texts", data)
     return jsonify(success=True)
+
+
+@app.route("/api/mailgun_settings", methods=["GET", "POST"])
+@admin_required
+def mailgun_settings_route():
+    if request.method == "GET":
+        return jsonify(load_mailgun_settings())
+
+    data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify(error="Invalid payload"), 400
+    try:
+        saved = save_mailgun_settings(data)
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+    return jsonify(success=True, **saved)
+
 
 @app.route("/api/upload_image", methods=["POST"])
 @admin_required
@@ -4093,7 +4219,7 @@ def example_page(slug: str):
     has_multiple = len(image_urls) > 1
     gallery_images = "".join(
         f'<button type="button" class="seo-thumb{" is-active" if index == 0 else ""}" data-gallery-index="{index}" aria-label="Visa bild {index + 1}">'
-        f'<img src="{html.escape(image)}" alt="{html.escape(full_title)}" loading="lazy"/></button>'
+        f'<img src="{html.escape(image)}" alt="{html.escape(full_title)}" loading="lazy" decoding="async"/></button>'
         for index, image in enumerate(image_urls[:8])
     )
     nav_style = "" if has_multiple else ' style="display:none"'
@@ -4104,7 +4230,7 @@ def example_page(slug: str):
         <div class="seo-gallery-stage">
             <button type="button" class="seo-gallery-nav seo-gallery-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
             <div class="seo-gallery-main">
-                <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="eager"/>
+                <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="eager" decoding="async" fetchpriority="high"/>
                 <button type="button" class="seo-gallery-expand" aria-label="Öppna bilden större">Öppna större</button>
             </div>
             <button type="button" class="seo-gallery-nav seo-gallery-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
@@ -4116,7 +4242,7 @@ def example_page(slug: str):
             <button type="button" class="seo-lightbox-close" aria-label="Stäng">&times;</button>
             <button type="button" class="seo-lightbox-nav seo-lightbox-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
             <div class="seo-lightbox-stage">
-                <img id="seoLightboxImage" src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="eager"/>
+                <img id="seoLightboxImage" src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="lazy" decoding="async"/>
             </div>
             <button type="button" class="seo-lightbox-nav seo-lightbox-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
             <div class="seo-lightbox-actions">
@@ -4348,7 +4474,7 @@ def temp_product_page(slug: str):
         related_cards.append(
             f"""
             <a class="seo-related-card" href="{related_href}">
-                <img src="{related_image}" alt="{related_title}">
+                <img src="{related_image}" alt="{related_title}" loading="lazy" decoding="async">
                 <div class="seo-related-copy">
                     <strong>{related_title}</strong>
                     {f'<span class="seo-related-price">{related_price}</span>' if related_price else ''}
@@ -4362,7 +4488,7 @@ def temp_product_page(slug: str):
 
     nav_style = "" if len(image_urls) > 1 else ' style="display:none;"'
     thumbs_html = "".join(
-        f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(url)}" alt="{html.escape(title_text)} bild {idx + 1}"></button>'
+        f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(url)}" alt="{html.escape(title_text)} bild {idx + 1}" loading="lazy" decoding="async"></button>'
         for idx, url in enumerate(image_urls[:10])
     )
     gallery_html = f"""
@@ -4370,7 +4496,7 @@ def temp_product_page(slug: str):
         <div class="seo-gallery-stage">
             <button type="button" class="seo-gallery-nav seo-gallery-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
             <div class="seo-gallery-main">
-                <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(title_text)}">
+                <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(title_text)}" loading="eager" decoding="async" fetchpriority="high">
             </div>
             <button type="button" class="seo-gallery-nav seo-gallery-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
         </div>
