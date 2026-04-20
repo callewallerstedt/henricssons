@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from collections import defaultdict
 import hashlib
 import html
 import hmac
@@ -276,6 +277,17 @@ class SiteContent(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class AnalyticsEvent(Base):
+    __tablename__ = "analytics_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_type = Column(String, nullable=False, default="pageview", index=True)
+    path = Column(String, nullable=False, default="", index=True)
+    referrer_host = Column(String, nullable=False, default="", index=True)
+    search_query = Column(String, nullable=False, default="", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class SubmissionAttachment(Base):
     __tablename__ = "submission_attachments"
 
@@ -465,6 +477,77 @@ def admin_required(fn):
     return wrapper
 
 
+TRACKED_RESPONSE_MIME_PREFIXES = ("text/html",)
+TRACKED_EXCLUDED_PATH_PREFIXES = ("/api/", "/admin", "/assets/", "/henricssons_bilder/")
+TRACKED_EXCLUDED_PATHS = {
+    "/robots.txt",
+    "/sitemap.xml",
+    "/healthz",
+    "/favicon.ico",
+}
+
+
+def normalize_tracked_path(path: str) -> str:
+    clean = str(path or "").strip()
+    if not clean:
+        return "/"
+    if clean != "/" and clean.endswith("/"):
+        clean = clean.rstrip("/")
+    return clean or "/"
+
+
+def normalize_search_query(value: str) -> str:
+    query = " ".join(str(value or "").split()).strip()
+    return query[:200]
+
+
+def extract_referrer_host(referrer: str) -> str:
+    raw = str(referrer or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = urlparse(raw)
+    except Exception:
+        return ""
+    return (parsed.netloc or "").strip().lower()[:120]
+
+
+def should_track_analytics_response(response: Response) -> bool:
+    if request.method != "GET":
+        return False
+    if response.status_code != 200:
+        return False
+    mimetype = str(response.mimetype or "").lower()
+    if not any(mimetype.startswith(prefix) for prefix in TRACKED_RESPONSE_MIME_PREFIXES):
+        return False
+    path = normalize_tracked_path(request.path)
+    if path in TRACKED_EXCLUDED_PATHS:
+        return False
+    if any(path.startswith(prefix) for prefix in TRACKED_EXCLUDED_PATH_PREFIXES):
+        return False
+    return True
+
+
+def record_analytics_event(event_type: str, path: str, referrer_host: str = "", search_query: str = "") -> None:
+    db = get_db()
+    if not db:
+        return
+    try:
+        db.add(
+            AnalyticsEvent(
+                event_type=str(event_type or "pageview")[:32],
+                path=normalize_tracked_path(path)[:255],
+                referrer_host=str(referrer_host or "")[:120],
+                search_query=normalize_search_query(search_query),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 def render_admin_login(error: str = "") -> Response:
     error_html = f"<div class='error'>{html.escape(error)}</div>" if error else ""
     return Response(
@@ -529,6 +612,28 @@ def enforce_public_host() -> Optional[Any]:
     if query:
         target = f"{target}?{query}"
     return redirect(target, code=301)
+
+
+@app.after_request
+def capture_public_analytics(response: Response) -> Response:
+    try:
+        if should_track_analytics_response(response):
+            path = normalize_tracked_path(request.path)
+            search_query = ""
+            event_type = "pageview"
+            if path == "/search":
+                search_query = normalize_search_query(request.args.get("q") or request.args.get("query") or "")
+                if search_query:
+                    event_type = "search"
+            record_analytics_event(
+                event_type=event_type,
+                path=path,
+                referrer_host=extract_referrer_host(request.headers.get("Referer", "")),
+                search_query=search_query,
+            )
+    except Exception:
+        pass
+    return response
 
 
 def read_json_file(path: Path, default: Any) -> Any:
@@ -4735,6 +4840,87 @@ def temp_product_page(slug: str):
         content_html=content_html,
         og_image=image_urls[0],
     )
+
+
+def build_analytics_summary(days: int = 30) -> Dict[str, Any]:
+    days = max(1, min(int(days or 30), 365))
+    db = get_db()
+    if not db:
+        return {
+            "days": days,
+            "totals": {"pageviews": 0, "searches": 0},
+            "daily": [],
+            "top_pages": [],
+            "top_referrers": [],
+            "top_searches": [],
+        }
+    try:
+        cutoff = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        cutoff_ts = cutoff.timestamp() - ((days - 1) * 86400)
+        start_at = datetime.utcfromtimestamp(cutoff_ts)
+        events = (
+            db.query(AnalyticsEvent)
+            .filter(AnalyticsEvent.created_at >= start_at)
+            .order_by(AnalyticsEvent.created_at.asc())
+            .all()
+        )
+    finally:
+        db.close()
+
+    daily_map: Dict[str, Dict[str, int]] = defaultdict(lambda: {"pageviews": 0, "searches": 0})
+    page_counts: Dict[str, int] = defaultdict(int)
+    referrer_counts: Dict[str, int] = defaultdict(int)
+    search_counts: Dict[str, int] = defaultdict(int)
+
+    totals = {"pageviews": 0, "searches": 0}
+
+    for event in events:
+        event_type = str(event.event_type or "pageview").strip().lower()
+        created_at = event.created_at or datetime.utcnow()
+        day_key = created_at.strftime("%Y-%m-%d")
+        daily_map[day_key]["pageviews"] += 1
+        totals["pageviews"] += 1
+        page_counts[str(event.path or "/")] += 1
+
+        referrer_host = str(event.referrer_host or "").strip().lower()
+        if referrer_host:
+            referrer_counts[referrer_host] += 1
+
+        search_query = normalize_search_query(event.search_query or "")
+        if event_type == "search" and search_query:
+            daily_map[day_key]["searches"] += 1
+            totals["searches"] += 1
+            search_counts[search_query] += 1
+
+    daily = []
+    for offset in range(days):
+        current = datetime.utcfromtimestamp(cutoff_ts + (offset * 86400))
+        day_key = current.strftime("%Y-%m-%d")
+        counts = daily_map.get(day_key, {"pageviews": 0, "searches": 0})
+        daily.append({"date": day_key, "pageviews": counts["pageviews"], "searches": counts["searches"]})
+
+    def top_items(counter_map: Dict[str, int], label_key: str) -> List[Dict[str, Any]]:
+        ordered = sorted(counter_map.items(), key=lambda item: (-item[1], item[0].lower()))
+        return [{label_key: key, "count": value} for key, value in ordered[:10]]
+
+    return {
+        "days": days,
+        "totals": totals,
+        "daily": daily,
+        "top_pages": top_items(page_counts, "path"),
+        "top_referrers": top_items(referrer_counts, "host"),
+        "top_searches": top_items(search_counts, "query"),
+    }
+
+
+@app.route("/api/analytics/summary", methods=["GET"])
+@admin_required
+def analytics_summary():
+    try:
+        days = int(request.args.get("days", "30"))
+    except ValueError:
+        days = 30
+    return jsonify(build_analytics_summary(days))
 
 
 @app.route("/healthz", methods=["GET"])

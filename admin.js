@@ -5,6 +5,7 @@ let manufacturers = typeof boatData !== 'undefined' ? boatData : {};
 let selectedManufacturerKey = null;
 let selectedModelIndex = null;
 let $grid1, $grid2;
+let analyticsRangeDays = 30;
 
 // Lägg in omedelbart efter globala variabler
 const KNOWN_API_HOSTS = new Set(['henricssonsbatkapell.onrender.com']);
@@ -807,11 +808,98 @@ function bindImageDelete() {
     });
 }
 
+function formatAnalyticsNumber(value) {
+    return new Intl.NumberFormat('sv-SE').format(Number(value || 0));
+}
+
+function renderAnalyticsBarList(targetSelector, items, labelKey, emptyLabel) {
+    const target = $(targetSelector);
+    target.empty();
+    if (!Array.isArray(items) || !items.length) {
+        target.html(`<div class="analytics-empty">${emptyLabel}</div>`);
+        return;
+    }
+    const maxCount = Math.max(...items.map(item => Number(item.count || 0)), 1);
+    items.forEach(item => {
+        const label = escapeHtml(item[labelKey] || '-');
+        const count = Number(item.count || 0);
+        const width = Math.max(6, Math.round((count / maxCount) * 100));
+        target.append(`
+            <div class="analytics-bar-item">
+                <div class="analytics-bar-top">
+                    <strong title="${label}">${label}</strong>
+                    <span>${formatAnalyticsNumber(count)}</span>
+                </div>
+                <div class="analytics-bar-track">
+                    <div class="analytics-bar-fill" style="width:${width}%;"></div>
+                </div>
+            </div>
+        `);
+    });
+}
+
+function renderAnalyticsChart(days) {
+    const target = $('#analytics-daily-chart');
+    target.empty();
+    if (!Array.isArray(days) || !days.length) {
+        target.html('<div class="analytics-empty">Ingen data ännu.</div>');
+        return;
+    }
+    const maxViews = Math.max(...days.map(day => Number(day.pageviews || 0)), 1);
+    const maxSearches = Math.max(...days.map(day => Number(day.searches || 0)), 1);
+    days.forEach(day => {
+        const pageviews = Number(day.pageviews || 0);
+        const searches = Number(day.searches || 0);
+        const dateLabel = String(day.date || '').slice(5);
+        const pageHeight = Math.max(pageviews ? 8 : 2, Math.round((pageviews / maxViews) * 120));
+        const searchHeight = Math.max(searches ? 8 : 2, Math.round((searches / maxSearches) * 70));
+        target.append(`
+            <div class="analytics-chart-col" title="${escapeHtml(String(day.date || ''))}: ${formatAnalyticsNumber(pageviews)} sidvisningar, ${formatAnalyticsNumber(searches)} sökningar">
+                <div class="analytics-chart-bars">
+                    <div class="analytics-chart-bar" style="height:${pageHeight}px;"></div>
+                    <div class="analytics-chart-bar is-search" style="height:${searchHeight}px;"></div>
+                </div>
+                <div class="analytics-chart-label">${escapeHtml(dateLabel)}</div>
+            </div>
+        `);
+    });
+}
+
+async function loadAnalyticsSummary(days = analyticsRangeDays) {
+    analyticsRangeDays = Number(days || 30);
+    $('.analytics-range-btn').removeClass('active');
+    $(`.analytics-range-btn[data-days="${analyticsRangeDays}"]`).addClass('active');
+    $('#analytics-daily-chart').html('<div class="analytics-empty">Laddar...</div>');
+    $('#analytics-top-pages').empty();
+    $('#analytics-top-searches').empty();
+    $('#analytics-top-referrers').empty();
+    try {
+        const res = await adminFetch(`${API_BASE}/api/analytics/summary?days=${encodeURIComponent(analyticsRangeDays)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        $('#analytics-total-pageviews').text(formatAnalyticsNumber(data?.totals?.pageviews));
+        $('#analytics-total-searches').text(formatAnalyticsNumber(data?.totals?.searches));
+        renderAnalyticsChart(data?.daily || []);
+        renderAnalyticsBarList('#analytics-top-pages', data?.top_pages || [], 'path', 'Inga sidvisningar ännu.');
+        renderAnalyticsBarList('#analytics-top-searches', data?.top_searches || [], 'query', 'Inga sökningar ännu.');
+        renderAnalyticsBarList('#analytics-top-referrers', data?.top_referrers || [], 'host', 'Inga externa trafikkällor ännu.');
+    } catch (err) {
+        console.error('Kunde inte ladda analytics', err);
+        $('#analytics-total-pageviews').text('0');
+        $('#analytics-total-searches').text('0');
+        $('#analytics-daily-chart').html('<div class="analytics-empty">Kunde inte ladda statistik.</div>');
+        $('#analytics-top-pages').html('<div class="analytics-empty">Kunde inte ladda statistik.</div>');
+        $('#analytics-top-searches').html('<div class="analytics-empty">Kunde inte ladda statistik.</div>');
+        $('#analytics-top-referrers').html('<div class="analytics-empty">Kunde inte ladda statistik.</div>');
+    }
+}
+
 function switchTab(tab){
     activeTab = tab;
     $('.tab-btn').removeClass('active');
     $(`.tab-btn[data-tab="${tab}"]`).addClass('active');
     $('#settings-section').removeClass('active');
+    $('#analytics-section').removeClass('active');
 
     if(tab==='dashboard'){
         $('#dashboard-section').addClass('active');
@@ -879,6 +967,19 @@ function switchTab(tab){
         $('#admin-tabs').hide();
         $('#extras-search').hide();
         initCalendar();
+    } else if(tab==='analytics'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('#tempproducts-section').hide();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        $('#analytics-section').addClass('active');
+        loadAnalyticsSummary(analyticsRangeDays);
     } else if(tab==='boats'){
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').removeClass('active');
@@ -2536,6 +2637,8 @@ $(document).ready(function() {
             switchTab('settings');
         } else if(prim==='calendar'){
             switchTab('calendar');
+        } else if(prim==='analytics'){
+            switchTab('analytics');
         } else if(prim==='boats'){
             switchTab('boats');
         } else if(prim==='tempproducts'){
@@ -2558,6 +2661,9 @@ $(document).ready(function() {
     // Tab buttons
     $(document).on('click', '.tab-btn', function(){
         switchTab($(this).data('tab'));
+    });
+    $(document).on('click', '.analytics-range-btn', function(){
+        loadAnalyticsSummary(Number($(this).data('days') || 30));
     });
     
     // Plus-knappar

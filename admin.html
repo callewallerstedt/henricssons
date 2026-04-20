@@ -418,6 +418,105 @@
             gap: 1.25rem;
         }
         @media (max-width: 1100px) { .dashboard-grid { grid-template-columns: 1fr; } }
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+        .analytics-grid .dashboard-card { min-height: 100%; }
+        .analytics-bar-list {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 0.25rem;
+        }
+        .analytics-bar-item {
+            display: grid;
+            gap: 0.35rem;
+        }
+        .analytics-bar-top {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.75rem;
+            font-size: 0.86rem;
+        }
+        .analytics-bar-top strong {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text);
+        }
+        .analytics-bar-track {
+            height: 8px;
+            border-radius: 999px;
+            background: var(--surface-2);
+            overflow: hidden;
+        }
+        .analytics-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--brand), #c49a55);
+        }
+        .analytics-empty {
+            color: var(--text-muted);
+            font-size: 0.88rem;
+            padding: 0.4rem 0;
+        }
+        .analytics-chart {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(18px, 1fr));
+            align-items: end;
+            gap: 0.35rem;
+            min-height: 180px;
+            margin-top: 1rem;
+        }
+        .analytics-chart-col {
+            display: grid;
+            justify-items: center;
+            gap: 0.45rem;
+        }
+        .analytics-chart-bars {
+            width: 100%;
+            min-height: 140px;
+            display: flex;
+            align-items: end;
+            justify-content: center;
+            gap: 3px;
+        }
+        .analytics-chart-bar {
+            width: 9px;
+            min-height: 2px;
+            border-radius: 999px 999px 0 0;
+            background: var(--brand);
+        }
+        .analytics-chart-bar.is-search {
+            background: #0f766e;
+        }
+        .analytics-chart-label {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            letter-spacing: 0.02em;
+        }
+        .analytics-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .analytics-toolbar .row {
+            margin: 0;
+            gap: 0.5rem;
+        }
+        .analytics-range-btn.active {
+            background: var(--brand);
+            color: #fff !important;
+            border-color: var(--brand);
+        }
+        @media (max-width: 1100px) { .analytics-grid { grid-template-columns: 1fr; } }
 
         /* ================ STATUS FOLDERS (KANBAN) ================ */
         .statusmappar-header {
@@ -1359,6 +1458,10 @@
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                 Kalender
             </button>
+            <button class="primary-tab-btn" data-primary="analytics">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v-4"/><path d="M12 15V8"/><path d="M17 15v-7"/></svg>
+                Analytics
+            </button>
         </div>
 
         <div class="sidebar-label">Innehåll</div>
@@ -1515,6 +1618,53 @@
                 <div class="dashboard-card calendar-card">
                     <h2>Kalender</h2>
                     <div id="calendar"></div>
+                </div>
+            </div>
+
+            <!-- ANALYTICS -->
+            <div id="analytics-section" class="dashboard-container">
+                <div class="analytics-toolbar">
+                    <div>
+                        <h2 style="margin:0;">Webbplatsdata</h2>
+                        <p class="text-muted" style="margin:0.35rem 0 0 0; font-size:0.85rem;">Server-side aggregerad statistik för sidvisningar, referrers och sökningar.</p>
+                    </div>
+                    <div class="row">
+                        <button class="btn-secondary analytics-range-btn active" data-days="7">7 dagar</button>
+                        <button class="btn-secondary analytics-range-btn" data-days="30">30 dagar</button>
+                        <button class="btn-secondary analytics-range-btn" data-days="90">90 dagar</button>
+                    </div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-label">Sidvisningar</div>
+                        <div class="stat-value" id="analytics-total-pageviews">0</div>
+                        <div class="stat-hint">Under vald period</div>
+                    </div>
+                    <div class="stat-card is-info">
+                        <div class="stat-label">Sökningar</div>
+                        <div class="stat-value" id="analytics-total-searches">0</div>
+                        <div class="stat-hint">Sökningar via /search</div>
+                    </div>
+                </div>
+
+                <div class="analytics-grid">
+                    <div class="dashboard-card">
+                        <h2>Utveckling per dag</h2>
+                        <div id="analytics-daily-chart" class="analytics-chart"></div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h2>Mest besökta sidor</h2>
+                        <div id="analytics-top-pages" class="analytics-bar-list"></div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h2>Vanligaste sökningar</h2>
+                        <div id="analytics-top-searches" class="analytics-bar-list"></div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h2>Trafikkällor</h2>
+                        <div id="analytics-top-referrers" class="analytics-bar-list"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1710,7 +1860,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260420h" defer></script>
+<script src="admin.js?v=20260420i" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle
@@ -1738,6 +1888,7 @@
     const titles = {
         dashboard: { t: 'Dashboard', s: 'Översikt över senaste aktiviteten' },
         calendar: { t: 'Kalender', s: 'Planering och leveranser' },
+        analytics: { t: 'Analytics', s: 'Aggregerad trafik, sökningar och trafikkällor' },
         texts: { t: 'Redigera texter', s: 'Info-kort och sidtexter på webben' },
         advanced: { t: 'AI-inställningar', s: 'Hantera prompts och testa chatten' },
         settings: { t: 'Inställningar', s: 'Mailgun och administrativa inställningar' },
