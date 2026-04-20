@@ -1175,6 +1175,59 @@
             display: flex;
             padding: 0;
         }
+        .attachment-lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 11050;
+            background: rgba(2, 6, 23, 0.88);
+            backdrop-filter: blur(6px);
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .attachment-lightbox.active { display: flex; }
+        .attachment-lightbox-dialog {
+            position: relative;
+            max-width: min(92vw, 1400px);
+            max-height: 92vh;
+            display: grid;
+            gap: 0.9rem;
+            justify-items: center;
+        }
+        .attachment-lightbox-image {
+            display: block;
+            max-width: 100%;
+            max-height: calc(92vh - 4rem);
+            border-radius: 14px;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+            background: rgba(255,255,255,0.04);
+        }
+        .attachment-lightbox-caption {
+            color: rgba(255,255,255,0.86);
+            font-size: 0.88rem;
+            text-align: center;
+            max-width: min(92vw, 800px);
+            word-break: break-word;
+        }
+        .attachment-lightbox-close {
+            position: absolute;
+            top: -0.75rem;
+            right: -0.75rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 999px;
+            border: 0;
+            background: rgba(15, 23, 42, 0.85);
+            color: #fff;
+            font-size: 1.6rem;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+        }
+        .attachment-lightbox-close:hover {
+            background: rgba(30, 41, 59, 0.96);
+        }
         .form-modal-columns {
             display: flex;
             flex: 1;
@@ -1902,12 +1955,20 @@
     </div>
 </div>
 
+<div id="attachment-lightbox" class="attachment-lightbox" aria-hidden="true">
+    <div class="attachment-lightbox-dialog">
+        <button type="button" class="attachment-lightbox-close" id="attachment-lightbox-close" aria-label="Stäng bild">×</button>
+        <img id="attachment-lightbox-image" class="attachment-lightbox-image" alt="" />
+        <div id="attachment-lightbox-caption" class="attachment-lightbox-caption"></div>
+    </div>
+</div>
+
 <script src="https://code.jquery.com/jquery-3.7.1.min.js" defer></script>
 <script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260420j" defer></script>
+<script src="admin.js?v=20260420k" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle

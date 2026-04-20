@@ -166,6 +166,7 @@ async function adminFetch(url, options = {}) {
 }
 
 let attachmentImageObserver = null;
+let activeAttachmentLightboxUrl = null;
 
 function loadAttachmentPreviewImage(img, loadingEl, url, immediate = false) {
     const startLoad = () => {
@@ -202,6 +203,39 @@ function loadAttachmentPreviewImage(img, loadingEl, url, immediate = false) {
     img.data('loadingEl', loadingEl);
     img.data('attachmentUrl', url);
     attachmentImageObserver.observe(img[0]);
+}
+
+function closeAttachmentLightbox() {
+    const lightbox = $('#attachment-lightbox');
+    const image = $('#attachment-lightbox-image');
+    lightbox.removeClass('active').attr('aria-hidden', 'true');
+    image.attr('src', '').attr('alt', '');
+    $('#attachment-lightbox-caption').text('');
+    if (activeAttachmentLightboxUrl) {
+        URL.revokeObjectURL(activeAttachmentLightboxUrl);
+        activeAttachmentLightboxUrl = null;
+    }
+    $('body').css('overflow', '');
+}
+
+async function openAttachmentLightbox(url, filename) {
+    try {
+        const res = await adminFetch(url);
+        const blob = res.ok ? await res.blob() : null;
+        if (!blob) throw new Error('empty attachment blob');
+        const objectUrl = URL.createObjectURL(blob);
+        if (activeAttachmentLightboxUrl) {
+            URL.revokeObjectURL(activeAttachmentLightboxUrl);
+        }
+        activeAttachmentLightboxUrl = objectUrl;
+        $('#attachment-lightbox-image').attr('src', objectUrl).attr('alt', filename || 'Bilaga');
+        $('#attachment-lightbox-caption').text(filename || '');
+        $('#attachment-lightbox').addClass('active').attr('aria-hidden', 'false');
+        $('body').css('overflow', 'hidden');
+    } catch (err) {
+        console.warn('Kunde inte öppna bilaga', err);
+        showStatusMessage('Kunde inte öppna bilden');
+    }
 }
 
 async function updateSubmissionStatusOnServer(item, status, readFlag) {
@@ -577,6 +611,17 @@ function buildModels() {
     bindGridEvents(); // bind click on new model buttons
 }
 
+function refreshManufacturerListLayout(showEditor = false) {
+    $('.quicksearch').val('');
+    buildGrids();
+    $('.grid2').empty();
+    if (showEditor) {
+        showEditSection();
+        return;
+    }
+    $('#edit-section').removeClass('editing').html('<h2>Redigering</h2><p>Välj en tillverkare för att börja.</p>').hide();
+}
+
 function bindGridEvents() {
     // Tillverkare
     $('.grid1-item').off('click').on('click', function() {
@@ -645,14 +690,10 @@ function showManufacturerEdit() {
 
     $('#delete-manu-btn').on('click', function(){
         if(!confirm('Ta bort denna tillverkare?')) return;
-        const keyToDelete = selectedManufacturerKey;
         deleteManufacturer(selectedManufacturerKey, ()=>{
             selectedManufacturerKey=null;
             selectedModelIndex=null;
-            // Ta bort tillverkaren från UI utan att bygga om
-            $(`.grid1-item[data-key="${keyToDelete}"]`).remove();
-            $('.grid2').empty();
-            $('#edit-section').removeClass('editing').html('<h2>Redigering</h2><p>Välj en tillverkare för att börja.</p>').hide();
+            refreshManufacturerListLayout(false);
         });
     });
 
@@ -706,7 +747,7 @@ function showModelEdit() {
             setUnsaved('edit', false);
             selectedModelIndex = null;
             buildModels();
-            showEditSection();
+            refreshManufacturerListLayout(true);
         });
     });
     
@@ -2421,13 +2462,8 @@ async function viewFormSubmission(status, index) {
                     cursor: 'pointer',
                     background: '#e2e8f0'
                 });
-                loadAttachmentPreviewImage(img, loading, url);
-                img.on('click', () => {
-                    const src = img.attr('src');
-                    if (!src) return;
-                    const w = window.open('', '_blank');
-                    if (w) w.document.write(`<img src="${src}" style="max-width:100vw;max-height:100vh;"/>`);
-                });
+                loadAttachmentPreviewImage(img, loading, url, true);
+                img.on('click', () => openAttachmentLightbox(url, att.filename));
                 tile.append(loading);
                 tile.append(img);
             } else {
@@ -2625,6 +2661,16 @@ function saveStatusItem() {
 }
 
 $(document).ready(function() {
+    $('#attachment-lightbox-close').on('click', closeAttachmentLightbox);
+    $('#attachment-lightbox').on('click', function(e) {
+        if (e.target === this) closeAttachmentLightbox();
+    });
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape' && $('#attachment-lightbox').hasClass('active')) {
+            closeAttachmentLightbox();
+        }
+    });
+
     // Primära flikar
     $(document).on('click', '.primary-tab-btn', function(){
         $('.primary-tab-btn').removeClass('active');
@@ -2678,18 +2724,11 @@ $(document).ready(function() {
         };
 
         // Spara direkt så filen uppdateras utan extra steg
+        // Spara direkt så filen uppdateras utan extra steg
         pushFullDataset(() => {
             selectedManufacturerKey = newKey;
             selectedModelIndex = null;
-            // Lägg till i UI utan att bygga om hela griden
-            const item = $(`<div class="grid1-item selected-t" data-key="${newKey}">Ny tillverkare</div>`);
-            $('.grid1-item').removeClass('selected-t');
-            // Lägg till i Isotope-griden och layouta om direkt så höjden blir korrekt
-            $grid1.append(item);
-            $grid1.isotope('appended', item).isotope('layout');
-            $('.grid2').empty();
-            bindGridEvents(); // Bind events på nya elementet
-            showEditSection();
+            refreshManufacturerListLayout(true);
         });
     });
     
@@ -3164,3 +3203,4 @@ async function addTempProduct() {
 }
 
 $(document).on('click', '#tp-add-btn', addTempProduct);
+
