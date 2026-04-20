@@ -228,11 +228,19 @@
         let bilderexModalIndex = 0;
         let bilderexModalItem = null;
 
-        const API_BASE = `${location.protocol}//${location.host}`;
+        const API_BASE = (() => {
+            if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+                return `${location.protocol}//${location.hostname}:25565`;
+            }
+            if (location.hostname.endsWith('.onrender.com') && location.hostname !== 'henricssons-api.onrender.com') {
+                return 'https://henricssons-api.onrender.com';
+            }
+            return `${location.protocol}//${location.host}`;
+        })();
 
         function buildExamplePath(item) {
             const slug = String(item && item.slug || '').trim();
-            return slug ? `/exempel/${encodeURIComponent(slug)}` : '/bilder-och-exempel';
+            return slug ? `${API_BASE}/exempel/${encodeURIComponent(slug)}` : '/bilder-och-exempel';
         }
 
         function buildContactPath(item) {
@@ -240,9 +248,9 @@
             if (item && item.tillverkare) params.set('manufacturer', item.tillverkare);
             if (item && item.namn) params.set('model', item.namn);
             const examplePath = buildExamplePath(item);
-            if (examplePath.startsWith('/exempel/')) params.set('example', examplePath);
+            if (item && item.slug) params.set('example', `/exempel/${item.slug}`);
             const query = params.toString();
-            return query ? `/kontakt?${query}` : '/kontakt';
+            return query ? `${API_BASE}/kontakt?${query}` : `${API_BASE}/kontakt`;
         }
 
         function escapeHtml(value) {
