@@ -7,12 +7,9 @@ let selectedModelIndex = null;
 let $grid1, $grid2;
 
 // Lägg in omedelbart efter globala variabler
-// Auto-detect API base URL based on current location
+// Use same-origin API so local and deployed admin always talk to the current app instance.
 let API_BASE;
-API_BASE =
-    location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-        ? `${location.protocol}//${location.host}`
-        : 'https://henricssons-api.onrender.com';
+API_BASE = `${location.protocol}//${location.host}`;
 console.log('API_BASE initialized to:', API_BASE, 'from location:', location.href);
 
 let ADMIN_API_KEY = localStorage.getItem('adminApiKey') || '';

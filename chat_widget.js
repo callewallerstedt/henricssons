@@ -304,6 +304,7 @@
 }
 #hen-chat-panel {
   width: 100%;
+  min-height: 620px;
   max-height: min(720px, calc(100vh - 44px));
   max-height: min(720px, calc(100dvh - 44px));
   background: var(--hen-surface);
@@ -335,8 +336,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px 18px;
+  gap: 12px;
+  padding: 14px 16px;
   color: #ffffff;
   background:
     radial-gradient(120% 160% at 0% 0%, rgba(201, 162, 74, 0.22) 0%, rgba(201, 162, 74, 0) 55%),
@@ -352,36 +353,18 @@
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(201, 162, 74, 0.45), transparent);
 }
-#hen-chat-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
-#hen-chat-brand-mark {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(145deg, var(--hen-gold) 0%, #a8832d 100%);
-  color: var(--hen-navy-900);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  box-shadow:
-    0 6px 14px rgba(201, 162, 74, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
-}
-#hen-chat-title-wrap { min-width: 0; }
+#hen-chat-brand { display: flex; align-items: center; min-width: 0; }
 #hen-chat-title {
-  font-size: 0.98rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
   color: #ffffff;
   letter-spacing: -0.01em;
 }
-#hen-chat-header-actions { display: inline-flex; align-items: center; gap: 8px; }
-#hen-chat-close,
-#hen-chat-reset-top {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+#hen-chat-header-actions { display: inline-flex; align-items: center; }
+#hen-chat-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.85);
@@ -391,15 +374,13 @@
   cursor: pointer;
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
-#hen-chat-close:hover,
-#hen-chat-reset-top:hover {
+#hen-chat-close:hover {
   background: rgba(255, 255, 255, 0.14);
   border-color: rgba(201, 162, 74, 0.55);
   color: #ffffff;
   transform: translateY(-1px);
 }
-#hen-chat-close { font-size: 1.2rem; line-height: 1; }
-#hen-chat-reset-top svg { width: 15px; height: 15px; }
+#hen-chat-close { font-size: 1rem; line-height: 1; }
 #hen-chat-scroll {
   flex: 1;
   overflow-y: auto;
@@ -803,6 +784,7 @@
     width: calc(100vw - 24px);
   }
   #hen-chat-panel {
+    min-height: min(640px, calc(100dvh - 24px - env(safe-area-inset-bottom, 0px)));
     max-height: calc(100vh - 24px - env(safe-area-inset-bottom, 0px));
     max-height: calc(100dvh - 24px - env(safe-area-inset-bottom, 0px));
     border-radius: 20px;
@@ -833,7 +815,6 @@
   #hen-chat-panel,
   #hen-chat-toggle,
   #hen-chat-close,
-  #hen-chat-reset-top,
   .hen-route-card,
   .hen-secondary-route,
   .hen-primary-route,
@@ -847,19 +828,13 @@
 
         const panel = document.createElement('section');
         panel.id = 'hen-chat-panel';
-        panel.setAttribute('aria-label', 'Henricssons AI');
+        panel.setAttribute('aria-label', 'Henricssons Support');
         panel.innerHTML = `
 <div id="hen-chat-header">
   <div id="hen-chat-brand">
-    <div id="hen-chat-brand-mark">AI</div>
-    <div id="hen-chat-title-wrap">
-      <div id="hen-chat-title">Henricssons AI</div>
-    </div>
+    <div id="hen-chat-title">Henricssons Support</div>
   </div>
   <div id="hen-chat-header-actions">
-    <button id="hen-chat-reset-top" type="button" aria-label="Rensa chatten" title="Rensa chatten">
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 5a7 7 0 1 1-6.18 3.71H3l3.5-3.5L10 8.71H7.91A5 5 0 1 0 12 7V5z"/></svg>
-    </button>
     <button id="hen-chat-close" type="button" aria-label="Stäng" title="Stäng">×</button>
   </div>
 </div>
@@ -908,7 +883,7 @@
 <span id="hen-chat-toggle-icon" aria-hidden="true">
   <svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 3c5 0 9 3.58 9 8 0 4.42-4 8-9 8a10.6 10.6 0 0 1-3.3-.52L4 20l1.24-3.56A7.5 7.5 0 0 1 3 11c0-4.42 4-8 9-8Zm-3.2 7.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Zm3.2 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Zm3.2 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"/></svg>
 </span>
-<span id="hen-chat-toggle-label">AI-support</span>`;
+<span id="hen-chat-toggle-label">Support</span>`;
 
         shell.appendChild(panel);
         shell.appendChild(toggle);
@@ -990,16 +965,14 @@
     }
 
     function renderStaticCopy(ui) {
-        ui.toggleLabel.textContent = t('AI-support', 'AI support');
-        ui.toggle.setAttribute('aria-label', t('Öppna AI-support', 'Open AI support'));
-        ui.toggle.title = t('Öppna AI-support', 'Open AI support');
+        ui.toggleLabel.textContent = t('Support', 'Support');
+        ui.toggle.setAttribute('aria-label', t('Öppna support', 'Open support'));
+        ui.toggle.title = t('Öppna support', 'Open support');
         ui.input.placeholder = t('Skriv din fråga...', 'Write your question...');
         ui.sendBtn.setAttribute('aria-label', t('Skicka', 'Send'));
         ui.sendBtn.title = t('Skicka', 'Send');
         ui.closeBtn.setAttribute('aria-label', t('Stäng', 'Close'));
         ui.closeBtn.title = t('Stäng', 'Close');
-        ui.resetBtn.setAttribute('aria-label', t('Rensa chatten', 'Reset chat'));
-        ui.resetBtn.title = t('Rensa chatten', 'Reset chat');
         ui.introTitle.textContent = t('Välj väg eller skriv en fråga', 'Choose a route or ask a question');
 
         ui.routeButtons.forEach((button) => {
@@ -1165,7 +1138,6 @@
             backdrop,
             title: panel.querySelector('#hen-chat-title'),
             closeBtn: panel.querySelector('#hen-chat-close'),
-            resetBtn: panel.querySelector('#hen-chat-reset-top'),
             scroll: panel.querySelector('#hen-chat-scroll'),
             intro: panel.querySelector('#hen-chat-intro'),
             introTitle: panel.querySelector('#hen-chat-intro-title'),
@@ -1183,7 +1155,6 @@
         ui.toggle.addEventListener('click', () => setPanelOpen(ui, true));
         ui.closeBtn.addEventListener('click', () => setPanelOpen(ui, false));
         ui.backdrop.addEventListener('click', () => setPanelOpen(ui, false));
-        ui.resetBtn.addEventListener('click', () => resetChat(ui));
         ui.sendBtn.addEventListener('click', () => sendMessage(ui.input.value, ui));
         ui.input.addEventListener('input', () => autoResizeInput(ui.input));
         ui.input.addEventListener('keydown', (event) => {

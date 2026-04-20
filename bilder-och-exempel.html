@@ -28,7 +28,7 @@
         .hb-premium #bildModal .modal-backdrop { position: absolute; inset: 0; background: rgba(12,26,43,0.85); }
         .hb-premium #bildModal .modal-content { position: relative; background: #fff; max-width: 90%; max-height: 92%; overflow: auto; padding: 1.5rem 1.5rem 2rem; box-shadow: 0 24px 60px rgba(0,0,0,0.5); }
         .hb-premium #bildModal .slider { position: relative; width: 690px; max-width: 100%; height: 460px; display: flex; align-items: center; justify-content: center; margin: 0 auto; background: var(--cream-2); }
-        .hb-premium #bildModal .slider-main { width: 100%; height: 100%; object-fit: contain; display: block; cursor: pointer; }
+        .hb-premium #bildModal .slider-main { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
         .hb-premium #bildModal .slide-left,
         .hb-premium #bildModal .slide-right { background: rgba(255,255,255,0.9); border: none; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; color: var(--ink); cursor: pointer; position: absolute; top: 50%; transform: translateY(-50%); z-index: 10; font-weight: 700; }
         .hb-premium #bildModal .slide-left { left: 10px; }
@@ -55,7 +55,9 @@
         .hb-no-results { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 3rem 0; font-size: 1rem; }
         .hb-premium #bildModal .modal-meta { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; margin: 0 auto 1rem; max-width: 760px; }
         .hb-premium #bildModal .modal-meta span { background: var(--cream-2); color: var(--ink); padding: 0.55rem 0.8rem; font-size: 0.82rem; letter-spacing: 0.04em; text-transform: uppercase; }
-        .hb-premium #bildModal .modal-actions { display: flex; justify-content: center; }
+        .hb-premium #bildModal .modal-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8rem; }
+        .hb-premium #bildModal .modal-link { display: inline-block; color: var(--muted); text-decoration: none; font-size: 0.84rem; font-weight: 600; align-self: center; }
+        .hb-premium #bildModal .modal-link:hover { color: var(--ink); }
     </style>
 </head>
 <body class="hb-premium">
@@ -138,7 +140,8 @@
                 <p id="modalDelivery"></p>
             </div>
             <div class="modal-actions">
-                <a id="modalCta" class="modal-btn" href="/kapellforfragan">Skicka f&ouml;rfr&aring;gan</a>
+                <a id="modalContactCta" class="modal-btn" href="/kontakt">Kontakta om detta exempel</a>
+                <a id="modalDetailLink" class="modal-link" href="/bilder-och-exempel">Visa egen l&auml;nk</a>
             </div>
         </div>
     </div>
@@ -225,9 +228,22 @@
         let bilderexModalIndex = 0;
         let bilderexModalItem = null;
 
-        const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-            ? `${location.protocol}//${location.hostname}:25565`
-            : 'https://henricssons-api.onrender.com';
+        const API_BASE = `${location.protocol}//${location.host}`;
+
+        function buildExamplePath(item) {
+            const slug = String(item && item.slug || '').trim();
+            return slug ? `/exempel/${encodeURIComponent(slug)}` : '/bilder-och-exempel';
+        }
+
+        function buildContactPath(item) {
+            const params = new URLSearchParams();
+            if (item && item.tillverkare) params.set('manufacturer', item.tillverkare);
+            if (item && item.namn) params.set('model', item.namn);
+            const examplePath = buildExamplePath(item);
+            if (examplePath.startsWith('/exempel/')) params.set('example', examplePath);
+            const query = params.toString();
+            return query ? `/kontakt?${query}` : '/kontakt';
+        }
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -296,6 +312,11 @@
             if (!item) return;
             if (item.tillverkare) localStorage.setItem('preselectManufacturer', item.tillverkare);
             if (item.namn) localStorage.setItem('preselectModel', item.namn);
+            localStorage.setItem('contactExamplePrefill', JSON.stringify({
+                manufacturer: item.tillverkare || '',
+                model: item.namn || '',
+                example: buildExamplePath(item)
+            }));
         }
 
         function bilderexModalElements() {
@@ -308,7 +329,8 @@
                 meta: document.getElementById('modalMeta'),
                 description: document.getElementById('modalDescription'),
                 delivery: document.getElementById('modalDelivery'),
-                cta: document.getElementById('modalCta'),
+                contactCta: document.getElementById('modalContactCta'),
+                detailLink: document.getElementById('modalDetailLink'),
                 fullscreen: document.getElementById('fullscreenModal'),
                 fullscreenImage: document.getElementById('fullscreenImage')
             };
@@ -353,8 +375,9 @@
                     badge.textContent = text;
                     els.meta.appendChild(badge);
                 });
-            els.cta.href = '/kapellforfragan';
-            els.cta.onclick = () => bilderexRememberSelection(item);
+            els.contactCta.href = buildContactPath(item);
+            els.contactCta.onclick = () => bilderexRememberSelection(item);
+            els.detailLink.href = buildExamplePath(item);
             bilderexRenderModalImage();
             els.modal.classList.add('open');
             els.modal.setAttribute('aria-hidden', 'false');
@@ -461,24 +484,22 @@
                 const safeNamn = escapeHtml(item.namn);
                 const safeTillverkare = escapeHtml(item.tillverkare);
                 const safeKategori = escapeHtml(item.kategori || '');
+                const examplePath = buildExamplePath(item);
+                const safeExamplePath = escapeHtml(examplePath);
                 div.innerHTML = `
-                    <a href="#" tabindex="0">
+                    <a href="${safeExamplePath}">
                         <img src="${safeThumb}" alt="${safeNamn}" loading="lazy" onerror="this.style.display='none'"/>
                     </a>
                     <div class="caption">
                         <div class="cat">${safeKategori}</div>
-                        <h3><a href="#">${safeTillverkare}</a></h3>
-                        <p class="model"><a href="#">${safeNamn}</a></p>
-                        <a href="#" class="read-more">L\u00e4s mer</a>
+                        <h3><a href="${safeExamplePath}">${safeTillverkare}</a></h3>
+                        <p class="model"><a href="${safeExamplePath}">${safeNamn}</a></p>
+                        <div class="hb-item-actions">
+                            <a href="${safeExamplePath}" class="read-more">L&auml;s exempel</a>
+                        </div>
                     </div>
                 `;
                 grid.appendChild(div);
-                div.querySelectorAll('a').forEach(link => {
-                    link.addEventListener('click', event => {
-                        event.preventDefault();
-                        bilderexOpenModal(item);
-                    });
-                });
             });
         }
 

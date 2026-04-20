@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bindEvents();
 
     loadBoatData({ showAlertOnFailure: true }).finally(() => {
-        preselectFromStorage();
+        preselectFormFields();
 
         if (!state.refreshTimer) {
             state.refreshTimer = setInterval(refreshBoatData, 30000);
@@ -374,12 +374,90 @@ function debounce(fn, delay = 100) {
     };
 }
 
+function getQueryPrefill() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        manufacturerName: params.get('manufacturer')?.trim() || '',
+        modelName: params.get('model')?.trim() || '',
+        examplePath: params.get('example')?.trim() || ''
+    };
+}
+
+function preselectFormFields() {
+    const queryPrefill = getQueryPrefill();
+    const hasQueryPrefill = Boolean(queryPrefill.manufacturerName || queryPrefill.modelName || queryPrefill.examplePath);
+
+    if (hasQueryPrefill) {
+        applyDirectPrefill(queryPrefill);
+        return;
+    }
+
+    preselectFromStorage();
+}
+
+function applyDirectPrefill({ manufacturerName = '', modelName = '', examplePath = '' } = {}) {
+    if (manufacturerName) {
+        state.elements.manufacturerField.value = manufacturerName;
+    }
+
+    if (modelName) {
+        state.elements.modelField.value = modelName;
+    }
+
+    const manufacturer = state.manufacturers.find((item) => {
+        return normalizeText(item.name) === normalizeText(manufacturerName);
+    });
+
+    if (manufacturer) {
+        selectManufacturer(manufacturer.key, { scrollToModels: false });
+        state.elements.manufacturerField.value = manufacturerName || manufacturer.name;
+    } else {
+        state.selectedManufacturerKey = '';
+        state.selectedModelName = '';
+        renderManufacturers();
+        renderModels();
+        updateActions();
+    }
+
+    if (modelName) {
+        const selectedManufacturer = getSelectedManufacturer();
+        const matchedModel = selectedManufacturer
+            ? selectedManufacturer.models.find((item) => normalizeText(item) === normalizeText(modelName))
+            : null;
+
+        if (matchedModel) {
+            selectModel(matchedModel, { scrollToForm: false });
+        }
+
+        state.elements.modelField.value = modelName;
+    }
+
+    if (examplePath) {
+        try {
+            localStorage.setItem('contactExamplePrefill', JSON.stringify({
+                manufacturer: manufacturerName,
+                model: modelName,
+                example: examplePath
+            }));
+        } catch (error) {
+            console.debug('Kunde inte spara exempel-prefill', error);
+        }
+    }
+}
+
 function preselectFromStorage() {
     const manufacturerName = localStorage.getItem('preselectManufacturer');
     const modelName = localStorage.getItem('preselectModel');
 
-    if (!manufacturerName || !modelName) {
+    if (!manufacturerName && !modelName) {
         return;
+    }
+
+    if (manufacturerName) {
+        state.elements.manufacturerField.value = manufacturerName;
+    }
+    if (modelName) {
+        state.elements.modelField.value = modelName;
     }
 
     const manufacturer = state.manufacturers.find((item) => {
@@ -395,7 +473,12 @@ function preselectFromStorage() {
 
         if (matchedModel) {
             selectModel(matchedModel, { scrollToForm: false });
+        } else if (modelName) {
+            state.elements.modelField.value = modelName;
         }
+    } else {
+        state.selectedManufacturerKey = '';
+        state.selectedModelName = '';
     }
 
     localStorage.removeItem('preselectManufacturer');
