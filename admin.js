@@ -40,7 +40,6 @@ function resolveApiBase() {
     return sameOrigin;
 }
 API_BASE = resolveApiBase();
-console.log('API_BASE initialized to:', API_BASE, 'from location:', location.href);
 
 let ADMIN_API_KEY = localStorage.getItem('adminApiKey') || '';
 const STATUS_FLOW = ['nya-inskick', 'vantar-pa-svar', 'i-produktion', 'redo-for-leverans'];
@@ -414,20 +413,16 @@ function fetchManufacturers() {
 }
 
 function fetchExtras() {
-    console.log('fetchExtras() called');
     // Ladda allt direkt från models_meta.json och mappa till extrasData-strukturen
     const url = `${API_BASE}/henricssons_bilder/models_meta.json?v=${Date.now()}`;
-    console.log('Fetching extras from:', url);
     return fetch(url)
         .then(r => {
-            console.log('Fetch response status:', r.status);
             if (!r.ok) {
                 throw new Error('HTTP error! status: ' + r.status);
             }
             return r.json();
         })
         .then(meta => {
-            console.log('Fetched meta data, entries:', Object.keys(meta).length);
             // Initiera tomma listor per kategori
             extrasData = {
                 all: [],
@@ -474,7 +469,6 @@ function fetchExtras() {
                 extrasData.special,
                 extrasData.sunbrella
             );
-            console.log('Extras data processed successfully. Total items:', extrasData.all.length);
             extrasLoaded = true;
         })
         .catch(err => {
@@ -1338,10 +1332,7 @@ function sendChatMessage() {
     const loadingId = 'loading-' + Date.now();
     addChatMessage('assistant', 'Skriver...', loadingId);
     
-    // Debug: log API_BASE
-    console.log('API_BASE:', API_BASE);
     const chatUrl = `${API_BASE}/api/chat`;
-    console.log('Chat URL:', chatUrl);
     
     // Call OpenAI API
     adminFetch(chatUrl, {
@@ -1355,7 +1346,6 @@ function sendChatMessage() {
         })
     })
     .then(response => {
-        console.log('Response status:', response.status);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }

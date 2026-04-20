@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import base64
 import hashlib
@@ -67,7 +67,7 @@ LOGO_FILE = BASE_DIR / "logo.png"
 IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
 EXAMPLES_META_FILE = BASE_DIR / "examples_meta.json"
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://henricssonsbatkapell.se").rstrip("/")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://www.henricssonsbatkapell.se").rstrip("/")
 LEGACY_PUBLIC_HOSTS = {
     "www.henricssonsbatkapell.se",
     "henricssonsbatkapell.se",
@@ -167,7 +167,7 @@ REQUIRED_ALLOWED_ORIGINS = {
 ALLOWED_ORIGINS = {
     origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",") if origin.strip()
 } | REQUIRED_ALLOWED_ORIGINS
-PRIMARY_PUBLIC_HOST = "henricssonsbatkapell.se"
+PRIMARY_PUBLIC_HOST = "www.henricssonsbatkapell.se"
 PUBLIC_HOST_ALIASES = {"henricssonsbatkapell.se", "www.henricssonsbatkapell.se"}
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
@@ -519,7 +519,15 @@ def enforce_public_host() -> Optional[Any]:
     proto = request.headers.get("X-Forwarded-Proto", request.scheme or "http").split(",")[0].strip().lower()
     if host == PRIMARY_PUBLIC_HOST and proto == "https":
         return None
-    target = f"https://{PRIMARY_PUBLIC_HOST}{request.full_path}".rstrip("?")
+    target_path = request.path or "/"
+    if target_path == "/index.html":
+        target_path = "/"
+    elif target_path.endswith(".html"):
+        target_path = target_path[:-5]
+    query = request.query_string.decode("utf-8", errors="ignore")
+    target = f"https://{PRIMARY_PUBLIC_HOST}{target_path}"
+    if query:
+        target = f"{target}?{query}"
     return redirect(target, code=301)
 
 
@@ -3695,8 +3703,15 @@ def enrich_temp_products(products: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     return enriched
 
 
+def is_public_temp_product(product: Dict[str, Any]) -> bool:
+    title = str(product.get("title") or "").strip().lower()
+    if not title or title == "ny produkt" or title.startswith("test"):
+        return False
+    return True
+
+
 def get_public_temp_products() -> List[Dict[str, Any]]:
-    return enrich_temp_products(_fetch_temp_products())
+    return enrich_temp_products([product for product in _fetch_temp_products() if is_public_temp_product(product)])
 
 
 def get_temp_product_by_slug(slug: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -3733,6 +3748,8 @@ def _fetch_temp_products(include_images: bool = True) -> List[Dict[str, Any]]:
 
 @app.route("/api/temp_products", methods=["GET"])
 def list_temp_products_public():
+    if check_admin_access():
+        return jsonify(enrich_temp_products(_fetch_temp_products()))
     return jsonify(get_public_temp_products())
 
 
@@ -4239,7 +4256,15 @@ def assistant_submit():
 @app.route("/robots.txt", methods=["GET"])
 def robots_txt():
     return Response(
-        f"User-agent: *\nAllow: /\nSitemap: {PUBLIC_BASE_URL}/sitemap.xml\n",
+        "\n".join(
+            [
+                "User-agent: *",
+                "Disallow: /admin",
+                "Disallow: /admin.html",
+                f"Sitemap: {PUBLIC_BASE_URL}/sitemap.xml",
+                "",
+            ]
+        ),
         mimetype="text/plain",
     )
 
