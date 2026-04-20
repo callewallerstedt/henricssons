@@ -122,18 +122,15 @@ async function refreshSubmissionAttachments(item) {
 async function adminFetch(url, options = {}) {
     const opts = { ...options };
     opts.headers = { ...(options.headers || {}) };
+    opts.credentials = 'include';
     if (ADMIN_API_KEY) {
         opts.headers['X-Admin-Key'] = ADMIN_API_KEY;
     }
-    let response = await fetch(url, opts);
-    if ((response.status === 401 || response.status === 403) && !ADMIN_API_KEY) {
-        const entered = window.prompt('Ange admin-nyckel');
-        if (entered) {
-            ADMIN_API_KEY = entered.trim();
-            localStorage.setItem('adminApiKey', ADMIN_API_KEY);
-            opts.headers['X-Admin-Key'] = ADMIN_API_KEY;
-            response = await fetch(url, opts);
-        }
+    const response = await fetch(url, opts);
+    if (response.status === 401 || response.status === 403) {
+        try { localStorage.removeItem('adminApiKey'); } catch (_) {}
+        window.location.href = '/admin';
+        return response;
     }
     return response;
 }

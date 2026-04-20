@@ -33,7 +33,7 @@ LOGO_FILE = BASE_DIR / "logo.png"
 IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
 EXAMPLES_META_FILE = BASE_DIR / "examples_meta.json"
-PUBLIC_BASE_URL = "https://www.henricssonsbatkapell.se"
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://henricssons.onrender.com").rstrip("/")
 GENERIC_EXAMPLE_DESCRIPTION = (
     "Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning "
     "och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi "
@@ -330,6 +330,19 @@ def verify_admin_session(token: str) -> bool:
         return False
     expected = hmac.new(secret.encode("utf-8"), raw_ts.encode("utf-8"), hashlib.sha256).hexdigest()
     return hmac.compare_digest(signature, expected)
+
+
+def sign_attachment_token(attachment_id: int) -> str:
+    secret = ADMIN_PANEL_PASSWORD or ADMIN_API_KEY or "attachment-fallback"
+    payload = f"att:{attachment_id}"
+    return hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()[:24]
+
+
+def verify_attachment_token(attachment_id: int, token: str) -> bool:
+    if not token:
+        return False
+    expected = sign_attachment_token(attachment_id)
+    return hmac.compare_digest(expected, token.strip())
 
 
 def check_admin_access() -> bool:
@@ -1772,7 +1785,11 @@ def send_mailgun_submission_notification(
         mime = str(att.get("mime", "application/octet-stream"))
         ext = os.path.splitext(filename)[1].lower() or ".jpg"
         cid = f"attachment-{att.get('id', idx)}{ext}"
-        public_url = f"{PUBLIC_BASE_URL}/api/attachment/{att.get('id', '')}"
+        att_id = att.get('id', '')
+        token = sign_attachment_token(int(att_id)) if isinstance(att_id, int) or (isinstance(att_id, str) and att_id.isdigit()) else ""
+        public_url = f"{PUBLIC_BASE_URL}/api/attachment/{att_id}"
+        if token:
+            public_url = f"{public_url}?token={token}"
         enriched.append({
             "cid": cid,
             "filename": filename,
@@ -2571,8 +2588,9 @@ def submit_form():
 
 @app.route("/api/attachment/<int:attachment_id>", methods=["GET"])
 def get_attachment(attachment_id: int):
-    """Public-link fetch for a single attachment. Admin-gated."""
-    if not check_admin_access():
+    """Fetch a single attachment. Accepts admin session or a signed ?token= query param."""
+    token = request.args.get("token", "").strip()
+    if not (check_admin_access() or verify_attachment_token(attachment_id, token)):
         return jsonify(error="Admin authorization required"), 403
     db = get_db()
     if not db:
@@ -3321,8 +3339,14 @@ def healthz():
 @app.route("/admin.html", methods=["GET"])
 def admin_page():
     if not check_admin_access():
-        return render_admin_login()
-    return send_from_directory(str(BASE_DIR), "admin.html")
+        response = render_admin_login()
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        return response
+    response = send_from_directory(str(BASE_DIR), "admin.html")
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @app.route("/admin/login", methods=["POST"])
