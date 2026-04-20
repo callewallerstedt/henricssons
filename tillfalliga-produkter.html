@@ -116,7 +116,16 @@
     </footer>
     <script>
     (function () {
-        const API_BASE = `${location.protocol}//${location.host}`;
+        function resolveApiBase() {
+            const sameOrigin = `${location.protocol}//${location.host}`;
+            const staticRenderHosts = new Set(['henricssons.onrender.com', 'henricssons-app.onrender.com']);
+            if (staticRenderHosts.has(location.hostname)) {
+                return 'https://henricssons-api.onrender.com';
+            }
+            return sameOrigin;
+        }
+
+        const API_BASE = resolveApiBase();
         const grid = document.getElementById('tp-grid');
         const loading = document.getElementById('tp-loading');
         const empty = document.getElementById('tp-empty');
@@ -136,7 +145,7 @@
             const images = Array.isArray(product.images) ? product.images : [];
             const primary = images[0];
             const imgSrc = primary ? `${API_BASE}${primary.url}` : '';
-            const href = product.href || '/tillfalliga-produkter';
+            const href = product.href ? `${API_BASE}${product.href}` : '/tillfalliga-produkter';
             const description = String(product.description || '').trim();
             const shortDescription = description.length > 170 ? `${description.slice(0, 167).trimEnd()}...` : description;
             const descHtml = escHtml(shortDescription).replace(/\n/g, '<br>');

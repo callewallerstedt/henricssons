@@ -142,6 +142,8 @@ DEFAULT_ALLOWED_ORIGINS = ",".join(
         "https://www.henricssonsbatkapell.se",
         "https://henricssons.se",
         "https://www.henricssons.se",
+        "https://henricssons.onrender.com",
+        "https://henricssons-app.onrender.com",
         "https://henricssons-api.onrender.com",
         "http://localhost:25565",
         "http://127.0.0.1:25565",

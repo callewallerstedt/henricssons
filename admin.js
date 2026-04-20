@@ -7,9 +7,16 @@ let selectedModelIndex = null;
 let $grid1, $grid2;
 
 // Lägg in omedelbart efter globala variabler
-// Use same-origin API so local and deployed admin always talk to the current app instance.
 let API_BASE;
-API_BASE = `${location.protocol}//${location.host}`;
+function resolveApiBase() {
+    const sameOrigin = `${location.protocol}//${location.host}`;
+    const staticRenderHosts = new Set(['henricssons.onrender.com', 'henricssons-app.onrender.com']);
+    if (staticRenderHosts.has(location.hostname)) {
+        return 'https://henricssons-api.onrender.com';
+    }
+    return sameOrigin;
+}
+API_BASE = resolveApiBase();
 console.log('API_BASE initialized to:', API_BASE, 'from location:', location.href);
 
 let ADMIN_API_KEY = localStorage.getItem('adminApiKey') || '';
