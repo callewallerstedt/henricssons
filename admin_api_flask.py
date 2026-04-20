@@ -45,6 +45,8 @@ CORE_PUBLIC_PATHS = [
     "/bilder-och-exempel",
     "/search",
     "/tillbehor",
+    "/dynsatser",
+    "/tillfalliga-produkter",
     "/kontakt",
     "/kapellforfragan",
 ]
@@ -571,7 +573,7 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css?v=20250630">
+    <link rel="stylesheet" href="/styles.css?v=20260420b">
     <link rel="icon" href="/logo.png">
     <link rel="canonical" href="{{ canonical_url }}"/>
     <meta property="og:title" content="{{ title }}"/>
@@ -633,7 +635,14 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
                 <a href="/om-oss" class="nav-link">Om oss</a>
                 <a href="/kapellforfragan" class="nav-link">Kapellförfrågan</a>
                 <a href="/bilder-och-exempel" class="nav-link">Bilder & exempel</a>
-                <a href="/tillbehor" class="nav-link">Fenderstrumpor</a>
+                <details class="nav-dropdown">
+                    <summary class="nav-summary">Övriga produkter</summary>
+                    <div class="nav-submenu">
+                        <a href="/tillbehor">Fenderstrumpor</a>
+                        <a href="/dynsatser">Dynsatser</a>
+                        <a href="/tillfalliga-produkter">Tillfälliga produkter</a>
+                    </div>
+                </details>
                 <a href="/kontakt" class="nav-link">Kontakt</a>
             </div>
         </nav>
@@ -681,7 +690,7 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
             </div>
         </div>
     </footer>
-    <script src="/script.js"></script>
+    <script src="/script.js?v=20260420b"></script>
     <script src="/chat_widget.js?v=20260420a"></script>
 </body>
 </html>""",

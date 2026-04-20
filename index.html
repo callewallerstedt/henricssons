@@ -106,6 +106,7 @@
     }
     .hb-logo img { height: 46px; width: auto; display: block; }
     .hb-nav-links { display: flex; gap: 2.25rem; align-items: center; }
+    .hb-nav-dropdown { position: relative; }
     .hb-nav-links a {
         text-decoration: none;
         color: var(--ink);
@@ -116,7 +117,60 @@
         transition: color 0.2s;
         position: relative;
     }
-    .hb-nav-links a:hover { color: var(--brass); }
+    .hb-nav-summary {
+        list-style: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        text-decoration: none;
+        color: var(--ink);
+        font-size: 0.86rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        transition: color 0.2s;
+        white-space: nowrap;
+    }
+    .hb-nav-summary::-webkit-details-marker { display: none; }
+    .hb-nav-summary::after {
+        content: '▾';
+        font-size: 0.72em;
+        transition: transform 0.2s ease;
+    }
+    .hb-nav-dropdown[open] .hb-nav-summary::after { transform: rotate(180deg); }
+    .hb-nav-links a:hover,
+    .hb-nav-links a.active,
+    .hb-nav-summary:hover,
+    .hb-nav-summary.active,
+    .hb-nav-dropdown[open] .hb-nav-summary { color: var(--brass); }
+    .hb-nav-submenu {
+        position: absolute;
+        top: calc(100% + 0.9rem);
+        left: 50%;
+        transform: translateX(-50%);
+        min-width: 240px;
+        padding: 0.6rem 0;
+        background: var(--cream);
+        border: 1px solid var(--line);
+        box-shadow: 0 18px 40px rgba(12, 26, 43, 0.12);
+        display: none;
+        z-index: 20;
+    }
+    .hb-nav-submenu a {
+        display: block;
+        padding: 0.72rem 1rem;
+        font-size: 0.76rem;
+        letter-spacing: 0.1em;
+        width: 100%;
+    }
+    .hb-nav-submenu a:hover,
+    .hb-nav-submenu a.active { background: rgba(178, 138, 76, 0.08); }
+    @media (min-width: 901px) {
+        .hb-nav-dropdown:hover .hb-nav-submenu,
+        .hb-nav-dropdown:focus-within .hb-nav-submenu,
+        .hb-nav-dropdown[open] .hb-nav-submenu { display: block; }
+    }
     .hb-nav-cta {
         background: var(--brass);
         color: var(--white) !important;
@@ -138,6 +192,23 @@
         }
         .hb-nav-links.is-open { display: flex; }
         .hb-burger { display: block; }
+        .hb-nav-dropdown { width: 100%; }
+        .hb-nav-summary {
+            width: 100%;
+            justify-content: space-between;
+            padding: 0.4rem 0;
+        }
+        .hb-nav-submenu {
+            position: static;
+            left: auto;
+            top: auto;
+            transform: none;
+            min-width: 0;
+            margin-top: 0.35rem;
+            border: 1px solid var(--line);
+            box-shadow: none;
+        }
+        .hb-nav-dropdown[open] .hb-nav-submenu { display: block; }
     }
 
     /* ---------- Hero ---------- */
@@ -258,6 +329,27 @@
         border-color: rgba(245,240,230,0.4);
     }
     .hb-btn-ghost:hover { border-color: var(--cream); background: rgba(245,240,230,0.06); }
+    .hb-hero-subcta-wrap { margin-top: 0.9rem; }
+    .hb-hero-subcta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.7rem 1rem;
+        font-size: 0.72rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        text-decoration: none;
+        color: var(--cream);
+        border: 1px solid rgba(245,240,230,0.28);
+        background: rgba(12,26,43,0.22);
+        backdrop-filter: blur(6px);
+        transition: all 0.25s ease;
+    }
+    .hb-hero-subcta:hover {
+        color: var(--cream);
+        border-color: var(--brass);
+        background: rgba(178,138,76,0.14);
+    }
     .hb-btn-dark {
         background: var(--ink);
         color: var(--cream);
@@ -561,6 +653,7 @@
         .hb-logo img { height: 38px; }
         .hb-nav-links { top: 64px; padding: 1rem 1.1rem; gap: 0.9rem; }
         .hb-nav-links a { font-size: 0.95rem; padding: 0.4rem 0; width: 100%; }
+        .hb-nav-summary { font-size: 0.95rem; }
         .hb-nav-cta { width: 100%; text-align: center; padding: 0.85rem 1rem; }
 
         .hb-announcement { padding: 0.75rem 0; }
@@ -577,6 +670,8 @@
         .hb-ctas .hb-btn-primary { flex: 1 1 100%; justify-content: center; text-align: center; }
         .hb-finalcta .hb-ctas .hb-btn,
         .hb-finalcta .hb-ctas .hb-btn-primary { flex: 0 1 auto; }
+        .hb-hero-subcta-wrap { margin-top: 0.7rem; }
+        .hb-hero-subcta { width: 100%; }
         .hb-hero-meta .wrap { padding: 0.85rem 1.1rem; gap: 0.5rem; }
         .hb-hero-meta .k { font-size: 1.2rem; }
         .hb-hero-meta .v { font-size: 0.6rem; letter-spacing: 0.14em; margin-top: 0.2rem; }
@@ -647,7 +742,14 @@
             <nav class="hb-nav-links" id="hbNav">
                 <a href="/om-oss">Om oss</a>
                 <a href="/bilder-och-exempel">Bilder &amp; exempel</a>
-                <a href="/tillbehor">Fenderstrumpor</a>
+                <details class="hb-nav-dropdown">
+                    <summary class="hb-nav-summary">Övriga produkter</summary>
+                    <div class="hb-nav-submenu">
+                        <a href="/tillbehor">Fenderstrumpor</a>
+                        <a href="/dynsatser">Dynsatser</a>
+                        <a href="/tillfalliga-produkter">Tillfälliga produkter</a>
+                    </div>
+                </details>
                 <a href="/kontakt">Kontakt</a>
                 <a href="/kapellforfragan" class="hb-nav-cta">Kapellförfrågan</a>
             </nav>
@@ -680,6 +782,9 @@
             <div class="hb-ctas">
                 <a href="/kapellforfragan" class="hb-btn hb-btn-primary"><span>Få en offert</span></a>
                 <a href="/bilder-och-exempel" class="hb-btn hb-btn-ghost">Se våra kapell</a>
+            </div>
+            <div class="hb-hero-subcta-wrap">
+                <a href="/dynsatser" class="hb-hero-subcta">Se dynsatser</a>
             </div>
         </div>
         <div class="hb-hero-meta">
@@ -865,6 +970,8 @@
                         <li><a href="/kapellforfragan">Kapellförfrågan</a></li>
                         <li><a href="/bilder-och-exempel">Bilder &amp; exempel</a></li>
                         <li><a href="/tillbehor">Fenderstrumpor</a></li>
+                        <li><a href="/dynsatser">Dynsatser</a></li>
+                        <li><a href="/tillfalliga-produkter">Tillfälliga produkter</a></li>
                         <li><a href="/kontakt">Kontakt</a></li>
                     </ul>
                 </div>

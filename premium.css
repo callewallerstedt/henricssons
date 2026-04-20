@@ -112,6 +112,9 @@
     gap: 2.25rem;
     align-items: center;
 }
+.hb-nav-dropdown {
+    position: relative;
+}
 .hb-nav-links a {
     text-decoration: none;
     color: var(--ink);
@@ -123,8 +126,68 @@
     position: relative;
     white-space: nowrap;
 }
+.hb-nav-summary {
+    list-style: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    text-decoration: none;
+    color: var(--ink);
+    font-size: 0.86rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+    white-space: nowrap;
+}
+.hb-nav-summary::-webkit-details-marker {
+    display: none;
+}
+.hb-nav-summary::after {
+    content: '▾';
+    font-size: 0.72em;
+    transition: transform 0.2s ease;
+}
+.hb-nav-dropdown[open] .hb-nav-summary::after {
+    transform: rotate(180deg);
+}
 .hb-nav-links a:hover,
-.hb-nav-links a.active { color: var(--brass); }
+.hb-nav-links a.active,
+.hb-nav-summary:hover,
+.hb-nav-summary.active,
+.hb-nav-dropdown[open] .hb-nav-summary { color: var(--brass); }
+.hb-nav-submenu {
+    position: absolute;
+    top: calc(100% + 0.9rem);
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 240px;
+    padding: 0.6rem 0;
+    background: var(--cream);
+    border: 1px solid var(--line);
+    box-shadow: 0 18px 40px rgba(12, 26, 43, 0.12);
+    display: none;
+    z-index: 20;
+}
+.hb-nav-submenu a {
+    display: block;
+    padding: 0.72rem 1rem;
+    font-size: 0.76rem;
+    letter-spacing: 0.1em;
+    width: 100%;
+}
+.hb-nav-submenu a:hover,
+.hb-nav-submenu a.active {
+    background: rgba(178, 138, 76, 0.08);
+}
+@media (min-width: 901px) {
+    .hb-nav-dropdown:hover .hb-nav-submenu,
+    .hb-nav-dropdown:focus-within .hb-nav-submenu,
+    .hb-nav-dropdown[open] .hb-nav-submenu {
+        display: block;
+    }
+}
 .hb-nav-cta {
     background: var(--brass);
     color: var(--white) !important;
@@ -167,6 +230,27 @@
     }
     .hb-nav-links.is-open { display: flex; }
     .hb-burger { display: block; }
+    .hb-nav-dropdown {
+        width: 100%;
+    }
+    .hb-nav-summary {
+        width: 100%;
+        justify-content: space-between;
+        padding: 0.4rem 0;
+    }
+    .hb-nav-submenu {
+        position: static;
+        left: auto;
+        top: auto;
+        transform: none;
+        min-width: 0;
+        margin-top: 0.35rem;
+        border: 1px solid var(--line);
+        box-shadow: none;
+    }
+    .hb-nav-dropdown[open] .hb-nav-submenu {
+        display: block;
+    }
 }
 
 /* ---------- Sections ---------- */
