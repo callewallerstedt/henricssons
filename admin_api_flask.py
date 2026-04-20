@@ -68,6 +68,14 @@ IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
 EXAMPLES_META_FILE = BASE_DIR / "examples_meta.json"
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://henricssonsbatkapell.se").rstrip("/")
+LEGACY_PUBLIC_HOSTS = {
+    "www.henricssonsbatkapell.se",
+    "henricssonsbatkapell.se",
+    "henricssonsbatkapell.onrender.com",
+    "henricssons-api.onrender.com",
+    "henricssons.onrender.com",
+    "henricssons-app.onrender.com",
+}
 PUBLIC_ATTACHMENT_BASE_URL = os.getenv(
     "PUBLIC_ATTACHMENT_BASE_URL",
     os.getenv("PUBLIC_API_BASE_URL", PUBLIC_BASE_URL),
@@ -566,6 +574,22 @@ def absolute_public_url(path: str) -> str:
     return f"{PUBLIC_BASE_URL}{clean}"
 
 
+def normalize_public_reference(value: str) -> str:
+    clean = str(value or "").strip().replace("\\", "/")
+    if not clean or clean.startswith("data:"):
+        return clean
+    parsed = urlparse(clean)
+    hostname = (parsed.hostname or "").strip().lower()
+    if parsed.scheme in {"http", "https"} and hostname in LEGACY_PUBLIC_HOSTS:
+        path = parsed.path or "/"
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+        if parsed.fragment:
+            path = f"{path}#{parsed.fragment}"
+        return absolute_public_url(path)
+    return clean
+
+
 def normalize_example_record(raw: Any, fallback_slug: str = "") -> Dict[str, Any]:
     if not isinstance(raw, dict):
         return {}
@@ -579,10 +603,19 @@ def normalize_example_record(raw: Any, fallback_slug: str = "") -> Dict[str, Any
         "variant": str(raw.get("variant", "") or "").strip(),
         "delivery": str(raw.get("delivery", "") or "").strip(),
         "category": str(raw.get("category", "") or "").strip(),
-        "images": [str(image or "").strip() for image in images if str(image or "").strip()],
-        "source": str(raw.get("source", "") or "").strip(),
+        "images": [normalize_public_reference(str(image or "").strip()) for image in images if str(image or "").strip()],
+        "source": normalize_public_reference(str(raw.get("source", "") or "").strip()),
         "fallback_slug": fallback_slug.strip(),
     }
+
+
+def normalize_example_payload(data: Any) -> Dict[str, Dict[str, Any]]:
+    if not isinstance(data, dict):
+        return {}
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for key, raw in data.items():
+        normalized[str(key)] = normalize_example_record(raw, fallback_slug=str(key))
+    return normalized
 
 
 def extract_example_slug(source: str, fallback_slug: str = "") -> str:
@@ -823,31 +856,43 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         }
         .seo-gallery-stage {
             position: relative;
-            min-height: 420px;
+            min-height: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1rem 4.25rem;
+            padding: 0;
             background: var(--cream-2);
             overflow: hidden;
         }
         .seo-gallery-main {
             position: relative;
             width: 100%;
-            height: 100%;
-            min-height: 420px;
+            height: auto;
+            min-height: 0;
             cursor: zoom-in;
             overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .seo-gallery-main img {
             width: 100%;
             max-width: 100%;
-            height: 100%;
-            min-height: 420px;
+            height: auto;
+            min-height: 0;
+            max-height: 72vh;
             object-fit: contain;
             object-position: center;
             display: block;
             background: var(--cream-2);
+        }
+        .seo-gallery-main img[src$="logo.png"] {
+            width: auto;
+            height: auto;
+            max-width: min(86%, 420px);
+            max-height: 86%;
+            object-fit: contain;
+            margin: auto;
         }
         .seo-gallery-expand {
             position: absolute;
@@ -937,6 +982,12 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
             font-weight: 600;
             margin-bottom: 0.35rem;
         }
+        .seo-interest-text {
+            margin: 0.2rem 0 0;
+            color: #627084;
+            font-size: 0.98rem;
+            line-height: 1.6;
+        }
         .seo-cta-row {
             display: flex;
             flex-wrap: wrap;
@@ -989,7 +1040,8 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         .seo-related-grid {
             display: grid;
             gap: 1rem;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 320px));
+            justify-content: start;
         }
         .seo-related-card {
             background: var(--white);
@@ -1152,16 +1204,11 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         @media (max-width: 900px) {
             .seo-grid { grid-template-columns: 1fr; }
             .seo-page { padding-top: 3rem; }
-            .seo-gallery-stage { min-height: 320px; padding-inline: 3.5rem; }
-            .seo-gallery-main,
-            .seo-gallery-main img { min-height: 320px; }
             .seo-thumbs { grid-template-columns: repeat(auto-fit, minmax(60px, 72px)); }
         }
         @media (max-width: 640px) {
             .seo-page { padding: 2.5rem 1rem 3rem; }
-            .seo-gallery-stage { min-height: 280px; padding-inline: 3rem; }
-            .seo-gallery-main,
-            .seo-gallery-main img { min-height: 280px; }
+            .seo-gallery-main img { max-height: 64vh; }
             .seo-hero h1 { font-size: 1.8rem; }
             .seo-cta-row,
             .seo-search-form { flex-direction: column; }
@@ -2199,45 +2246,62 @@ def build_customer_confirmation_html(
     greeting = f"Hej {safe_name}," if safe_name else "Hej,"
     html_doc = f"""<!DOCTYPE html>
 <html lang="sv">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#eef2f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#17212f;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;padding:32px 16px;">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+</head>
+<body style="margin:0;padding:0;background:#f5f0e6;font-family:Georgia,'Times New Roman',serif;color:#0c1a2b;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;padding:40px 16px 48px;">
 <tr><td align="center">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border:1px solid #d9e1ea;border-radius:14px;overflow:hidden;">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #d9cfbe;">
+
+  <!-- Header -->
   <tr>
-    <td style="background:#10263f;padding:28px 32px;text-align:center;">
-      <div style="display:inline-block;background:#ffffff;border-radius:10px;padding:10px 16px;margin-bottom:14px;border:1px solid #d9e1ea;">
-        <img src="cid:henricssons-logo" alt="Henricssons Båtkapell" width="148" style="display:block;width:148px;height:auto;border:0;outline:none;text-decoration:none;">
-      </div>
-      <div style="color:#ffffff;font-size:22px;font-weight:700;margin-bottom:4px;">Tack för din förfrågan</div>
-      <div style="color:#c4cfdb;font-size:13px;">{form_label}</div>
+    <td style="background:#0c1a2b;padding:32px 40px 28px;text-align:center;">
+      <img src="cid:henricssons-logo" alt="Henricssons B&#229;tkapell" width="156" style="display:block;width:156px;height:auto;border:0;margin:0 auto 20px;">
+      <div style="width:40px;height:1px;background:#b28a4c;margin:0 auto 16px;"></div>
+      <div style="color:#f5f0e6;font-size:11px;font-family:Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;">Tack f&#246;r din f&#246;rfr&#229;gan</div>
+      <div style="color:#b28a4c;font-size:12px;font-family:Arial,Helvetica,sans-serif;letter-spacing:0.1em;margin-top:6px;">{form_label}</div>
     </td>
   </tr>
+
+  <!-- Body -->
   <tr>
-    <td style="padding:28px 32px 18px;background:#ffffff;">
-      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">{greeting}</p>
-      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Tack för att du kontaktade oss på Henricssons Båtkapell.</p>
-      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Vi har tagit emot din förfrågan och återkommer så snart vi kan med information eller eventuella följdfrågor.</p>
+    <td style="padding:36px 40px 28px;background:#ffffff;">
+      <p style="margin:0 0 16px;font-size:16px;line-height:1.75;color:#0c1a2b;">{greeting}</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Tack f&#246;r att du kontaktade oss p&#229; Henricssons B&#229;tkapell.</p>
+      <p style="margin:0 0 20px;font-size:15px;line-height:1.75;color:#1b2e47;">Vi har tagit emot din f&#246;rfr&#229;gan och &#229;terkommer s&#229; snart vi kan med information eller eventuella f&#246;ljdfr&#229;gor.</p>
       {summary_html}
-      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Om du vill komplettera din förfrågan under tiden kan du kontakta oss med uppgifterna nedan.</p>
-      <div style="margin:18px 0 16px;padding:16px 18px;background:#f7f9fc;border:1px solid #e6ebf2;border-radius:10px;">
-        <div style="font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Kontaktuppgifter</div>
-        <div style="font-size:14px;line-height:1.8;color:#17212f;">
-          Telefon: <a href="tel:+46314718200" style="color:#10263f;text-decoration:none;">+46 (0)31 47 18 20</a><br>
-          E-post: <a href="mailto:info@henricssonsbatkapell.se" style="color:#10263f;text-decoration:none;">info@henricssonsbatkapell.se</a><br>
-          Adress: Energigatan 17E, 434 37 Kungsbacka
-        </div>
-      </div>
-      <p style="margin:0;font-size:15px;line-height:1.7;color:#17212f;">Vänliga hälsningar<br>Henricssons Båtkapell</p>
+      <p style="margin:0 0 28px;font-size:15px;line-height:1.75;color:#1b2e47;">Om du vill komplettera din f&#246;rfr&#229;gan under tiden &#228;r du v&#228;lkommen att kontakta oss direkt.</p>
+
+      <!-- Contact box -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;border-top:2px solid #b28a4c;margin-bottom:28px;">
+        <tr>
+          <td style="padding:20px 22px;">
+            <div style="font-size:10px;font-family:Arial,Helvetica,sans-serif;color:#b28a4c;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;margin-bottom:12px;">Kontakta oss</div>
+            <div style="font-size:14px;line-height:2;color:#0c1a2b;font-family:Arial,Helvetica,sans-serif;">
+              &#9990;&nbsp; <a href="tel:+46314718200" style="color:#0c1a2b;text-decoration:none;">+46 (0)31 47 18 20</a><br>
+              &#9993;&nbsp; <a href="mailto:info@henricssonsbatkapell.se" style="color:#b28a4c;text-decoration:none;">info@henricssonsbatkapell.se</a><br>
+              &#8962;&nbsp; Energigatan 17E, 434 37 Kungsbacka
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:0;font-size:15px;line-height:1.7;color:#0c1a2b;">V&#228;nliga h&#228;lsningar<br><strong>Henricssons B&#229;tkapell</strong></p>
     </td>
   </tr>
+
+  <!-- Footer -->
   <tr>
-    <td style="background:#f7f9fc;padding:18px 32px;border-top:1px solid #e6ebf2;">
-      <p style="margin:0;color:#7d8796;font-size:12px;text-align:center;line-height:1.6;">
-        Detta är en automatisk bekräftelse på att vi tagit emot ditt formulär.
+    <td style="background:#0c1a2b;padding:16px 40px;">
+      <p style="margin:0;color:#6b7788;font-size:11px;font-family:Arial,Helvetica,sans-serif;text-align:center;line-height:1.6;letter-spacing:0.04em;">
+        Detta &#228;r en automatisk bekr&#228;ftelse. Svara inte p&#229; detta e-postmeddelande.
       </p>
     </td>
   </tr>
+
 </table>
 </td></tr>
 </table>
@@ -2281,10 +2345,12 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
         return "", ""
 
     summary_html = (
-        '<div style="margin:18px 0 16px;padding:16px 18px;background:#fcfbf7;border:1px solid #e6ebf2;border-radius:10px;">'
-        '<div style="font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Sammanfattning</div>'
+        '<div style="margin:24px 0 20px;padding:20px 22px;background:#eae2d2;border-left:3px solid #b28a4c;">'
+        '<div style="font-size:10px;color:#b28a4c;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:14px;">Din f&#246;rfr&#229;gan</div>'
         + "".join(
-            f'<div style="font-size:14px;line-height:1.75;color:#17212f;"><strong>{html.escape(label)}:</strong> {html.escape(value)}</div>'
+            f'<div style="font-size:13px;line-height:1.8;color:#0c1a2b;border-bottom:1px solid #d9cfbe;padding:5px 0;">'
+            f'<span style="color:#6b7788;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;">{html.escape(label)}</span>'
+            f'<br><span style="color:#0c1a2b;">{html.escape(value)}</span></div>'
             for label, value in rows
         )
         + '</div>'
@@ -3867,11 +3933,10 @@ def get_boat_data():
 def get_henricssons_files(filename: str):
     if filename == "models_meta.json":
         data = get_site_content("models_meta")
-        if isinstance(data, dict):
-            return app.response_class(json.dumps(data, ensure_ascii=False), mimetype="application/json")
-        if MODELS_META_FILE.exists():
-            return send_from_directory(str(IMAGES_ROOT), "models_meta.json")
-        return jsonify({})
+        if not isinstance(data, dict):
+            data = read_json_file(MODELS_META_FILE, {})
+        normalized = normalize_example_payload(data)
+        return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
     full_path = (IMAGES_ROOT / filename).resolve()
     if IMAGES_ROOT not in full_path.parents:
@@ -3879,6 +3944,15 @@ def get_henricssons_files(filename: str):
     if full_path.exists() and full_path.is_file():
         return send_from_directory(str(full_path.parent), full_path.name)
     return jsonify(error="File not found"), 404
+
+
+@app.route("/examples_meta.json")
+def get_examples_meta():
+    data = get_site_content("examples_meta")
+    if not isinstance(data, dict):
+        data = read_json_file(EXAMPLES_META_FILE, {})
+    normalized = normalize_example_payload(data)
+    return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
 
 @app.route("/api/chat", methods=["POST", "OPTIONS"])
@@ -4380,7 +4454,6 @@ def example_page(slug: str):
             </div>
             <div class="seo-kicker">{html.escape(str(item.get('category', '') or 'Exempel'))}</div>
             <h1>{html.escape(full_title)}</h1>
-            <p>Exempel på tidigare projekt från Henricssons Båtkapell. Här hittar du bilder, variantinformation och leveransinfo för modellen.</p>
         </section>
         <section class="seo-grid">
             <article class="seo-card">{gallery_html}</article>
@@ -4511,9 +4584,8 @@ def temp_product_page(slug: str):
     price_text = str(product.get("price") or "").strip()
     images = [absolute_public_url(img.get("url", "")) for img in product.get("images", []) if img.get("url")]
     image_urls = images or [absolute_public_url("/logo.png")]
-    lead_text = description_text or "En aktuell produkt från Henricssons Båtkapell med delbar produktsida och bildgalleri."
     page_title = f"{title_text} - Tillfälliga produkter - Henricssons Båtkapell"
-    page_description = product.get("share_description") or lead_text[:160]
+    page_description = product.get("share_description") or description_text[:160] or f"{title_text} hos Henricssons Båtkapell."
     contact_query = urlencode({"product": title_text, "product_slug": canonical_slug})
     contact_href = f"/kontakt?{contact_query}" if contact_query else "/kontakt"
 
@@ -4566,12 +4638,9 @@ def temp_product_page(slug: str):
             <div class="seo-meta-label">Om produkten</div>
             <p style="margin:0;">{html.escape(description_text or 'Kontakta oss för mer information om denna produkt.')}</p>
         </div>
-        <div class="seo-meta-block">
-            <div class="seo-meta-label">Delbar länk</div>
-            <p style="margin:0;">Skicka den här sidan direkt till kunden eller använd den som referens i kontaktformuläret.</p>
-        </div>
+        <p class="seo-interest-text">Är du intresserad? Kontakta oss så återkommer vi.</p>
         <div class="seo-cta-row">
-            <a class="seo-btn seo-btn-primary" href="{html.escape(contact_href)}">Fråga om produkten</a>
+            <a class="seo-btn seo-btn-primary" href="{html.escape(contact_href)}">Kontakta oss</a>
             <a class="seo-btn" href="/tillfalliga-produkter">Till alla produkter</a>
         </div>
     </div>
@@ -4589,7 +4658,6 @@ def temp_product_page(slug: str):
             </nav>
             <span class="seo-kicker">Övriga produkter</span>
             <h1>{html.escape(title_text)}</h1>
-            <p>{html.escape(lead_text)}</p>
         </section>
         <section class="seo-grid">
             <article class="seo-card">{gallery_html}</article>
