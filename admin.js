@@ -853,8 +853,11 @@ function renderAnalyticsChart(days) {
         const dateLabel = String(day.date || '').slice(5);
         const pageHeight = Math.max(pageviews ? 8 : 2, Math.round((pageviews / maxViews) * 120));
         const searchHeight = Math.max(searches ? 8 : 2, Math.round((searches / maxSearches) * 70));
+        const tooltip = escapeHtml(
+            `${String(day.date || '')}\n${formatAnalyticsNumber(pageviews)} sidvisningar\n${formatAnalyticsNumber(searches)} sökningar`
+        ).replace(/\n/g, '&#10;');
         target.append(`
-            <div class="analytics-chart-col" title="${escapeHtml(String(day.date || ''))}: ${formatAnalyticsNumber(pageviews)} sidvisningar, ${formatAnalyticsNumber(searches)} sökningar">
+            <div class="analytics-chart-col" tabindex="0" data-tooltip="${tooltip}">
                 <div class="analytics-chart-bars">
                     <div class="analytics-chart-bar" style="height:${pageHeight}px;"></div>
                     <div class="analytics-chart-bar is-search" style="height:${searchHeight}px;"></div>

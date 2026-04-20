@@ -474,6 +474,53 @@
             display: grid;
             justify-items: center;
             gap: 0.45rem;
+            position: relative;
+            cursor: default;
+        }
+        .analytics-chart-col::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 0.55rem);
+            transform: translateX(-50%);
+            min-width: 132px;
+            max-width: 220px;
+            padding: 0.45rem 0.55rem;
+            border-radius: 8px;
+            background: rgba(12, 26, 43, 0.96);
+            color: #fff;
+            font-size: 0.72rem;
+            line-height: 1.4;
+            text-align: center;
+            white-space: pre-line;
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.14s ease, visibility 0.14s ease;
+            z-index: 4;
+            box-shadow: 0 14px 30px rgba(12, 26, 43, 0.22);
+        }
+        .analytics-chart-col::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 0.2rem);
+            transform: translateX(-50%);
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid rgba(12, 26, 43, 0.96);
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.14s ease, visibility 0.14s ease;
+            z-index: 4;
+        }
+        .analytics-chart-col:hover::after,
+        .analytics-chart-col:hover::before,
+        .analytics-chart-col:focus-visible::after,
+        .analytics-chart-col:focus-visible::before {
+            opacity: 1;
+            visibility: visible;
         }
         .analytics-chart-bars {
             width: 100%;
@@ -1860,7 +1907,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260420i" defer></script>
+<script src="admin.js?v=20260420j" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle
