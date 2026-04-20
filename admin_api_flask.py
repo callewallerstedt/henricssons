@@ -250,6 +250,52 @@ class SubmissionAttachment(Base):
         }
 
 
+class TempProduct(Base):
+    __tablename__ = "temp_products"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String, nullable=False, default="")
+    description = Column(Text, nullable=False, default="")
+    price = Column(String, nullable=False, default="")
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self, images: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "title": self.title or "",
+            "description": self.description or "",
+            "price": self.price or "",
+            "sort_order": int(self.sort_order or 0),
+            "images": images or [],
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class TempProductImage(Base):
+    __tablename__ = "temp_product_images"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    product_id = Column(Integer, ForeignKey("temp_products.id", ondelete="CASCADE"), index=True, nullable=False)
+    filename = Column(String, nullable=False, default="")
+    mime = Column(String, nullable=False, default="image/jpeg")
+    data = Column(LargeBinary, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_meta(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "filename": self.filename or "",
+            "mime": self.mime or "image/jpeg",
+            "sort_order": int(self.sort_order or 0),
+            "url": f"/api/temp_product_image/{self.id}",
+        }
+
+
 engine = None
 SessionLocal = None
 
@@ -2798,6 +2844,216 @@ def upload_image():
         handle.write(raw)
 
     return jsonify(success=True, saved_path=safe_rel_path.replace("/", "\\"))
+
+
+TEMP_PRODUCT_MAX_IMAGE_BYTES = 8 * 1024 * 1024
+TEMP_PRODUCT_MAX_IMAGES = 12
+TEMP_PRODUCT_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+
+def _fetch_temp_products(include_images: bool = True) -> List[Dict[str, Any]]:
+    db = get_db()
+    if not db:
+        return []
+    try:
+        rows = db.query(TempProduct).order_by(TempProduct.sort_order.asc(), TempProduct.id.asc()).all()
+        images_by_product: Dict[int, List[Dict[str, Any]]] = {}
+        if include_images and rows:
+            img_rows = (
+                db.query(TempProductImage)
+                .order_by(TempProductImage.sort_order.asc(), TempProductImage.id.asc())
+                .all()
+            )
+            for img in img_rows:
+                images_by_product.setdefault(img.product_id, []).append(img.to_meta())
+        return [row.to_dict(images=images_by_product.get(row.id, [])) for row in rows]
+    except Exception as exc:
+        print(f"fetch_temp_products failed: {exc}")
+        return []
+    finally:
+        db.close()
+
+
+@app.route("/api/temp_products", methods=["GET"])
+def list_temp_products_public():
+    return jsonify(_fetch_temp_products())
+
+
+@app.route("/api/temp_products", methods=["POST"])
+@admin_required
+def create_temp_product():
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        next_order = (db.query(TempProduct).count() or 0)
+        product = TempProduct(
+            title=str(payload.get("title", "") or "").strip()[:300],
+            description=str(payload.get("description", "") or "").strip()[:4000],
+            price=str(payload.get("price", "") or "").strip()[:100],
+            sort_order=int(payload.get("sort_order", next_order) or next_order),
+        )
+        db.add(product)
+        db.commit()
+        db.refresh(product)
+        return jsonify(product.to_dict())
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/temp_products/<int:product_id>", methods=["PUT"])
+@admin_required
+def update_temp_product(product_id: int):
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        product = db.query(TempProduct).filter_by(id=product_id).first()
+        if not product:
+            return jsonify(error="Not found"), 404
+        if "title" in payload:
+            product.title = str(payload.get("title", "") or "").strip()[:300]
+        if "description" in payload:
+            product.description = str(payload.get("description", "") or "").strip()[:4000]
+        if "price" in payload:
+            product.price = str(payload.get("price", "") or "").strip()[:100]
+        if "sort_order" in payload:
+            try:
+                product.sort_order = int(payload.get("sort_order") or 0)
+            except (TypeError, ValueError):
+                pass
+        db.commit()
+        db.refresh(product)
+        return jsonify(product.to_dict())
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/temp_products/<int:product_id>", methods=["DELETE"])
+@admin_required
+def delete_temp_product(product_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        product = db.query(TempProduct).filter_by(id=product_id).first()
+        if not product:
+            return jsonify(error="Not found"), 404
+        # Explicitly delete images in case cascade isn't configured on the engine
+        db.query(TempProductImage).filter_by(product_id=product_id).delete(synchronize_session=False)
+        db.delete(product)
+        db.commit()
+        return jsonify(success=True)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/temp_products/<int:product_id>/images", methods=["POST"])
+@admin_required
+def upload_temp_product_image(product_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        product = db.query(TempProduct).filter_by(id=product_id).first()
+        if not product:
+            return jsonify(error="Product not found"), 404
+
+        existing_count = db.query(TempProductImage).filter_by(product_id=product_id).count()
+        files = request.files.getlist("images") or request.files.getlist("image")
+        if not files:
+            return jsonify(error="No images provided"), 400
+
+        saved: List[Dict[str, Any]] = []
+        next_order = existing_count
+        for file_storage in files:
+            if existing_count + len(saved) >= TEMP_PRODUCT_MAX_IMAGES:
+                break
+            raw_name = getattr(file_storage, "filename", "") or f"image-{int(time.time())}"
+            mime = (getattr(file_storage, "mimetype", "") or "").lower()
+            if mime not in TEMP_PRODUCT_ALLOWED_MIMES:
+                ext = os.path.splitext(raw_name)[1].lower()
+                mime = {
+                    ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                    ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
+                }.get(ext, "")
+                if mime not in TEMP_PRODUCT_ALLOWED_MIMES:
+                    continue
+            blob = file_storage.read()
+            if not blob or len(blob) > TEMP_PRODUCT_MAX_IMAGE_BYTES:
+                continue
+            image = TempProductImage(
+                product_id=product_id,
+                filename=sanitize_attachment_filename(raw_name, fallback_ext=os.path.splitext(raw_name)[1]),
+                mime=mime,
+                data=blob,
+                sort_order=next_order,
+            )
+            db.add(image)
+            db.flush()
+            saved.append(image.to_meta())
+            next_order += 1
+        db.commit()
+        return jsonify(success=True, images=saved)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/temp_product_image/<int:image_id>", methods=["GET"])
+def get_temp_product_image(image_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        row = db.query(TempProductImage).filter_by(id=image_id).first()
+        if not row:
+            return jsonify(error="Not found"), 404
+        response = Response(row.data, mimetype=row.mime or "image/jpeg")
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        response.headers["Content-Length"] = str(len(row.data or b""))
+        return response
+    except Exception as exc:
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/temp_product_image/<int:image_id>", methods=["DELETE"])
+@admin_required
+def delete_temp_product_image(image_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        row = db.query(TempProductImage).filter_by(id=image_id).first()
+        if not row:
+            return jsonify(error="Not found"), 404
+        db.delete(row)
+        db.commit()
+        return jsonify(success=True)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
 
 
 @app.route("/api/mailgun_test", methods=["POST"])

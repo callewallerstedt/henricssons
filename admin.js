@@ -699,6 +699,7 @@ function switchTab(tab){
         $('#advanced-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').hide();
+        $('#tempproducts-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
@@ -710,6 +711,7 @@ function switchTab(tab){
         $('#advanced-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').hide();
+        $('#tempproducts-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
@@ -725,6 +727,7 @@ function switchTab(tab){
         $('#advanced-section').addClass('active');
         $('#boats-section').hide();
         $('#extras-section').hide();
+        $('#tempproducts-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
@@ -737,6 +740,7 @@ function switchTab(tab){
         $('#advanced-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').hide();
+        $('#tempproducts-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
@@ -748,6 +752,7 @@ function switchTab(tab){
         $('#advanced-section').removeClass('active');
         $('#boats-section').show();
         $('#extras-section').hide();
+        $('#tempproducts-section').hide();
         $('.quicksearch').show();
         // Dölj sekundära flikar när vi är i tillverkar-läget
         $('#admin-tabs').hide();
@@ -757,6 +762,18 @@ function switchTab(tab){
         }
         $('#extras-search').hide();
         editExtrasCat = null; // nollställ
+    } else if(tab==='tempproducts'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('#tempproducts-section').show();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        loadTempProducts();
     } else {
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').removeClass('active');
@@ -764,6 +781,7 @@ function switchTab(tab){
         $('#advanced-section').removeClass('active');
         $('#boats-section').hide();
         $('#extras-section').show();
+        $('#tempproducts-section').hide();
         $('.quicksearch').hide();
         // Visa sekundära flikar under "Bilder & exempel"
         $('#admin-tabs').css('display', 'flex');
@@ -2321,6 +2339,8 @@ $(document).ready(function() {
             switchTab('calendar');
         } else if(prim==='boats'){
             switchTab('boats');
+        } else if(prim==='tempproducts'){
+            switchTab('tempproducts');
         } else {
             // Byt till "Visa alla" som standard
             const firstCat = activeExtrasKey || 'all';
@@ -2595,4 +2615,227 @@ function debounce(fn, threshold) {
         }
         timeout = setTimeout(delayed, threshold);
     };
-} 
+}
+
+// ============================== TEMP PRODUCTS ==============================
+let tempProductsCache = [];
+const tpSaveTimers = new WeakMap();
+
+function escHtml(s) { return escapeHtml(s); }
+
+async function loadTempProducts() {
+    const list = document.getElementById('tp-list');
+    const empty = document.getElementById('tp-empty-state');
+    if (!list) return;
+    list.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Laddar...</div>';
+    try {
+        const res = await adminFetch(`${API_BASE}/api/temp_products`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        tempProductsCache = await res.json();
+    } catch (err) {
+        console.error('Kunde inte ladda produkter', err);
+        list.innerHTML = '<div style="padding:1rem;color:#dc2626;">Kunde inte ladda produkter. ' + escHtml(err.message || '') + '</div>';
+        return;
+    }
+    renderTempProducts();
+}
+
+function renderTempProducts() {
+    const list = document.getElementById('tp-list');
+    const empty = document.getElementById('tp-empty-state');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!Array.isArray(tempProductsCache) || tempProductsCache.length === 0) {
+        if (empty) empty.style.display = 'block';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+    tempProductsCache.forEach(product => list.appendChild(buildTempProductCard(product)));
+}
+
+function buildTempProductCard(product) {
+    const card = document.createElement('div');
+    card.className = 'tp-card';
+    card.dataset.productId = product.id;
+    card.innerHTML = `
+        <div class="tp-fields">
+            <div>
+                <label>Titel</label>
+                <input type="text" class="tp-title" value="${escHtml(product.title || '')}" placeholder="Produktens namn">
+            </div>
+            <div class="tp-row-2col">
+                <div>
+                    <label>Pris</label>
+                    <input type="text" class="tp-price" value="${escHtml(product.price || '')}" placeholder="t.ex. 2 495 kr">
+                </div>
+                <div>
+                    <label>Sorteringsordning</label>
+                    <input type="text" class="tp-sort" value="${escHtml(String(product.sort_order || 0))}" placeholder="0">
+                </div>
+            </div>
+            <div>
+                <label>Beskrivning</label>
+                <textarea class="tp-description" placeholder="Beskriv produkten...">${escHtml(product.description || '')}</textarea>
+            </div>
+            <div class="tp-actions">
+                <span class="tp-save-status"></span>
+                <button type="button" class="btn btn-danger tp-delete">Ta bort produkt</button>
+            </div>
+        </div>
+        <div class="tp-images">
+            <div>
+                <label>Bilder (${(product.images || []).length})</label>
+                <div class="tp-images-grid"></div>
+            </div>
+            <label class="tp-dropzone" tabindex="0">
+                <div style="font-size:1.6rem;margin-bottom:.3rem;">📷</div>
+                <div style="font-size:.92rem;">Klicka eller dra och släpp bilder</div>
+                <div style="font-size:.78rem;opacity:.7;margin-top:.2rem;">JPG, PNG, WEBP, GIF · max 8 MB/bild</div>
+                <input type="file" class="tp-file-input" multiple accept="image/*">
+            </label>
+            <div class="tp-upload-status"></div>
+        </div>
+    `;
+    renderTempProductImages(card, product);
+    bindTempProductCard(card, product);
+    return card;
+}
+
+function renderTempProductImages(card, product) {
+    const grid = card.querySelector('.tp-images-grid');
+    grid.innerHTML = '';
+    (product.images || []).forEach(img => {
+        const tile = document.createElement('div');
+        tile.className = 'tp-thumb';
+        tile.innerHTML = `
+            <img src="${API_BASE}${img.url}" alt="${escHtml(img.filename || '')}">
+            <button type="button" class="tp-thumb-del" title="Ta bort bild" data-image-id="${img.id}">×</button>
+        `;
+        tile.querySelector('.tp-thumb-del').addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (!confirm('Ta bort den här bilden?')) return;
+            try {
+                const res = await adminFetch(`${API_BASE}/api/temp_product_image/${img.id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                product.images = (product.images || []).filter(i => i.id !== img.id);
+                renderTempProductImages(card, product);
+                card.querySelector('.tp-images label').textContent = `Bilder (${product.images.length})`;
+            } catch (err) {
+                alert('Kunde inte ta bort bild: ' + (err.message || err));
+            }
+        });
+        grid.appendChild(tile);
+    });
+}
+
+function bindTempProductCard(card, product) {
+    const titleInput = card.querySelector('.tp-title');
+    const priceInput = card.querySelector('.tp-price');
+    const sortInput = card.querySelector('.tp-sort');
+    const descInput = card.querySelector('.tp-description');
+    const status = card.querySelector('.tp-save-status');
+
+    function scheduleSave() {
+        clearTimeout(tpSaveTimers.get(card));
+        status.textContent = 'Sparar...';
+        status.classList.remove('is-saved', 'is-error');
+        const t = setTimeout(() => saveTempProduct(card, product, status), 600);
+        tpSaveTimers.set(card, t);
+    }
+
+    [titleInput, priceInput, sortInput, descInput].forEach(el => {
+        el.addEventListener('input', scheduleSave);
+    });
+
+    card.querySelector('.tp-delete').addEventListener('click', async () => {
+        if (!confirm(`Ta bort produkten "${product.title || 'utan titel'}"? Detta kan inte ångras.`)) return;
+        try {
+            const res = await adminFetch(`${API_BASE}/api/temp_products/${product.id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            tempProductsCache = tempProductsCache.filter(p => p.id !== product.id);
+            renderTempProducts();
+        } catch (err) {
+            alert('Kunde inte ta bort produkt: ' + (err.message || err));
+        }
+    });
+
+    // File upload
+    const dropzone = card.querySelector('.tp-dropzone');
+    const fileInput = card.querySelector('.tp-file-input');
+    const uploadStatus = card.querySelector('.tp-upload-status');
+
+    async function uploadFiles(files) {
+        if (!files || !files.length) return;
+        const fd = new FormData();
+        Array.from(files).forEach(f => fd.append('images', f, f.name));
+        uploadStatus.textContent = `Laddar upp ${files.length} bild${files.length === 1 ? '' : 'er'}...`;
+        try {
+            const res = await adminFetch(`${API_BASE}/api/temp_products/${product.id}/images`, { method: 'POST', body: fd });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            product.images = [...(product.images || []), ...(data.images || [])];
+            renderTempProductImages(card, product);
+            card.querySelector('.tp-images label').textContent = `Bilder (${product.images.length})`;
+            uploadStatus.textContent = `${(data.images || []).length} bild${(data.images || []).length === 1 ? '' : 'er'} uppladdade.`;
+            setTimeout(() => { uploadStatus.textContent = ''; }, 3000);
+        } catch (err) {
+            uploadStatus.textContent = 'Fel vid uppladdning: ' + (err.message || err);
+        }
+    }
+
+    fileInput.addEventListener('change', () => {
+        uploadFiles(fileInput.files);
+        fileInput.value = '';
+    });
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('is-drag'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('is-drag'));
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('is-drag');
+        uploadFiles(e.dataTransfer.files);
+    });
+}
+
+async function saveTempProduct(card, product, status) {
+    const title = card.querySelector('.tp-title').value;
+    const price = card.querySelector('.tp-price').value;
+    const sort = parseInt(card.querySelector('.tp-sort').value, 10) || 0;
+    const description = card.querySelector('.tp-description').value;
+    try {
+        const res = await adminFetch(`${API_BASE}/api/temp_products/${product.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, price, sort_order: sort, description })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const updated = await res.json();
+        product.title = updated.title;
+        product.price = updated.price;
+        product.description = updated.description;
+        product.sort_order = updated.sort_order;
+        status.textContent = 'Sparat ✓';
+        status.classList.add('is-saved');
+        setTimeout(() => { status.textContent = ''; status.classList.remove('is-saved'); }, 2000);
+    } catch (err) {
+        status.textContent = 'Fel: ' + (err.message || err);
+        status.classList.add('is-error');
+    }
+}
+
+async function addTempProduct() {
+    try {
+        const res = await adminFetch(`${API_BASE}/api/temp_products`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: 'Ny produkt', description: '', price: '', sort_order: tempProductsCache.length })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const product = await res.json();
+        tempProductsCache.push(product);
+        renderTempProducts();
+    } catch (err) {
+        alert('Kunde inte skapa produkt: ' + (err.message || err));
+    }
+}
+
+$(document).on('click', '#tp-add-btn', addTempProduct);
