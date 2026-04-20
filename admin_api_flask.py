@@ -24,6 +24,40 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 app = Flask(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def load_local_env_file(path: Path) -> None:
+    """Load a local .env file without overriding variables already set by the host."""
+    if not path.exists() or not path.is_file():
+        return
+
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip().lstrip("\ufeff")
+        if not key or key in os.environ:
+            continue
+
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        os.environ[key] = value
+
+
+load_local_env_file(BASE_DIR / ".env")
+
 BOAT_DATA_FILE = BASE_DIR / "boat_data.json"
 FORM_SUBMISSIONS_FILE = BASE_DIR / "form_submissions.json"
 FORM_PROMPTS_FILE = BASE_DIR / "form_prompts.json"
@@ -544,6 +578,36 @@ def extract_example_slug(source: str, fallback_slug: str = "") -> str:
         if path.startswith("exempel/"):
             return path.split("/", 1)[1].strip()
     return fallback_slug.strip()
+
+
+def build_contact_example_href(manufacturer: str, model: str, canonical_slug: str) -> str:
+    params: Dict[str, str] = {}
+    manufacturer = str(manufacturer or "").strip()
+    model = str(model or "").strip()
+    canonical_slug = str(canonical_slug or "").strip()
+    if manufacturer:
+        params["manufacturer"] = manufacturer
+    if model:
+        params["model"] = model
+    if canonical_slug:
+        params["example"] = f"/exempel/{canonical_slug}"
+    query = urlencode(params)
+    return f"/kontakt?{query}" if query else "/kontakt"
+
+
+def build_kapell_example_href(manufacturer: str, model: str, canonical_slug: str) -> str:
+    params: Dict[str, str] = {}
+    manufacturer = str(manufacturer or "").strip()
+    model = str(model or "").strip()
+    canonical_slug = str(canonical_slug or "").strip()
+    if manufacturer:
+        params["manufacturer"] = manufacturer
+    if model:
+        params["model"] = model
+    if canonical_slug:
+        params["example"] = f"/exempel/{canonical_slug}"
+    query = urlencode(params)
+    return f"/kapellforfragan?{query}" if query else "/kapellforfragan"
 
 
 def image_path_to_site_url(image_path: str) -> str:
@@ -1093,6 +1157,11 @@ def get_openai_response(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
     target_model = (model or OPENAI_MODEL).strip()
+    normalized_reasoning_effort = {
+        "minimal": "low",
+        "min": "low",
+        "off": "none",
+    }.get(OPENAI_REASONING_EFFORT, OPENAI_REASONING_EFFORT)
     payload: Dict[str, Any] = {
         "model": target_model,
         "messages": messages,
@@ -1101,7 +1170,7 @@ def get_openai_response(
     is_gpt5 = str(target_model).lower().startswith("gpt-5")
     if is_gpt5:
         payload["max_completion_tokens"] = max(int(max_tokens), 120)
-        payload["reasoning_effort"] = OPENAI_REASONING_EFFORT
+        payload["reasoning_effort"] = normalized_reasoning_effort
     else:
         payload["max_tokens"] = max_tokens
     if response_format:
@@ -1440,38 +1509,33 @@ def build_notification_html(
 ) -> str:
     form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
 
-    # Build ordered rows, then any remaining keys not in FIELD_ORDER
     ordered_keys = [k for k in FIELD_ORDER if k in fields]
     extra_keys = [k for k in fields if k not in FIELD_ORDER and k != "__submitted_via"]
     all_keys = ordered_keys + extra_keys
 
     rows_html = ""
-    for i, key in enumerate(all_keys):
+    for key in all_keys:
         raw = fields.get(key, "")
         val = _humanize_value(raw)
         if not val:
             continue
-        bg = "#ffffff" if i % 2 == 0 else "#f8f9fb"
-        label_cell = (
-            f"<td style='padding:11px 16px;border-bottom:1px solid #e8edf3;"
-            f"background:{bg};font-weight:600;color:#4a5568;"
-            f"font-size:13px;width:38%;white-space:nowrap;'>"
+        rows_html += (
+            "<tr>"
+            f"<td style='padding:10px 12px;border:1px solid #d9dee5;"
+            f"font-weight:600;color:#222831;font-size:13px;width:34%;vertical-align:top;'>"
             f"{html.escape(_label(key))}</td>"
+            f"<td style='padding:10px 12px;border:1px solid #d9dee5;"
+            f"color:#222831;font-size:14px;word-break:break-word;'>"
+            f"{html.escape(val)}</td>"
+            "</tr>"
         )
-        val_cell = (
-            f"<td style='padding:11px 16px;border-bottom:1px solid #e8edf3;"
-            f"background:{bg};color:#1a202c;font-size:14px;"
-            f"word-break:break-word;'>{html.escape(val)}</td>"
-        )
-        rows_html += f"<tr>{label_cell}{val_cell}</tr>"
 
     if not rows_html:
         rows_html = (
-            "<tr><td colspan='2' style='padding:12px 16px;color:#718096;"
-            "font-style:italic;'>Inga fält</td></tr>"
+            "<tr><td colspan='2' style='padding:12px;border:1px solid #d9dee5;"
+            "color:#6b7280;font-style:italic;'>Inga fält</td></tr>"
         )
 
-    # Format timestamp nicely
     try:
         from datetime import datetime, timezone
         dt = datetime.fromisoformat(timestamp_iso.replace("Z", "+00:00"))
@@ -1479,109 +1543,76 @@ def build_notification_html(
     except Exception:
         local_str = html.escape(timestamp_iso)
 
-    # Attachments block (inline image thumbnails via cid, download links for non-images)
     attachments_block = ""
     if attachments:
-        image_tiles: List[str] = []
-        file_rows: List[str] = []
+        attachment_rows: List[str] = []
         for att in attachments:
-            cid = str(att.get("cid", "")).strip()
             filename = html.escape(str(att.get("filename", "bilaga")))
             mime = str(att.get("mime", ""))
             size_kb = max(1, int((att.get("size") or 0) / 1024))
             public_url = html.escape(str(att.get("public_url", "")))
-            if mime.startswith("image/") and cid:
-                image_tiles.append(
-                    f"<td style='padding:6px;vertical-align:top;'>"
-                    f"<a href='{public_url}' style='text-decoration:none;'>"
-                    f"<img src='cid:{html.escape(cid)}' alt='{filename}' "
-                    f"style='display:block;width:170px;height:128px;object-fit:cover;"
-                    f"border-radius:6px;border:1px solid #e8edf3;'/></a>"
-                    f"<div style='font-size:11px;color:#718096;margin-top:4px;"
-                    f"max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>"
-                    f"{filename} &middot; {size_kb} KB</div></td>"
-                )
-            else:
-                file_rows.append(
-                    f"<li style='margin:4px 0;color:#1a202c;font-size:13px;'>"
-                    f"<a href='{public_url}' style='color:#0a2342;text-decoration:none;'>&#128206; {filename}</a> "
-                    f"<span style='color:#718096;'>({size_kb} KB)</span></li>"
-                )
-        tiles_html = ""
-        if image_tiles:
-            rows_of_tiles = ""
-            for i in range(0, len(image_tiles), 3):
-                rows_of_tiles += "<tr>" + "".join(image_tiles[i : i + 3]) + "</tr>"
-            tiles_html = (
-                "<table cellpadding='0' cellspacing='0' style='border-collapse:separate;'>"
-                f"{rows_of_tiles}</table>"
+            kind = "Bild" if mime.startswith("image/") else "Fil"
+            attachment_rows.append(
+                "<tr>"
+                f"<td style='padding:10px 12px;border:1px solid #d9dee5;"
+                f"font-weight:600;color:#222831;font-size:13px;width:34%;vertical-align:top;'>{kind}</td>"
+                f"<td style='padding:10px 12px;border:1px solid #d9dee5;color:#222831;font-size:14px;'>"
+                f"<a href='{public_url}' style='color:#222831;text-decoration:underline;'>{filename}</a>"
+                f" <span style='color:#6b7280;'>({size_kb} KB)</span></td>"
+                "</tr>"
             )
-        files_html = ""
-        if file_rows:
-            files_html = "<ul style='margin:8px 0 0;padding-left:18px;list-style:none;'>" + "".join(file_rows) + "</ul>"
         attachments_block = (
-            "<tr><td style='background:#ffffff;padding:14px 24px 18px;"
-            "border-top:1px solid #e6ebf2;'>"
-            "<div style='font-size:11px;color:#8b6f18;font-weight:700;letter-spacing:0.08em;"
-            "text-transform:uppercase;margin-bottom:10px;'>"
-            f"Bifogade filer ({len(attachments)})</div>"
-            f"{tiles_html}{files_html}</td></tr>"
+            "<div style='margin-top:20px;'>"
+            "<div style='font-size:12px;font-weight:700;color:#222831;margin-bottom:8px;'>Bilagor</div>"
+            "<table width='100%' cellpadding='0' cellspacing='0' style='border-collapse:collapse;'>"
+            + "".join(attachment_rows)
+            + "</table></div>"
         )
 
     ai_reply_block = ""
     if str(proposed_response or "").strip():
         ai_reply_html = html.escape(str(proposed_response).strip()).replace("\n", "<br>")
         ai_reply_block = (
-            "<tr><td style='background:#f8fafc;padding:18px 24px 20px;border-top:1px solid #e6ebf2;'>"
-            "<div style='font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;"
-            "text-transform:uppercase;margin-bottom:8px;'>AI-utkast till svar</div>"
-            "<div style='font-size:12px;line-height:1.65;color:#667085;'>"
+            "<div style='margin-top:20px;'>"
+            "<div style='font-size:12px;font-weight:700;color:#222831;margin-bottom:8px;'>AI-utkast till svar</div>"
+            "<div style='padding:12px;border:1px solid #d9dee5;background:#fafafa;"
+            "font-size:14px;line-height:1.6;color:#222831;'>"
             f"{ai_reply_html}</div>"
-            "</td></tr>"
+            "</div>"
         )
 
     return f"""<!DOCTYPE html>
 <html lang="sv">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#eef2f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#17212f;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;padding:32px 16px;">
-<tr><td align="center">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border:1px solid #d9e1ea;border-radius:14px;overflow:hidden;">
-
-  <!-- Header -->
+<body style="margin:0;padding:24px;background:#f5f5f5;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#222831;">
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+<tr>
+<td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;border-collapse:collapse;background:#ffffff;border:1px solid #d9dee5;">
   <tr>
-    <td style="background:#10263f;padding:28px 32px;text-align:center;">
-      <div style="display:inline-block;background:#ffffff;border-radius:10px;padding:10px 16px;margin-bottom:14px;border:1px solid #d9e1ea;">
-        <img src="cid:henricssons-logo" alt="Henricssons Båtkapell" width="148" style="display:block;width:148px;height:auto;border:0;outline:none;text-decoration:none;">
-      </div>
-      <div style="color:#ffffff;font-size:22px;font-weight:700;margin-bottom:4px;">Ny {form_label}</div>
-      <div style="color:#c4cfdb;font-size:13px;">{local_str}</div>
+    <td style="padding:24px 24px 16px;border-bottom:1px solid #d9dee5;">
+      <div style="font-size:24px;font-weight:700;color:#222831;margin:0 0 6px;">Ny {form_label}</div>
+      <div style="font-size:13px;color:#6b7280;line-height:1.5;">{local_str}</div>
+      <div style="font-size:13px;color:#6b7280;line-height:1.5;">Referens-ID: {html.escape(submission_id)}</div>
     </td>
   </tr>
-
-  <!-- Fields table -->
   <tr>
-    <td style="background:#ffffff;padding:0;">
+    <td style="padding:20px 24px 24px;">
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         {rows_html}
       </table>
+      {attachments_block}
+      {ai_reply_block}
     </td>
   </tr>
-  {attachments_block}
-  {ai_reply_block}
-
-  <!-- Footer -->
   <tr>
-    <td style="background:#f7f9fc;padding:18px 32px;border-top:1px solid #e6ebf2;">
-      <p style="margin:0;color:#7d8796;font-size:12px;text-align:center;line-height:1.6;">
-        Referens-ID: {html.escape(submission_id)}<br>
-        Henricssonsbatkapell.se - automatiskt meddelande
-      </p>
+    <td style="padding:14px 24px;border-top:1px solid #d9dee5;font-size:12px;color:#6b7280;">
+      Henricssonsbatkapell.se - automatiskt internt meddelande
     </td>
   </tr>
-
 </table>
-</td></tr>
+</td>
+</tr>
 </table>
 </body>
 </html>"""
@@ -3569,6 +3600,9 @@ def example_page(slug: str):
     else:
         description_parts.append(f"<p>{html.escape(GENERIC_EXAMPLE_DESCRIPTION)}</p>")
 
+    contact_href = build_contact_example_href(manufacturer, model, canonical_slug)
+    kapell_href = build_kapell_example_href(manufacturer, model, canonical_slug)
+
     meta_html = f"""
     <div class="seo-meta">
         <div class="seo-meta-block" style="border-top:0; padding-top:0;">
@@ -3588,8 +3622,8 @@ def example_page(slug: str):
             <p>{html.escape(str(item.get('category', '') or '-'))}</p>
         </div>
         <div class="seo-cta-row">
-            <a class="seo-btn seo-btn-primary" href="{html.escape(build_kapell_example_href(manufacturer, model, canonical_slug))}">Kapellförfrågan</a>
-            <a class="seo-btn" href="{html.escape(build_contact_example_href(manufacturer, model, canonical_slug))}">Mer information</a>
+            <a class="seo-btn seo-btn-primary" href="{html.escape(kapell_href)}">Kapellförfrågan</a>
+            <a class="seo-btn" href="{html.escape(contact_href)}">Mer information</a>
         </div>
     </div>
     """
