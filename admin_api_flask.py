@@ -1698,6 +1698,8 @@ def get_openai_response(
 
 def normalize_form_type(value: str) -> str:
     lowered = (value or "").lower()
+    if "dyn" in lowered or "dyna" in lowered:
+        return "Dynsatsforfragan"
     if "fender" in lowered:
         return "Fenderforfragan"
     if "kapell" in lowered:
@@ -1711,6 +1713,8 @@ def display_form_type(value: str) -> str:
         return "Kapellförfrågan"
     if key == "Fenderforfragan":
         return "Fenderförfrågan"
+    if key == "Dynsatsforfragan":
+        return "Dynsatsförfrågan"
     return "Kontakt"
 
 
@@ -1990,7 +1994,15 @@ FIELD_LABELS_SV: Dict[str, str] = {
 FORM_TYPE_LABELS_SV: Dict[str, str] = {
     "Kapellforfragan": "Kapellförfrågan",
     "Fenderforfragan": "Fenderförfrågan",
+    "Dynsatsforfragan": "Dynsatsförfrågan",
     "Kontakt": "Kontaktärende",
+}
+
+NOTIFICATION_FORM_LABELS_SV: Dict[str, str] = {
+    "Kapellforfragan": "Kapellförfrågan",
+    "Fenderforfragan": "Fenderförfrågan",
+    "Dynsatsforfragan": "Dynsatsförfrågan",
+    "Kontakt": "Kontakt",
 }
 
 FIELD_ORDER = [
@@ -2018,6 +2030,33 @@ def _humanize_value(value: Any) -> str:
     return s
 
 
+def truncate_notification_preview(text: str, limit: int = 120) -> str:
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    if len(clean) <= limit:
+        return clean
+    return clean[: max(0, limit - 3)].rstrip() + "..."
+
+
+def build_submission_notification_preview(fields: Dict[str, Any]) -> Tuple[str, str]:
+    if not isinstance(fields, dict):
+        return "", ""
+
+    manufacturer = get_field_value(fields, "manufacturer", "boat_brand", "tillverkare", "båtmärke")
+    model = get_field_value(fields, "model", "boat_model", "modell", "båtmodell")
+    subject = get_field_value(fields, "subject", "ämne")
+    size = get_field_value(fields, "size", "storlek")
+    quantity = get_field_value(fields, "quantity", "antal")
+    message = get_field_value(fields, "message", "meddelande", "övrig information", "ovrig information")
+
+    primary_line = " ".join(part for part in [manufacturer, model] if part).strip()
+    if not primary_line:
+        primary_line = subject.strip()
+    if not primary_line and (size or quantity):
+        primary_line = " ".join(part for part in [quantity, size] if part).strip()
+
+    return truncate_notification_preview(primary_line, limit=80), truncate_notification_preview(message, limit=140)
+
+
 def build_notification_html(
     form_type: str,
     fields: Dict[str, Any],
@@ -2025,6 +2064,8 @@ def build_notification_html(
     timestamp_iso: str,
     attachments: Optional[List[Dict[str, Any]]] = None,
     proposed_response: str = "",
+    preview_title: str = "",
+    preview_message: str = "",
 ) -> str:
     form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
 
@@ -2100,6 +2141,30 @@ def build_notification_html(
             "</div>"
         )
 
+    preview_block = ""
+    if preview_title or preview_message:
+        preview_parts: List[str] = []
+        if preview_title:
+            preview_parts.append(
+                f"<div style='font-size:20px;font-weight:700;color:#222831;margin:0 0 6px;'>{html.escape(preview_title)}</div>"
+            )
+        if preview_message:
+            preview_parts.append(
+                f"<div style='font-size:14px;line-height:1.6;color:#4b5563;'>{html.escape(preview_message)}</div>"
+            )
+        preview_block = (
+            "<div style='margin:0 0 18px;padding:16px 18px;background:#f7f9fc;border:1px solid #d9dee5;'>"
+            + "".join(preview_parts)
+            + "</div>"
+        )
+
+    meta_block = (
+        "<div style='margin-top:18px;padding:12px 14px;background:#fafafa;border:1px solid #e5e7eb;'>"
+        f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Tid (UTC): {local_str}</div>"
+        f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Referens-ID: {html.escape(submission_id)}</div>"
+        "</div>"
+    )
+
     return f"""<!DOCTYPE html>
 <html lang="sv">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -2109,19 +2174,14 @@ def build_notification_html(
 <td align="center">
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;border-collapse:collapse;background:#ffffff;border:1px solid #d9dee5;">
   <tr>
-    <td style="padding:24px 24px 16px;border-bottom:1px solid #d9dee5;">
-      <div style="font-size:24px;font-weight:700;color:#222831;margin:0 0 6px;">Ny {form_label}</div>
-      <div style="font-size:13px;color:#6b7280;line-height:1.5;">{local_str}</div>
-      <div style="font-size:13px;color:#6b7280;line-height:1.5;">Referens-ID: {html.escape(submission_id)}</div>
-    </td>
-  </tr>
-  <tr>
     <td style="padding:20px 24px 24px;">
+      {preview_block}
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         {rows_html}
       </table>
       {attachments_block}
       {ai_reply_block}
+      {meta_block}
     </td>
   </tr>
   <tr>
@@ -2195,14 +2255,11 @@ def build_customer_confirmation_html(
 
 
 def make_mailgun_safe_text(text: str) -> str:
-    raw = str(text or "")
-    normalized = unicodedata.normalize("NFKD", raw)
-    return normalized.encode("ascii", "ignore").decode("ascii")
+    return unicodedata.normalize("NFC", str(text or ""))
 
 
 def make_mailgun_safe_html(html_body: str) -> str:
-    raw = str(html_body or "")
-    return raw.encode("ascii", "xmlcharrefreplace").decode("ascii")
+    return unicodedata.normalize("NFC", str(html_body or ""))
 
 
 def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
@@ -2411,7 +2468,9 @@ def send_mailgun_submission_notification(
     timestamp_iso = str(submission.get("timestamp", ""))
     proposed_response = ""
     form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
-    subject = f"Ny {form_label} — Henricssons"
+    notification_form_label = NOTIFICATION_FORM_LABELS_SV.get(form_type, form_label)
+    preview_title, preview_message = build_submission_notification_preview(fields)
+    subject = f"Ny {notification_form_label}"
     field_lines = "\n".join(
         f"  {_label(k)}: {_humanize_value(v)}"
         for k, v in fields.items()
@@ -2458,9 +2517,11 @@ def send_mailgun_submission_notification(
             for a in enriched
         )
     ai_reply_lines = ""
+    preview_lines = "\n".join(line for line in [preview_title, preview_message] if line)
+    if preview_lines:
+        preview_lines += "\n\n"
     text_body = (
-        f"Ny {form_label}\n"
-        f"{'=' * (len(form_label) + 4)}\n\n"
+        f"{preview_lines}"
         f"{field_lines}"
         f"{attachment_lines}\n\n"
         f"{ai_reply_lines}"
@@ -2474,6 +2535,8 @@ def send_mailgun_submission_notification(
         timestamp_iso,
         attachments=enriched,
         proposed_response=proposed_response,
+        preview_title=preview_title,
+        preview_message=preview_message,
     )
     ok, info = send_mailgun_email(
         recipients=recipients,
