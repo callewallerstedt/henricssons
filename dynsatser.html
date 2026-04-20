@@ -9,6 +9,53 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
     <link rel="icon" href="logo.png">
+    <style>
+        .hb-dyn-visual {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(150px, 180px);
+            gap: 1rem;
+            align-items: start;
+            max-width: 560px;
+            margin-left: auto;
+        }
+        .hb-dyn-visual .image-stack {
+            display: grid;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .hb-dyn-visual .image-main img {
+            aspect-ratio: 4 / 5;
+            object-fit: cover;
+            object-position: center;
+        }
+        .hb-dyn-visual .image-detail img {
+            aspect-ratio: 4 / 5;
+            object-fit: cover;
+            object-position: center;
+        }
+        .hb-dyn-visual .image-detail--stol img {
+            aspect-ratio: 3 / 4;
+        }
+        @media (max-width: 900px) {
+            .hb-dyn-visual {
+                grid-template-columns: 1fr 160px;
+                max-width: none;
+                margin-left: 0;
+            }
+            .hb-dyn-visual .image-stack {
+                margin-top: 1.8rem;
+            }
+        }
+        @media (max-width: 640px) {
+            .hb-dyn-visual {
+                grid-template-columns: 1fr;
+                max-width: 420px;
+            }
+            .hb-dyn-visual .image-stack {
+                margin-top: 0;
+            }
+        }
+    </style>
 </head>
 <body class="hb-premium">
     <div class="hb-top"><div class="wrap"><div class="hb-top-left"><span>Familjeföretag sedan 1967 · Kungsbacka</span></div><div class="hb-top-right"><a href="tel:+46314718200">+46 (0)31 47 18 20</a><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></div></div></div>
@@ -27,12 +74,15 @@
                 <p>Vi hjälper till med dynsatser för flera olika båttyper och kan ofta utgå från tidigare modeller eller originalutförande. Skicka tillverkare och modell så återkommer vi med hur vi bäst går vidare.</p>
                 <p>Använd formuläret nedan för att skicka en prisförfrågan. Bifoga gärna bilder eller beskriv önskat utförande i meddelandet.</p>
             </div>
-            <div class="hb-fender-visual">
+            <div class="hb-fender-visual hb-dyn-visual">
                 <div class="image image-main">
-                    <img src="batstolar-dynor/5400-br/5400-br_01.jpg" alt="Dynsats för båt">
+                    <img src="assets/dynsatser/magnum.jpg" alt="Dynsats för Magnum">
                     <a href="#dynForm" class="badge">Skicka förfrågan</a>
                 </div>
-                <div class="image image-detail"><img src="batstolar-dynor/5400-br/5400-br_02.jpg" alt="Detalj av dynsats"></div>
+                <div class="image-stack">
+                    <div class="image image-detail"><img src="assets/dynsatser/bella.jpg" alt="Dynsats för Bella"></div>
+                    <div class="image image-detail image-detail--stol"><img src="assets/dynsatser/stol.jpg" alt="Stol med nysydd dyna"></div>
+                </div>
             </div>
         </div>
     </section>
