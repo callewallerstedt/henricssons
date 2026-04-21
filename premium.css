@@ -101,7 +101,10 @@
     align-items: center;
     justify-content: space-between;
     height: 78px;
+    gap: 1.5rem;
+    min-width: 0;
 }
+.hb-logo { flex: 0 0 auto; }
 .hb-logo img {
     height: 46px;
     width: auto;
@@ -111,6 +114,9 @@
     display: flex;
     gap: 2.25rem;
     align-items: center;
+    margin-left: auto;
+    min-width: 0;
+    flex-wrap: nowrap;
 }
 .hb-nav-dropdown {
     position: relative;
@@ -181,7 +187,7 @@
 .hb-nav-submenu a.active {
     background: rgba(178, 138, 76, 0.08);
 }
-@media (min-width: 901px) {
+@media (min-width: 1121px) {
     .hb-nav-dropdown:hover .hb-nav-submenu,
     .hb-nav-dropdown:focus-within .hb-nav-submenu,
     .hb-nav-dropdown[open] .hb-nav-submenu {
@@ -215,7 +221,16 @@
     margin: 5px 0;
     transition: .3s;
 }
-@media (max-width: 900px) {
+@media (max-width: 1320px) and (min-width: 1121px) {
+    .hb-nav-links {
+        gap: clamp(0.9rem, 1.8vw, 1.55rem);
+    }
+    .hb-nav-cta {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+@media (max-width: 1120px) {
     .hb-nav-links {
         position: absolute;
         top: 78px;

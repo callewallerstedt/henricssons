@@ -52,15 +52,19 @@
     <section class="hb-section">
         <div class="wrap hb-contact-grid">
             <aside class="hb-contact-info">
-                <div class="row"><h3>Logotyp</h3><p>Skicka gärna information om båtfabrikat eller egen logotyp i meddelandet.</p></div>
+                <h2>Inför offert</h2>
+                <div class="row"><h3>Logotyp</h3><p>Hos oss kan du beställa fenderstrumpor med eller utan logotyp. Vissa båtlogotyper finns redan i systemet och kan då ge lägre tillägg.</p></div>
+                <div class="row"><h3>Adress</h3><p>Fyll gärna i leveransadress i formuläret om du vill att vi ska räkna med frakt direkt i offerten.</p></div>
+                <div class="row"><h3>Storleksguide</h3><p><a href="https://cdn.prod.website-files.com/5e669fea091655b193e71a3b/5e7c6246ee55b0062a529478_LIROS-Fenderskyddstorleksguide.pdf" target="_blank" rel="noopener noreferrer">Läs mer om Liros fenderskydd och storleksguide</a></p></div>
             </aside>
             <form id="fenderForm" class="hb-form-card" data-subject="Fenderförfrågan">
                 <h2>Prisförfrågan</h2>
                 <p class="subtitle">Fyll i dina uppgifter så återkommer vi.</p>
                 <div class="hb-form-grid-2"><div class="hb-form-row"><label for="fs-name">Namn *</label><input id="fs-name" name="name" required></div><div class="hb-form-row"><label for="fs-phone">Telefon *</label><input id="fs-phone" name="phone" type="tel" required></div></div>
                 <div class="hb-form-grid-2"><div class="hb-form-row"><label for="fs-email">E-post *</label><input id="fs-email" name="email" type="email" required></div><div class="hb-form-row"><label for="fs-qty">Antal *</label><input id="fs-qty" name="quantity" required></div></div>
+                <div class="hb-form-row"><label for="fs-address">Adress</label><input id="fs-address" name="address"></div>
                 <div class="hb-form-row"><label for="fs-size">Storlek</label><select id="fs-size" name="size"><option value="">Välj storlek</option><option>F1 6x25</option><option>F2 8x27</option><option>F3 9x30</option><option>F4 9x41</option><option>F5 12x30</option><option>F6 12x43</option></select></div>
-                <div class="hb-form-row"><label for="fs-message">Meddelande</label><textarea id="fs-message" name="message"></textarea></div>
+                <div class="hb-form-row"><label for="fs-message">Meddelande</label><textarea id="fs-message" name="message" placeholder="Båtmärke, eventuell logotyp och annat vi ska ta hänsyn till"></textarea></div>
                 <div id="fenderAttachments"></div>
                 <button type="submit" class="hb-btn hb-btn-primary"><span>Skicka förfrågan</span></button>
                 <div class="hb-form-done">Tack! Din förfrågan har skickats.</div>

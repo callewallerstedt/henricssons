@@ -39,6 +39,10 @@
     <section class="hb-section hb-section--tight">
         <div class="wrap">
             <div id="tp-loading" class="hb-tp-empty">Laddar produkter...</div>
+            <div id="tp-error" class="hb-tp-empty" style="display:none;">
+                <h2>Kunde inte ladda produkter just nu</h2>
+                <p>Försök igen om en liten stund, eller <a href="/kontakt">kontakta oss</a> direkt.</p>
+            </div>
             <div id="tp-empty" class="hb-tp-empty" style="display:none;">
                 <h2>Inga aktuella produkter just nu</h2>
                 <p>Titta gärna tillbaka senare, eller <a href="/kontakt">kontakta oss</a> direkt om du söker något specifikt.</p>
@@ -129,6 +133,7 @@
         const API_BASE = resolveApiBase();
         const grid = document.getElementById('tp-grid');
         const loading = document.getElementById('tp-loading');
+        const error = document.getElementById('tp-error');
         const empty = document.getElementById('tp-empty');
 
         function escHtml(value) {
@@ -171,6 +176,8 @@
 
         function renderProducts(products) {
             grid.innerHTML = '';
+            error.style.display = 'none';
+            empty.style.display = 'none';
             if (!products.length) {
                 empty.style.display = 'block';
                 return;
@@ -188,14 +195,19 @@
         }
 
         fetch(`${API_BASE}/api/temp_products`)
-            .then((response) => response.ok ? response.json() : [])
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`temp products request failed (${response.status})`);
+                }
+                return response.json();
+            })
             .then((products) => {
                 loading.style.display = 'none';
                 renderProducts(Array.isArray(products) ? products : []);
             })
             .catch(() => {
                 loading.style.display = 'none';
-                empty.style.display = 'block';
+                error.style.display = 'block';
             });
     })();
     </script>
