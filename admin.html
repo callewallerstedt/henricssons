@@ -574,6 +574,31 @@
             flex-wrap: wrap;
             margin-bottom: 1rem;
         }
+        .statusmappar-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        #status-config-open-btn {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+            min-height: 32px;
+            padding: 0.35rem 0.75rem;
+            font-size: 0.76rem;
+            font-weight: 600;
+            box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08);
+        }
+        #status-config-open-btn:hover {
+            background: #1d4ed8;
+            border-color: #1d4ed8;
+        }
+        #status-config-open-btn:focus-visible {
+            outline: 2px solid rgba(37, 99, 235, 0.28);
+            outline-offset: 2px;
+        }
         .statusmappar-title {
             margin: 0;
             font-size: 1rem;
@@ -609,6 +634,7 @@
         .status-folder {
             background: var(--surface-2);
             border: 1px solid var(--border);
+            border-top: 3px solid var(--status-accent, var(--border));
             border-radius: var(--radius);
             padding: 0.85rem;
             display: flex;
@@ -616,11 +642,6 @@
             min-height: 260px;
             transition: border-color 0.15s, background 0.15s;
         }
-        .status-folder[data-status="nya-inskick"] { border-top: 3px solid var(--primary); }
-        .status-folder[data-status="vantar-pa-svar"] { border-top: 3px solid var(--warning); }
-        .status-folder[data-status="i-produktion"] { border-top: 3px solid var(--info); }
-        .status-folder[data-status="redo-for-leverans"] { border-top: 3px solid var(--success); }
-        .status-folder[data-status="todo"] { border-top: 3px solid #0f766e; }
         .status-folder.drag-over { background: var(--info-soft); border-color: var(--primary); }
         .status-folder h3 {
             margin: 0 0 0.6rem 0;
@@ -629,6 +650,25 @@
             text-transform: uppercase;
             letter-spacing: 0.06em;
             color: var(--text-soft);
+        }
+        .status-folder-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.6rem;
+            margin-bottom: 0.55rem;
+        }
+        .status-folder-title-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            width: 100%;
+        }
+        .status-sort-btn {
+            font-size: 0.72rem;
+            padding: 0.25rem 0.5rem;
+            min-height: auto;
         }
         .folder-items {
             flex: 1;
@@ -739,6 +779,67 @@
         .folder-item-delete:hover { opacity: 1; background: var(--danger-soft); }
         .folder-item-content { color: var(--text-muted); font-size: 0.78rem; margin-top: 0.25rem; }
         .form-submission-item { border-left: 3px solid var(--accent); }
+        .status-config-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            margin-top: 1rem;
+        }
+        .status-config-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.55rem;
+            align-items: center;
+            padding: 0.55rem 0.65rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--surface);
+        }
+        .status-config-row.is-fixed .status-config-input {
+            background: var(--surface-2);
+            color: var(--text-muted);
+        }
+        .status-config-input {
+            width: 100%;
+        }
+        .status-config-row-actions {
+            display: flex;
+            gap: 0.35rem;
+            align-items: center;
+        }
+        .status-config-move-btn {
+            min-width: 36px;
+            padding: 0.45rem 0.55rem;
+        }
+        .status-config-delete-btn {
+            min-width: 36px;
+            padding: 0.45rem 0.55rem;
+            color: var(--danger);
+            border-color: rgba(220, 38, 38, 0.18);
+        }
+        .status-config-delete-btn:hover {
+            background: var(--danger-soft);
+            border-color: rgba(220, 38, 38, 0.28);
+        }
+        .status-config-meta {
+            grid-column: 1 / -1;
+            font-size: 0.76rem;
+            color: var(--text-muted);
+            margin-top: -0.15rem;
+        }
+        .status-config-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        .status-config-note {
+            margin: 0;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
 
         /* ================ CHATBOT ================ */
         .chatbot-card {
@@ -1627,70 +1728,28 @@
         <div class="content">
             <!-- DASHBOARD -->
             <div id="dashboard-section" class="dashboard-container active">
-                <div class="stats-row">
-                    <div class="stat-card">
-                        <div class="stat-label">Nya inskick</div>
-                        <div class="stat-value" id="stat-new">0</div>
-                        <div class="stat-hint">Obesvarade förfrågningar</div>
-                    </div>
-                    <div class="stat-card is-warning">
-                        <div class="stat-label">Väntar på svar</div>
-                        <div class="stat-value" id="stat-waiting">0</div>
-                        <div class="stat-hint">Under uppföljning</div>
-                    </div>
-                    <div class="stat-card is-info">
-                        <div class="stat-label">I produktion</div>
-                        <div class="stat-value" id="stat-production">0</div>
-                        <div class="stat-hint">Aktiva arbeten</div>
-                    </div>
-                    <div class="stat-card is-success">
-                        <div class="stat-label">Redo för leverans</div>
-                        <div class="stat-value" id="stat-ready">0</div>
-                        <div class="stat-hint">Klara att skicka</div>
-                    </div>
-                </div>
+                <div class="stats-row" id="status-summary-row"></div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card status-folders-card">
                         <div class="statusmappar-header">
                             <h2 class="statusmappar-title">Statusmappar</h2>
-                            <div class="form-type-filters">
-                                <button class="form-filter-btn active" data-filter="all">Alla</button>
-                                <button class="form-filter-btn" data-filter="Kapellförfrågan">Kapell</button>
-                                <button class="form-filter-btn" data-filter="Fenderförfrågan">Fender</button>
-                                <button class="form-filter-btn" data-filter="Dynsatsförfrågan">Dynsats</button>
-                                <button class="form-filter-btn" data-filter="Kontakt">Kontakt</button>
-                            </div>
-                        </div>
-                        <div class="status-folders">
-                            <div class="status-folder droppable-folder" data-status="nya-inskick">
-                                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
-                                    <h3 style="margin:0;">Nya inskick</h3>
-                                    <button id="nya-inskick-sort-btn" class="btn-ghost" style="font-size:0.72rem; padding:0.25rem 0.5rem; min-height:auto;" onclick="toggleNyaInskickSort()">Nyaste först</button>
+                            <div class="statusmappar-actions">
+                                <div class="form-type-filters">
+                                    <button class="form-filter-btn active" data-filter="all">Alla</button>
+                                    <button class="form-filter-btn" data-filter="Kapellförfrågan">Kapell</button>
+                                    <button class="form-filter-btn" data-filter="Fenderförfrågan">Fender</button>
+                                    <button class="form-filter-btn" data-filter="Dynsatsförfrågan">Dynsats</button>
+                                    <button class="form-filter-btn" data-filter="Kontakt">Kontakt</button>
                                 </div>
-                                <div class="folder-items" id="folder-nya-inskick"></div>
-                                <button class="add-item-btn" data-status="nya-inskick">+ Lägg till</button>
-                            </div>
-                            <div class="status-folder droppable-folder" data-status="vantar-pa-svar">
-                                <h3>Väntar på svar</h3>
-                                <div class="folder-items" id="folder-vantar-pa-svar"></div>
-                                <button class="add-item-btn" data-status="vantar-pa-svar">+ Lägg till</button>
-                            </div>
-                            <div class="status-folder droppable-folder" data-status="i-produktion">
-                                <h3>I produktion</h3>
-                                <div class="folder-items" id="folder-i-produktion"></div>
-                                <button class="add-item-btn" data-status="i-produktion">+ Lägg till</button>
-                            </div>
-                            <div class="status-folder droppable-folder" data-status="redo-for-leverans">
-                                <h3>Redo för leverans</h3>
-                                <div class="folder-items" id="folder-redo-for-leverans"></div>
-                                <button class="add-item-btn" data-status="redo-for-leverans">+ Lägg till</button>
+                                <button id="status-config-open-btn" class="btn-ghost" type="button">Anpassa</button>
                             </div>
                         </div>
+                        <div class="status-folders" id="status-folders-workflow"></div>
                         <div style="margin-top:1rem;">
                             <h2 class="statusmappar-title" style="margin-bottom:0.75rem;">To-do</h2>
                             <div class="status-folders" style="grid-template-columns:minmax(220px, 1fr);">
-                                <div class="status-folder droppable-folder" data-status="todo">
+                                <div class="status-folder droppable-folder" data-status="todo" id="status-folder-todo">
                                     <h3>To-do</h3>
                                     <div class="folder-items" id="folder-todo"></div>
                                     <button class="add-item-btn" data-status="todo">+ Lägg till</button>
@@ -1866,6 +1925,36 @@
                         <button class="btn-secondary" id="reload-mailgun-settings-btn">Ladda nuvarande</button>
                     </div>
                 </div>
+                <div class="dashboard-card">
+                    <h2>Kundmejl</h2>
+                    <p class="hint" style="margin:0 0 0.9rem 0;">Anv&#228;nd taggar i texten d&#228;r inneh&#229;ll ska bytas ut.</p>
+                    <div class="hint" style="margin:0 0 1rem 0; padding:0.85rem 1rem; border:1px solid var(--border-strong); border-radius:10px; background:#f6f7fb; line-height:1.7;">
+                        <strong>S&#229; h&#228;r fungerar det:</strong><br>
+                        <code>{namn}</code> visar kundens namn i vanlig text, till exempel <code>Hej {namn},</code><br>
+                        <code>{sammanfattning}</code> visar sammanfattningsblocket p&#229; en egen rad<br>
+                        <code>{kontaktinfo}</code> visar kontaktblocket p&#229; en egen rad
+                    </div>
+                    <label for="customer-confirmation-template">E-posttext till kunden</label>
+                    <textarea id="customer-confirmation-template" rows="12" style="font-family:'SFMono-Regular',Consolas,monospace; font-size:0.84rem;"></textarea>
+                    <div class="mt-3 row">
+                        <button class="btn" id="save-customer-confirmation-btn">Spara text</button>
+                        <button class="btn-secondary" id="reload-customer-confirmation-btn">Ladda nuvarande</button>
+                        <button class="btn-secondary" id="reset-customer-confirmation-btn">&#197;terst&#228;ll standardtext</button>
+                    </div>
+                    <div style="margin-top:1.25rem;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.6rem;">
+                            <label style="margin:0;">F&#246;rhandsvisning</label>
+                            <div id="customer-confirmation-preview-meta" class="hint" style="margin:0;"></div>
+                        </div>
+                        <div id="customer-confirmation-preview-types" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.85rem;">
+                            <button type="button" class="btn-secondary customer-confirmation-preview-type is-active" data-form-type="Kontakt">Kontakt</button>
+                            <button type="button" class="btn-secondary customer-confirmation-preview-type" data-form-type="Kapellforfragan">Kapell</button>
+                            <button type="button" class="btn-secondary customer-confirmation-preview-type" data-form-type="Fenderforfragan">Fender</button>
+                            <button type="button" class="btn-secondary customer-confirmation-preview-type" data-form-type="Dynsatsforfragan">Dynsats</button>
+                        </div>
+                        <iframe id="customer-confirmation-preview-frame" title="F&#246;rhandsvisning kundmejl" style="width:100%; min-height:720px; border:1px solid var(--border-strong); border-radius:12px; background:#f2ede3;"></iframe>
+                    </div>
+                </div>
             </div>
 
             <!-- BOATS -->
@@ -1955,6 +2044,24 @@
     </div>
 </div>
 
+<div id="status-config-modal" class="item-modal">
+    <div class="item-modal-content">
+        <div class="modal-header">
+            <h2>Statusmappar</h2>
+            <button type="button" class="modal-close" id="status-config-close-btn" aria-label="Stäng">×</button>
+        </div>
+        <p class="status-config-note">Inskick ligger alltid först. De andra mapparna kan döpas om, flyttas och utökas.</p>
+        <div id="status-config-list" class="status-config-list"></div>
+        <div class="status-config-footer">
+            <button type="button" class="btn-ghost" id="status-config-add-btn">+ Lägg till mapp</button>
+            <div class="item-modal-actions" style="margin-top:0;">
+                <button type="button" class="btn-secondary" id="status-config-cancel-btn">Avbryt</button>
+                <button type="button" class="btn" id="status-config-save-btn">Spara</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="attachment-lightbox" class="attachment-lightbox" aria-hidden="true">
     <div class="attachment-lightbox-dialog">
         <button type="button" class="attachment-lightbox-close" id="attachment-lightbox-close" aria-label="Stäng bild">×</button>
@@ -1968,7 +2075,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260421a" defer></script>
+<script src="admin.js?v=20260422d" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle
@@ -2018,19 +2125,9 @@
 
     // Stats counters fed from folder DOM
     function updateStats() {
-        const map = [
-            ['folder-nya-inskick', 'stat-new'],
-            ['folder-vantar-pa-svar', 'stat-waiting'],
-            ['folder-i-produktion', 'stat-production'],
-            ['folder-redo-for-leverans', 'stat-ready'],
-        ];
-        map.forEach(([src, dst]) => {
-            const srcEl = document.getElementById(src);
-            const dstEl = document.getElementById(dst);
-            if (srcEl && dstEl) {
-                dstEl.textContent = srcEl.querySelectorAll('.folder-item:not(.folder-item-empty)').length;
-            }
-        });
+        if (typeof window.updateStatusSummaryCounts === 'function') {
+            window.updateStatusSummaryCounts();
+        }
     }
     setInterval(updateStats, 1500);
     window.addEventListener('load', () => setTimeout(updateStats, 500));

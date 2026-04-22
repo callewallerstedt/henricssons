@@ -1,0 +1,29 @@
+{
+  "statuses": [
+    {
+      "id": "nya-inskick",
+      "name": "Nya inskick",
+      "fixed": true
+    },
+    {
+      "id": "vantar-pa-svar",
+      "name": "Camilla",
+      "fixed": false
+    },
+    {
+      "id": "i-produktion",
+      "name": "Niclas",
+      "fixed": false
+    },
+    {
+      "id": "redo-for-leverans",
+      "name": "Redo för leverans",
+      "fixed": false
+    },
+    {
+      "id": "test",
+      "name": "Test",
+      "fixed": false
+    }
+  ]
+}

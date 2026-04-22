@@ -64,6 +64,7 @@ FORM_SUBMISSIONS_FILE = BASE_DIR / "form_submissions.json"
 FORM_PROMPTS_FILE = BASE_DIR / "form_prompts.json"
 PAGE_TEXTS_FILE = BASE_DIR / "page_texts.json"
 AI_SETTINGS_FILE = BASE_DIR / "ai_settings.json"
+STATUS_CONFIG_FILE = BASE_DIR / "status_config.json"
 LOGO_FILE = BASE_DIR / "logo.png"
 IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
@@ -191,6 +192,15 @@ ATTACHMENT_MIME_BY_EXT = {
     ".pdf": "application/pdf",
 }
 STATUS_FLOW = ["nya-inskick", "vantar-pa-svar", "i-produktion", "redo-for-leverans"]
+DEFAULT_STATUS_CONFIG: List[Dict[str, Any]] = [
+    {"id": "nya-inskick", "name": "Nya inskick", "fixed": True},
+    {"id": "vantar-pa-svar", "name": "Väntar på svar", "fixed": False},
+    {"id": "i-produktion", "name": "I produktion", "fixed": False},
+    {"id": "redo-for-leverans", "name": "Redo för leverans", "fixed": False},
+]
+MAX_WORKFLOW_STATUSES = 12
+MAX_STATUS_NAME_CHARS = 40
+RESERVED_STATUS_IDS = {"todo"}
 MOJIBAKE_MARKERS = ("Ã", "Â", "â")
 ADMIN_SESSION_COOKIE = "henricssons_admin"
 ADMIN_SESSION_MAX_AGE = 60 * 60 * 12
@@ -1531,6 +1541,98 @@ def get_site_content(key: str) -> Optional[Any]:
         db.close()
 
 
+def normalize_status_name(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip())[:MAX_STATUS_NAME_CHARS]
+
+
+def slugify_status_id(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = text.encode("ascii", "ignore").decode("ascii").lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    return text[:48]
+
+
+def is_valid_custom_status_id(value: str) -> bool:
+    return bool(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,47}", str(value or "")))
+
+
+def build_unique_status_id(seed: str, seen: set[str]) -> str:
+    base = slugify_status_id(seed) or "status"
+    if base in RESERVED_STATUS_IDS or base == "nya-inskick":
+        base = f"{base}-kolumn"
+    candidate = base
+    suffix = 2
+    while candidate in seen or candidate in RESERVED_STATUS_IDS or candidate == "nya-inskick":
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    return candidate[:48]
+
+
+def normalize_status_config(data: Any) -> List[Dict[str, Any]]:
+    default_statuses = [dict(item) for item in DEFAULT_STATUS_CONFIG]
+    raw_statuses: Any = None
+    if isinstance(data, dict):
+        raw_statuses = data.get("statuses")
+    elif isinstance(data, list):
+        raw_statuses = data
+
+    if not isinstance(raw_statuses, list) or not raw_statuses:
+        return default_statuses
+
+    normalized: List[Dict[str, Any]] = [dict(default_statuses[0])]
+    seen = {"nya-inskick"}
+
+    for raw in raw_statuses:
+        if len(normalized) >= MAX_WORKFLOW_STATUSES:
+            break
+        if isinstance(raw, str):
+            raw = {"name": raw}
+        if not isinstance(raw, dict):
+            continue
+        raw_id = str(raw.get("id", "") or "").strip().lower()
+        if raw_id == "nya-inskick":
+            continue
+        name = normalize_status_name(raw.get("name", ""))
+        if not name and raw_id:
+            fallback = next((item for item in default_statuses if item["id"] == raw_id), None)
+            if fallback:
+                name = fallback["name"]
+        if not name:
+            continue
+        status_id = raw_id if is_valid_custom_status_id(raw_id) and raw_id not in RESERVED_STATUS_IDS else ""
+        if not status_id or status_id in seen:
+            status_id = build_unique_status_id(name, seen)
+        normalized.append({"id": status_id, "name": name, "fixed": False})
+        seen.add(status_id)
+
+    if len(normalized) == 1:
+        keeps_fixed_only = any(
+            isinstance(raw, dict) and str(raw.get("id", "")).strip().lower() == "nya-inskick"
+            for raw in raw_statuses
+        )
+        return normalized if keeps_fixed_only else default_statuses
+    return normalized
+
+
+def load_status_config() -> List[Dict[str, Any]]:
+    data = get_site_content("status_config")
+    if data is None:
+        data = read_json_file(STATUS_CONFIG_FILE, {})
+    return normalize_status_config(data)
+
+
+def save_status_config(data: Any) -> List[Dict[str, Any]]:
+    normalized = normalize_status_config(data)
+    payload = {"statuses": normalized}
+    write_json_file(STATUS_CONFIG_FILE, payload)
+    set_site_content("status_config", payload)
+    return normalized
+
+
+def get_valid_submission_status_ids() -> set[str]:
+    return {str(item.get("id", "")).strip() for item in load_status_config() if str(item.get("id", "")).strip()}
+
+
 DEFAULT_FORM_PROMPTS: Dict[str, str] = {
     "Kapellforfragan": (
         "Du svarar på inkomna kapellförfrågningar för Henricssons Båtkapell. "
@@ -1722,6 +1824,59 @@ def save_mailgun_settings(data: Dict[str, Any]) -> Dict[str, Any]:
     }
     set_site_content("mailgun_settings", payload)
     return payload
+
+
+DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE = (
+    "Tack fÃ¶r att du kontaktade oss pÃ¥ Henricssons BÃ¥tkapell.\n\n"
+    "Vi har tagit emot ditt Ã¤rende och Ã¥terkommer sÃ¥ snart vi kan med information eller eventuella frÃ¥gor.\n\n"
+    "{sammanfattning}\n"
+    "Om du vill komplettera ditt Ã¤rende under tiden kan du kontakta oss med uppgifterna nedan.\n\n"
+    "{kontaktinfo}\n\n"
+    "VÃ¤nliga hÃ¤lsningar\n"
+    "Henricssons BÃ¥tkapell"
+)
+CUSTOMER_CONFIRMATION_TOKENS = {"{sammanfattning}", "{kontaktinfo}"}
+CUSTOMER_CONFIRMATION_TOKEN_PATTERN = re.compile(r"(\{sammanfattning\}|\{kontaktinfo\})", flags=re.IGNORECASE)
+
+# Override the literal strings above with ASCII-safe unicode escapes to avoid mojibake.
+DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE = (
+    "Hej {namn},\n\n"
+    "Tack f\u00f6r att du kontaktade oss p\u00e5 Henricssons B\u00e5tkapell.\n\n"
+    "Vi har tagit emot ditt \u00e4rende och \u00e5terkommer s\u00e5 snart vi kan med information eller eventuella fr\u00e5gor.\n\n"
+    "{sammanfattning}\n"
+    "Om du vill komplettera ditt \u00e4rende under tiden kan du kontakta oss med uppgifterna nedan.\n\n"
+    "{kontaktinfo}\n\n"
+    "V\u00e4nliga h\u00e4lsningar\n"
+    "Henricssons B\u00e5tkapell"
+)
+CUSTOMER_CONFIRMATION_TOKENS = {"{namn}", "{sammanfattning}", "{kontaktinfo}"}
+CUSTOMER_CONFIRMATION_TOKEN_PATTERN = re.compile(r"(\{namn\}|\{sammanfattning\}|\{kontaktinfo\})", flags=re.IGNORECASE)
+
+
+def normalize_customer_confirmation_settings(data: Any) -> Dict[str, str]:
+    template = DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE
+    if isinstance(data, dict):
+        candidate = str(data.get("body_template", "") or "").strip()
+        if candidate:
+            template = candidate
+    return {
+        "body_template": template,
+        "default_body_template": DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE,
+    }
+
+
+def load_customer_confirmation_settings() -> Dict[str, str]:
+    data = get_site_content("customer_confirmation_settings")
+    return normalize_customer_confirmation_settings(data)
+
+
+def save_customer_confirmation_settings(data: Dict[str, Any]) -> Dict[str, str]:
+    template = str(data.get("body_template", "") or "").strip()
+    if not template:
+        raise ValueError("Texten fÃ¶r kundmejlet kan inte vara tom.")
+    payload = {"body_template": template}
+    set_site_content("customer_confirmation_settings", payload)
+    return normalize_customer_confirmation_settings(payload)
 
 
 def safe_json_loads(text: str) -> Optional[Dict[str, Any]]:
@@ -2349,26 +2504,102 @@ def build_notification_html(
 </html>"""
 
 
-_FORM_TYPE_COPY: Dict[str, Dict[str, str]] = {
-    "Kontakt": {
-        "received": "Vi har tagit emot ditt meddelande och &#229;terkommer s&#229; snart vi kan.",
-        "followup": "Om du vill till&#228;gga n&#229;got eller har fler fr&#229;gor &#228;r du v&#228;lkommen att svara p&#229; detta e-postmeddelande eller kontakta oss direkt p&#229; uppgifterna nedan.",
-    },
-}
-_FORM_TYPE_COPY_DEFAULT: Dict[str, str] = {
-    "received": "Vi har tagit emot din f&#246;rfr&#229;gan och &#229;terkommer s&#229; snart vi kan med information eller eventuella f&#246;ljdfr&#229;gor.",
-    "followup": "Om du vill komplettera din f&#246;rfr&#229;gan eller har fr&#229;gor &#228;r du v&#228;lkommen att svara p&#229; detta e-postmeddelande eller kontakta oss direkt p&#229; uppgifterna nedan.",
-}
+def build_customer_contact_info_html() -> str:
+    return (
+        '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;border-top:2px solid #b28a4c;margin:24px 0 28px;">'
+        "<tr>"
+        '<td style="padding:20px 22px;">'
+        '<div style="font-size:10px;font-family:Arial,Helvetica,sans-serif;color:#b28a4c;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;margin-bottom:12px;">Kontakta oss</div>'
+        '<div style="font-size:14px;line-height:2;color:#0c1a2b;font-family:Arial,Helvetica,sans-serif;">'
+        '<a href="tel:+46314718200" style="color:#0c1a2b;text-decoration:none;">+46 (0)31 47 18 20</a><br>'
+        '<a href="mailto:info@henricssonsbatkapell.se" style="color:#b28a4c;text-decoration:none;">info@henricssonsbatkapell.se</a><br>'
+        "Energigatan 17E, 434 37 Kungsbacka"
+        "</div>"
+        "</td>"
+        "</tr>"
+        "</table>"
+    )
 
 
-def build_customer_confirmation_html(
-    form_type: str,
-    customer_name: str,
-    summary_html: str = "",
+def build_customer_contact_info_text() -> str:
+    return (
+        "Kontaktinfo:\n"
+        "Telefon: +46 (0)31 47 18 20\n"
+        "E-post: info@henricssonsbatkapell.se\n"
+        "Adress: Energigatan 17E, 434 37 Kungsbacka"
+    )
+
+
+def render_customer_confirmation_text_segment(text: str) -> str:
+    return str(text or "").replace("\r\n", "\n")
+
+
+def render_customer_confirmation_html_segment(text: str) -> str:
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in re.split(r"\n\s*\n", str(text or "").replace("\r\n", "\n"))
+        if paragraph.strip()
+    ]
+    return "".join(
+        f'<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">'
+        f'{html.escape(paragraph).replace(chr(10), "<br>")}</p>'
+        for paragraph in paragraphs
+    )
+
+
+def render_customer_confirmation_template(
+    template: str,
+    replacements: Dict[str, str],
+    renderer,
 ) -> str:
-    copy = _FORM_TYPE_COPY.get(form_type, _FORM_TYPE_COPY_DEFAULT)
+    rendered_parts: List[str] = []
+    for part in CUSTOMER_CONFIRMATION_TOKEN_PATTERN.split(str(template or "").replace("\r\n", "\n")):
+        if not part:
+            continue
+        token = part.strip().lower()
+        if token in CUSTOMER_CONFIRMATION_TOKENS:
+            replacement = replacements.get(token, "").strip()
+            if replacement:
+                rendered_parts.append(replacement)
+            continue
+        rendered_segment = renderer(part)
+        if rendered_segment:
+            rendered_parts.append(rendered_segment)
+    return "".join(rendered_parts).strip()
+
+
+def build_customer_confirmation_text_body(customer_name: str, body_content_text: str) -> str:
+    greeting = f"Hej {customer_name.strip()}," if str(customer_name or "").strip() else "Hej,"
+    body_parts = [greeting, str(body_content_text or "").strip()]
+    return re.sub(r"\n{3,}", "\n\n", "\n\n".join(part for part in body_parts if part).strip())
+
+
+def build_customer_confirmation_html(*args, **kwargs) -> str:
+    logo_src = str(kwargs.get("logo_src", "cid:henricssons-logo") or "cid:henricssons-logo")
+    if "summary_html" in kwargs:
+        legacy_form_type = str(args[0] if len(args) > 0 else kwargs.get("form_type", "") or "")
+        customer_name = str(args[1] if len(args) > 1 else kwargs.get("customer_name", "") or "")
+        summary_html = str(kwargs.get("summary_html", "") or "")
+        form_label = FORM_TYPE_LABELS_SV.get(normalize_form_type(legacy_form_type), display_form_type(legacy_form_type))
+        followup_text = (
+            "Vi har tagit emot ditt meddelande och Ã¥terkommer sÃ¥ snart vi kan."
+            if normalize_form_type(legacy_form_type) == "Kontakt"
+            else f"Vi har tagit emot din {form_label.lower()} och Ã¥terkommer sÃ¥ snart vi kan med information eller eventuella frÃ¥gor."
+        )
+        body_content_html = (
+            '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Tack f&#246;r att du kontaktade oss p&#229; Henricssons B&#229;tkapell.</p>'
+            f'<p style="margin:0 0 20px;font-size:15px;line-height:1.75;color:#1b2e47;">{html.escape(followup_text)}</p>'
+            f"{summary_html}"
+            '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Om du vill komplettera ditt Ã¤rende under tiden kan du kontakta oss med uppgifterna nedan.</p>'
+            f"{build_customer_contact_info_html()}"
+            '<p style="margin:0;font-size:15px;line-height:1.7;color:#0c1a2b;">V&#228;nliga h&#228;lsningar<br><strong>Henricssons B&#229;tkapell</strong></p>'
+        )
+    else:
+        customer_name = str(args[0] if len(args) > 0 else kwargs.get("customer_name", "") or "")
+        body_content_html = str(args[1] if len(args) > 1 else kwargs.get("body_content_html", "") or "")
     safe_name = html.escape((customer_name or "").strip())
     greeting = f"Hej {safe_name}," if safe_name else "Hej,"
+    safe_logo_src = html.escape(logo_src, quote=True)
     html_doc = f"""<!DOCTYPE html>
 <html lang="sv">
 <head>
@@ -2380,44 +2611,19 @@ def build_customer_confirmation_html(
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;padding:40px 16px 48px;">
 <tr><td align="center">
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #d9cfbe;">
-
-  <!-- Header -->
   <tr>
     <td style="background:#0c1a2b;padding:32px 40px 28px;text-align:center;">
-      <img src="cid:henricssons-logo" alt="Henricssons B&#229;tkapell" width="156" style="display:block;width:156px;height:auto;border:0;margin:0 auto 20px;">
+      <img src="{safe_logo_src}" alt="Henricssons B&#229;tkapell" width="156" style="display:block;width:156px;height:auto;border:0;margin:0 auto 20px;">
       <div style="width:40px;height:1px;background:#b28a4c;margin:0 auto 16px;"></div>
       <div style="color:#f5f0e6;font-size:11px;font-family:Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;">Tack f&#246;r din f&#246;rfr&#229;gan</div>
     </td>
   </tr>
-
-  <!-- Body -->
   <tr>
     <td style="padding:36px 40px 28px;background:#ffffff;">
       <p style="margin:0 0 16px;font-size:16px;line-height:1.75;color:#0c1a2b;">{greeting}</p>
-      <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Tack f&#246;r att du kontaktade oss p&#229; Henricssons B&#229;tkapell.</p>
-      <p style="margin:0 0 20px;font-size:15px;line-height:1.75;color:#1b2e47;">{copy["received"]}</p>
-      {summary_html}
-      <p style="margin:0 0 28px;font-size:15px;line-height:1.75;color:#1b2e47;">{copy["followup"]}</p>
-
-      <!-- Contact box -->
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;border-top:2px solid #b28a4c;margin-bottom:28px;">
-        <tr>
-          <td style="padding:20px 22px;">
-            <div style="font-size:10px;font-family:Arial,Helvetica,sans-serif;color:#b28a4c;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;margin-bottom:12px;">Kontakta oss</div>
-            <div style="font-size:14px;line-height:2;color:#0c1a2b;font-family:Arial,Helvetica,sans-serif;">
-              <a href="tel:+46314718200" style="color:#0c1a2b;text-decoration:none;">+46 (0)31 47 18 20</a><br>
-              <a href="mailto:info@henricssonsbatkapell.se" style="color:#b28a4c;text-decoration:none;">info@henricssonsbatkapell.se</a><br>
-              Energigatan 17E, 434 37 Kungsbacka
-            </div>
-          </td>
-        </tr>
-      </table>
-
-      <p style="margin:0;font-size:15px;line-height:1.7;color:#0c1a2b;">V&#228;nliga h&#228;lsningar<br><strong>Henricssons B&#229;tkapell</strong></p>
+      {body_content_html}
     </td>
   </tr>
-
-  <!-- Footer -->
   <tr>
     <td style="background:#0c1a2b;padding:16px 40px;">
       <p style="margin:0;color:#6b7788;font-size:11px;font-family:Arial,Helvetica,sans-serif;text-align:center;line-height:1.6;letter-spacing:0.04em;">
@@ -2425,7 +2631,6 @@ def build_customer_confirmation_html(
       </p>
     </td>
   </tr>
-
 </table>
 </td></tr>
 </table>
@@ -2451,8 +2656,10 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
         "model",
         "boat_year",
         "home_port",
+        "old_canopy",
         "quantity",
         "size",
+        "address",
         "subject",
         "message",
     ]
@@ -2483,6 +2690,296 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
         f"- {label}: {value}" for label, value in rows
     ) + "\n\n"
     return summary_html, summary_text
+
+
+def build_customer_confirmation_email_content(
+    form_type: str,
+    customer_name: str,
+    fields: Dict[str, Any],
+    body_template: str,
+    logo_src: str = "cid:henricssons-logo",
+) -> Dict[str, str]:
+    normalized_form_type = normalize_form_type(form_type)
+    form_label = FORM_TYPE_LABELS_SV.get(normalized_form_type, display_form_type(form_type))
+    summary_html, summary_text = build_customer_summary(fields)
+    replacements_text = {
+        "{sammanfattning}": summary_text.strip(),
+        "{kontaktinfo}": build_customer_contact_info_text(),
+    }
+    replacements_html = {
+        "{sammanfattning}": summary_html.strip(),
+        "{kontaktinfo}": build_customer_contact_info_html(),
+    }
+    body_content_text = render_customer_confirmation_template(
+        body_template,
+        replacements_text,
+        render_customer_confirmation_text_segment,
+    )
+    body_content_html = render_customer_confirmation_template(
+        body_template,
+        replacements_html,
+        render_customer_confirmation_html_segment,
+    )
+    return {
+        "form_type": normalized_form_type,
+        "form_label": form_label,
+        "subject": f"Tack fÃ¶r att du kontaktade oss - {form_label}",
+        "text_body": build_customer_confirmation_text_body(customer_name, body_content_text),
+        "html_body": build_customer_confirmation_html(customer_name, body_content_html, logo_src=logo_src),
+    }
+
+
+def build_customer_confirmation_preview_submission(form_type: str) -> Dict[str, Any]:
+    normalized_form_type = normalize_form_type(form_type)
+    samples: Dict[str, Dict[str, Any]] = {
+        "Kapellforfragan": {
+            "form_type": "KapellfÃ¶rfrÃ¥gan",
+            "fields": {
+                "name": "Anna Andersson",
+                "email": "anna@example.com",
+                "phone": "070-123 45 67",
+                "manufacturer": "Nimbus",
+                "model": "280 Coupe",
+                "boat_year": "2006",
+                "home_port": "Kungsbacka",
+                "old_canopy": "Original",
+                "message": "Vi behÃ¶ver ett nytt hamnkapell innan sommaren.",
+            },
+        },
+        "Fenderforfragan": {
+            "form_type": "FenderfÃ¶rfrÃ¥gan",
+            "fields": {
+                "name": "Erik Berg",
+                "email": "erik@example.com",
+                "phone": "073-987 65 43",
+                "address": "Hamngatan 5, 114 56 Stockholm",
+                "quantity": "6",
+                "size": "F-3",
+            },
+        },
+        "Dynsatsforfragan": {
+            "form_type": "DynsatsfÃ¶rfrÃ¥gan",
+            "fields": {
+                "name": "Maria Svensson",
+                "email": "maria@example.com",
+                "phone": "076-555 44 33",
+                "manufacturer": "Yamarin",
+                "model": "63 DC",
+                "quantity": "1 sats",
+                "message": "Vi vill gÃ¤rna ha en originalnÃ¤ra dynsats i ljusgrÃ¥tt tyg.",
+            },
+        },
+        "Kontakt": {
+            "form_type": "Kontakt",
+            "fields": {
+                "name": "Johan Nilsson",
+                "email": "johan@example.com",
+                "phone": "031-47 18 20",
+                "subject": "BesÃ¶k i verkstaden",
+                "message": "Jag vill boka en tid fÃ¶r att visa upp bÃ¥ten och diskutera upplÃ¤gg.",
+            },
+        },
+    }
+    return samples.get(normalized_form_type, samples["Kontakt"])
+
+
+def normalize_customer_confirmation_template_text(template: str, customer_name: str) -> str:
+    text = str(template or "").replace("\r\n", "\n")
+    name_value = str(customer_name or "").strip()
+    text = re.sub(r"\{namn\}", name_value, text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+,", ",", text)
+    return text
+
+
+def build_customer_confirmation_render_parts(
+    template: str,
+    customer_name: str,
+    summary_text: str,
+    summary_html: str,
+    contact_text: str,
+    contact_html: str,
+) -> Tuple[str, str]:
+    normalized = normalize_customer_confirmation_template_text(template, customer_name)
+    block_markers = {
+        "{sammanfattning}": "__HB_SUMMARY_BLOCK__",
+        "{kontaktinfo}": "__HB_CONTACT_BLOCK__",
+    }
+    for token, marker in block_markers.items():
+        normalized = re.sub(re.escape(token), f"\n\n{marker}\n\n", normalized, flags=re.IGNORECASE)
+
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in re.split(r"\n\s*\n", normalized)
+        if paragraph.strip()
+    ]
+    text_parts: List[str] = []
+    html_parts: List[str] = []
+    for paragraph in paragraphs:
+        if paragraph == block_markers["{sammanfattning}"]:
+            if summary_text.strip():
+                text_parts.append(summary_text.strip())
+            if summary_html.strip():
+                html_parts.append(summary_html.strip())
+            continue
+        if paragraph == block_markers["{kontaktinfo}"]:
+            if contact_text.strip():
+                text_parts.append(contact_text.strip())
+            if contact_html.strip():
+                html_parts.append(contact_html.strip())
+            continue
+        text_parts.append(paragraph)
+        html_parts.append(
+            f'<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">'
+            f'{html.escape(paragraph).replace(chr(10), "<br>")}</p>'
+        )
+    return "\n\n".join(text_parts).strip(), "".join(html_parts).strip()
+
+
+def build_customer_confirmation_text_body(customer_name: str, body_content_text: str) -> str:
+    return re.sub(r"\n{3,}", "\n\n", str(body_content_text or "").strip())
+
+
+def build_customer_confirmation_html(*args, **kwargs) -> str:
+    logo_src = str(kwargs.get("logo_src", "cid:henricssons-logo") or "cid:henricssons-logo")
+    if "summary_html" in kwargs:
+        legacy_form_type = str(args[0] if len(args) > 0 else kwargs.get("form_type", "") or "")
+        customer_name = str(args[1] if len(args) > 1 else kwargs.get("customer_name", "") or "")
+        summary_html = str(kwargs.get("summary_html", "") or "")
+        followup_text = (
+            "Vi har tagit emot ditt meddelande och \u00e5terkommer s\u00e5 snart vi kan."
+            if normalize_form_type(legacy_form_type) == "Kontakt"
+            else "Vi har tagit emot ditt \u00e4rende och \u00e5terkommer s\u00e5 snart vi kan med information eller eventuella fr\u00e5gor."
+        )
+        body_content_html = (
+            f'<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Hej {html.escape(customer_name or "")},</p>'
+            '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Tack f&#246;r att du kontaktade oss p&#229; Henricssons B&#229;tkapell.</p>'
+            f'<p style="margin:0 0 20px;font-size:15px;line-height:1.75;color:#1b2e47;">{html.escape(followup_text)}</p>'
+            f"{summary_html}"
+            '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Om du vill komplettera ditt \u00e4rende under tiden kan du kontakta oss med uppgifterna nedan.</p>'
+            f"{build_customer_contact_info_html()}"
+            '<p style="margin:0;font-size:15px;line-height:1.7;color:#0c1a2b;">V&#228;nliga h&#228;lsningar<br><strong>Henricssons B&#229;tkapell</strong></p>'
+        )
+    else:
+        customer_name = str(args[0] if len(args) > 0 else kwargs.get("customer_name", "") or "")
+        body_content_html = str(args[1] if len(args) > 1 else kwargs.get("body_content_html", "") or "")
+    safe_logo_src = html.escape(logo_src, quote=True)
+    html_doc = f"""<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+</head>
+<body style="margin:0;padding:0;background:#f5f0e6;font-family:Georgia,'Times New Roman',serif;color:#0c1a2b;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;padding:40px 16px 48px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #d9cfbe;">
+  <tr>
+    <td style="background:#0c1a2b;padding:32px 40px 28px;text-align:center;">
+      <img src="{safe_logo_src}" alt="Henricssons B&#229;tkapell" width="156" style="display:block;width:156px;height:auto;border:0;margin:0 auto 20px;">
+      <div style="width:40px;height:1px;background:#b28a4c;margin:0 auto 16px;"></div>
+      <div style="color:#f5f0e6;font-size:11px;font-family:Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;">Tack f&#246;r din f&#246;rfr&#229;gan</div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:36px 40px 28px;background:#ffffff;">
+      {body_content_html}
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#0c1a2b;padding:16px 40px;">
+      <p style="margin:0;color:#6b7788;font-size:11px;font-family:Arial,Helvetica,sans-serif;text-align:center;line-height:1.6;letter-spacing:0.04em;">
+        Du kan svara p&#229; detta e-postmeddelande s&#229; h&#246;r du fr&#229;n oss.
+      </p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+    return html_doc.encode("ascii", "xmlcharrefreplace").decode("ascii")
+
+
+def build_customer_confirmation_email_content(
+    form_type: str,
+    customer_name: str,
+    fields: Dict[str, Any],
+    body_template: str,
+    logo_src: str = "cid:henricssons-logo",
+) -> Dict[str, str]:
+    normalized_form_type = normalize_form_type(form_type)
+    form_label = FORM_TYPE_LABELS_SV.get(normalized_form_type, display_form_type(form_type))
+    summary_html, summary_text = build_customer_summary(fields)
+    body_text, body_html = build_customer_confirmation_render_parts(
+        body_template,
+        customer_name,
+        summary_text,
+        summary_html,
+        build_customer_contact_info_text(),
+        build_customer_contact_info_html(),
+    )
+    return {
+        "form_type": normalized_form_type,
+        "form_label": form_label,
+        "subject": f"Tack f\u00f6r att du kontaktade oss - {form_label}",
+        "text_body": build_customer_confirmation_text_body(customer_name, body_text),
+        "html_body": build_customer_confirmation_html(customer_name, body_html, logo_src=logo_src),
+    }
+
+
+def build_customer_confirmation_preview_submission(form_type: str) -> Dict[str, Any]:
+    normalized_form_type = normalize_form_type(form_type)
+    samples: Dict[str, Dict[str, Any]] = {
+        "Kapellforfragan": {
+            "form_type": "Kapellf\u00f6rfr\u00e5gan",
+            "fields": {
+                "name": "Anna Andersson",
+                "email": "anna@example.com",
+                "phone": "070-123 45 67",
+                "manufacturer": "Nimbus",
+                "model": "280 Coupe",
+                "boat_year": "2006",
+                "home_port": "Kungsbacka",
+                "old_canopy": "Original",
+                "message": "Vi beh\u00f6ver ett nytt hamnkapell innan sommaren.",
+            },
+        },
+        "Fenderforfragan": {
+            "form_type": "Fenderf\u00f6rfr\u00e5gan",
+            "fields": {
+                "name": "Erik Berg",
+                "email": "erik@example.com",
+                "phone": "073-987 65 43",
+                "address": "Hamngatan 5, 114 56 Stockholm",
+                "quantity": "6",
+                "size": "F-3",
+            },
+        },
+        "Dynsatsforfragan": {
+            "form_type": "Dynsatsf\u00f6rfr\u00e5gan",
+            "fields": {
+                "name": "Maria Svensson",
+                "email": "maria@example.com",
+                "phone": "076-555 44 33",
+                "manufacturer": "Yamarin",
+                "model": "63 DC",
+                "quantity": "1 sats",
+                "message": "Vi vill g\u00e4rna ha en originaln\u00e4ra dynsats i ljusgr\u00e5tt tyg.",
+            },
+        },
+        "Kontakt": {
+            "form_type": "Kontakt",
+            "fields": {
+                "name": "Johan Nilsson",
+                "email": "johan@example.com",
+                "phone": "031-47 18 20",
+                "subject": "Bes\u00f6k i verkstaden",
+                "message": "Jag vill boka en tid f\u00f6r att visa upp b\u00e5ten och diskutera uppl\u00e4gg.",
+            },
+        },
+    }
+    return samples.get(normalized_form_type, samples["Kontakt"])
 
 
 def send_mailgun_email(
@@ -2759,6 +3256,16 @@ def send_mailgun_customer_confirmation(submission: Dict[str, Any]) -> None:
         f"Henricssons Båtkapell\n"
     )
     html_body = build_customer_confirmation_html(form_type, customer_name, summary_html=summary_html)
+    customer_confirmation_settings = load_customer_confirmation_settings()
+    rendered_email = build_customer_confirmation_email_content(
+        form_type,
+        customer_name,
+        fields,
+        customer_confirmation_settings.get("body_template", DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE),
+    )
+    subject = rendered_email["subject"]
+    text_body = rendered_email["text_body"]
+    html_body = rendered_email["html_body"]
     inline_files: List[Tuple[str, bytes, str]] = []
     try:
         inline_files.append(("henricssons-logo", LOGO_FILE.read_bytes(), "image/png"))
@@ -2888,6 +3395,7 @@ def label_submission_field_for_admin(key: str) -> str:
 
 def build_admin_chat_context() -> Dict[str, Any]:
     submissions = get_all_submissions()
+    status_config = load_status_config()
     normalized_submissions: List[Dict[str, Any]] = []
 
     for row in submissions:
@@ -3564,6 +4072,18 @@ def get_form_submissions():
     return jsonify(get_all_submissions())
 
 
+@app.route("/api/status_config", methods=["GET", "POST"])
+@admin_required
+def status_config_route():
+    if request.method == "GET":
+        return jsonify(statuses=load_status_config())
+
+    payload = request.get_json()
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    return jsonify(statuses=save_status_config(payload))
+
+
 @app.route("/api/update_submission_status", methods=["POST"])
 @admin_required
 def update_submission_status_route():
@@ -3574,8 +4094,10 @@ def update_submission_status_route():
     if not submission_id:
         return jsonify(error="Missing id"), 400
     new_status = payload.get("status")
-    if new_status is not None and new_status not in STATUS_FLOW:
-        return jsonify(error="Invalid status"), 400
+    if new_status is not None:
+        new_status = str(new_status).strip()
+        if new_status not in get_valid_submission_status_ids():
+            return jsonify(error="Invalid status"), 400
     read_value = payload.get("read")
     if read_value is not None:
         read_value = bool(read_value)
@@ -3734,6 +4256,58 @@ def mailgun_settings_route():
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
     return jsonify(success=True, **saved)
+
+
+@app.route("/api/customer_confirmation_settings", methods=["GET", "POST"])
+@admin_required
+def customer_confirmation_settings_route():
+    if request.method == "GET":
+        return jsonify(load_customer_confirmation_settings())
+
+    data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify(error="Invalid payload"), 400
+    try:
+        saved = save_customer_confirmation_settings(data)
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+    return jsonify(success=True, **saved)
+
+
+@app.route("/api/customer_confirmation_preview", methods=["POST"])
+@admin_required
+def customer_confirmation_preview_route():
+    data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify(error="Invalid payload"), 400
+
+    requested_form_type = str(data.get("form_type", "Kontakt") or "Kontakt")
+    sample_submission = build_customer_confirmation_preview_submission(requested_form_type)
+    fields = sample_submission.get("fields", {})
+    customer_name = get_field_value(fields, "name", "namn")
+    if "body_template" in data:
+        template = str(data.get("body_template", "") or "").strip()
+    else:
+        template = ""
+    if not template:
+        template = load_customer_confirmation_settings().get("body_template", DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE)
+
+    logo_src = request.url_root.rstrip("/") + "/logo.png"
+    preview_email = build_customer_confirmation_email_content(
+        str(sample_submission.get("form_type", requested_form_type)),
+        customer_name,
+        fields if isinstance(fields, dict) else {},
+        template,
+        logo_src=logo_src,
+    )
+    return jsonify(
+        success=True,
+        form_type=preview_email["form_type"],
+        form_label=preview_email["form_label"],
+        subject=preview_email["subject"],
+        text_body=preview_email["text_body"],
+        html_body=preview_email["html_body"],
+    )
 
 
 @app.route("/api/upload_image", methods=["POST"])
