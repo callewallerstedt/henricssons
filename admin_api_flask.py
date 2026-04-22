@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 import hashlib
 import html
@@ -11,11 +12,12 @@ import os
 import re
 import time
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode, urlparse
+from zoneinfo import ZoneInfo
 
 import requests
 from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_from_directory, has_request_context
@@ -82,6 +84,7 @@ PUBLIC_ATTACHMENT_BASE_URL = os.getenv(
     "PUBLIC_ATTACHMENT_BASE_URL",
     os.getenv("PUBLIC_API_BASE_URL", PUBLIC_BASE_URL),
 ).rstrip("/")
+STATUS_ACTION_BASE_URL = os.getenv("STATUS_ACTION_BASE_URL", "").strip().rstrip("/")
 GENERIC_EXAMPLE_DESCRIPTION = (
     "Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning "
     "och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi "
@@ -204,6 +207,7 @@ RESERVED_STATUS_IDS = {"todo"}
 MOJIBAKE_MARKERS = ("Ã", "Â", "â")
 ADMIN_SESSION_COOKIE = "henricssons_admin"
 ADMIN_SESSION_MAX_AGE = 60 * 60 * 12
+EMAIL_STATUS_ACTION_MAX_AGE = 60 * 60 * 24 * 30
 FORM_RATE_LIMIT_WINDOW = 60
 FORM_RATE_LIMIT_MAX = 8
 FORM_RATE_LIMIT_LONG_WINDOW = 60 * 60
@@ -216,6 +220,14 @@ CHAT_WIDGET_DISABLED_JS = (
     "window.HenricssonsChatbotDisabled = true;\n"
     "document.documentElement.classList.add('henricssons-chatbot-disabled');\n"
 )
+try:
+    FORM_BACKGROUND_WORKERS = max(1, int(os.getenv("FORM_BACKGROUND_WORKERS", "2")))
+except ValueError:
+    FORM_BACKGROUND_WORKERS = 2
+FORM_BACKGROUND_EXECUTOR = ThreadPoolExecutor(
+    max_workers=FORM_BACKGROUND_WORKERS,
+    thread_name_prefix="form-bg",
+)
 
 
 def is_env_flag_enabled(name: str, default: str = "0") -> bool:
@@ -226,6 +238,19 @@ def is_env_flag_enabled(name: str, default: str = "0") -> bool:
         raw = os.getenv(name.lower())
     value = str(raw if raw is not None else default).strip().lower()
     return value in {"1", "true", "yes", "on"}
+
+
+def enqueue_form_background_task(label: str, func: Any, *args: Any, **kwargs: Any) -> None:
+    def runner() -> None:
+        try:
+            func(*args, **kwargs)
+        except Exception as exc:
+            print(f"{label} failed: {exc}")
+
+    try:
+        FORM_BACKGROUND_EXECUTOR.submit(runner)
+    except Exception as exc:
+        print(f"Could not queue {label}: {exc}")
 
 
 def is_public_chatbot_enabled() -> bool:
@@ -464,6 +489,28 @@ def verify_attachment_token(attachment_id: int, token: str) -> bool:
     return hmac.compare_digest(expected, token.strip())
 
 
+def get_status_action_secret() -> str:
+    return ADMIN_PANEL_PASSWORD or ADMIN_API_KEY or MAILGUN_API_KEY or "status-action-local-fallback"
+
+
+def sign_submission_status_action(submission_id: str, status_id: str, issued_at: int) -> str:
+    payload = f"submission-status:{submission_id}:{status_id}:{issued_at}"
+    return hmac.new(
+        get_status_action_secret().encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+
+
+def verify_submission_status_action(submission_id: str, status_id: str, issued_at: int, token: str) -> bool:
+    if not submission_id or not status_id or not token:
+        return False
+    if issued_at < 1 or int(time.time()) - issued_at > EMAIL_STATUS_ACTION_MAX_AGE:
+        return False
+    expected = sign_submission_status_action(submission_id, status_id, issued_at)
+    return hmac.compare_digest(expected, str(token or "").strip())
+
+
 def check_admin_access() -> bool:
     if verify_admin_session(request.cookies.get(ADMIN_SESSION_COOKIE, "")):
         return True
@@ -495,6 +542,26 @@ TRACKED_EXCLUDED_PATHS = {
     "/healthz",
     "/favicon.ico",
 }
+TRACKED_BOT_USER_AGENT_PARTS = (
+    "bot",
+    "crawl",
+    "spider",
+    "slurp",
+    "bingpreview",
+    "facebookexternalhit",
+    "whatsapp",
+    "telegrambot",
+    "preview",
+    "uptime",
+    "monitor",
+    "validator",
+    "lighthouse",
+    "pagespeed",
+    "headless",
+    "python-requests",
+    "curl/",
+    "wget/",
+)
 
 
 def normalize_tracked_path(path: str) -> str:
@@ -524,6 +591,15 @@ def extract_referrer_host(referrer: str) -> str:
 
 def should_track_analytics_response(response: Response) -> bool:
     if request.method != "GET":
+        return False
+    user_agent = str(request.headers.get("User-Agent", "") or "").strip().lower()
+    if not user_agent or any(part in user_agent for part in TRACKED_BOT_USER_AGENT_PARTS):
+        return False
+    purpose_headers = " ".join(
+        str(request.headers.get(name, "") or "").strip().lower()
+        for name in ("Purpose", "Sec-Purpose", "X-Purpose", "X-Moz")
+    )
+    if "prefetch" in purpose_headers or "preview" in purpose_headers:
         return False
     if response.status_code != 200:
         return False
@@ -1633,6 +1709,14 @@ def get_valid_submission_status_ids() -> set[str]:
     return {str(item.get("id", "")).strip() for item in load_status_config() if str(item.get("id", "")).strip()}
 
 
+def get_status_name(status_id: str) -> str:
+    clean_status_id = str(status_id or "").strip()
+    for status in load_status_config():
+        if str(status.get("id", "") or "").strip() == clean_status_id:
+            return str(status.get("name", "") or clean_status_id)
+    return clean_status_id
+
+
 DEFAULT_FORM_PROMPTS: Dict[str, str] = {
     "Kapellforfragan": (
         "Du svarar på inkomna kapellförfrågningar för Henricssons Båtkapell. "
@@ -2126,6 +2210,14 @@ def build_form_summary(form_type: str, fields: Dict[str, str]) -> str:
     return "\n".join(lines)
 
 
+def generate_submission_metadata_fallback(form_type: str, fields: Dict[str, Any]) -> Tuple[str, str]:
+    category = display_form_type(form_type)
+    title = get_field_value(fields, "name", "namn") or "Kund"
+    if len(title) > 70:
+        title = title[:67] + "..."
+    return category, title
+
+
 def finalize_email_reply(text: str) -> str:
     raw = str(text or "").strip()
     if raw.startswith("```"):
@@ -2154,44 +2246,6 @@ def finalize_email_reply(text: str) -> str:
         raw = "Vi har tagit emot din förfrågan och återkommer med nästa steg inom kort."
 
     return f"{EMAIL_REQUIRED_OPENING}\n\n{raw}\n\n{EMAIL_REQUIRED_CLOSING}"
-
-
-def generate_submission_metadata(
-    form_type: str,
-    fields: Dict[str, str],
-    form_summary: str,
-) -> Tuple[str, str]:
-    category = "Allman fraga"
-    title = f"{form_type}: {fields.get('1. Namn', fields.get('Namn', 'Kund'))}"
-    if len(title) > 70:
-        title = title[:67] + "..."
-
-    category_prompt = (
-        "Categorize this customer message into one of: "
-        "Kapellforfragan, Allman fraga, Support/Service, Besoksforfragan.\n\n"
-        f"{form_summary}\n\nOnly return the category name."
-    )
-    title_prompt = (
-        "Create a short subject line (max 60 chars) for this customer message.\n\n"
-        f"{form_summary}\n\nOnly return the title."
-    )
-    try:
-        category_resp = get_openai_response(category_prompt, "You classify incoming service inquiries.", 0.6, 120)
-        candidate = category_resp.strip()
-        if candidate:
-            category = candidate[:80]
-    except Exception:
-        pass
-
-    try:
-        title_resp = get_openai_response(title_prompt, "You create short and clear email subjects.", 0.6, 120)
-        candidate = title_resp.strip().replace('"', "").replace("'", "")
-        if candidate:
-            title = candidate[:60] + ("..." if len(candidate) > 60 else "")
-    except Exception:
-        pass
-
-    return category, title
 
 
 def generate_submission_ai_response(form_type: str, fields: Dict[str, Any], form_summary: str = "") -> str:
@@ -2364,6 +2418,74 @@ def build_submission_notification_preview(fields: Dict[str, Any]) -> Tuple[str, 
     return truncate_notification_preview(primary_line, limit=80), truncate_notification_preview(message, limit=140)
 
 
+def get_status_action_url(submission_id: str, status_id: str) -> str:
+    issued_at = int(time.time())
+    params = {
+        "id": submission_id,
+        "status": status_id,
+        "ts": str(issued_at),
+        "token": sign_submission_status_action(submission_id, status_id, issued_at),
+    }
+    if STATUS_ACTION_BASE_URL:
+        base_url = STATUS_ACTION_BASE_URL
+    elif has_request_context():
+        base_url = request.url_root.rstrip("/")
+    else:
+        base_url = PUBLIC_ATTACHMENT_BASE_URL
+    return f"{base_url}/api/email_status_action?{urlencode(params)}"
+
+
+def get_submission_status_action_items(submission_id: str, current_status: str = "nya-inskick") -> List[Dict[str, str]]:
+    clean_submission_id = str(submission_id or "").strip()
+    current = str(current_status or "").strip() or "nya-inskick"
+    if not clean_submission_id:
+        return []
+    items: List[Dict[str, str]] = []
+    for status in load_status_config():
+        status_id = str(status.get("id", "") or "").strip()
+        status_name = str(status.get("name", "") or "").strip()
+        if not status_id or not status_name or status_id == current:
+            continue
+        items.append({
+            "id": status_id,
+            "name": status_name,
+            "url": get_status_action_url(clean_submission_id, status_id),
+        })
+    return items
+
+
+def build_submission_status_actions_html(submission_id: str, current_status: str = "nya-inskick") -> str:
+    actions = get_submission_status_action_items(submission_id, current_status)
+    if not actions:
+        return ""
+
+    buttons = ""
+    for action in actions:
+        buttons += (
+            f"<a href='{html.escape(action['url'], quote=True)}' "
+            "style='display:inline-block;margin:0 8px 8px 0;padding:10px 14px;"
+            "border-radius:999px;background:#2563eb;color:#ffffff;text-decoration:none;"
+            "font-size:13px;font-weight:700;line-height:1.2;'>"
+            f"{html.escape(action['name'])}</a>"
+        )
+
+    return (
+        "<div style='margin-top:20px;padding:14px 14px 6px;background:#f7f9fc;border:1px solid #d9dee5;'>"
+        "<div style='font-size:12px;font-weight:700;color:#222831;margin-bottom:10px;'>Flytta till status</div>"
+        f"{buttons}"
+        "</div>"
+    )
+
+
+def build_submission_status_actions_text(submission_id: str, current_status: str = "nya-inskick") -> str:
+    actions = get_submission_status_action_items(submission_id, current_status)
+    if not actions:
+        return ""
+    lines = ["Flytta till status:"]
+    lines.extend(f"  - {action['name']}: {action['url']}" for action in actions)
+    return "\n\n" + "\n".join(lines) + "\n"
+
+
 def build_notification_html(
     form_type: str,
     fields: Dict[str, Any],
@@ -2373,6 +2495,7 @@ def build_notification_html(
     proposed_response: str = "",
     preview_title: str = "",
     preview_message: str = "",
+    status_actions_html: str = "",
 ) -> str:
     form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
 
@@ -2488,6 +2611,7 @@ def build_notification_html(
       </table>
       {attachments_block}
       {ai_reply_block}
+      {status_actions_html}
       {meta_block}
     </td>
   </tr>
@@ -3195,6 +3319,9 @@ def send_mailgun_submission_notification(
             f"  - {a['filename']} ({max(1, int(a['size']/1024))} KB) {a['public_url']}"
             for a in enriched
         )
+    current_status = str(submission.get("status", "nya-inskick") or "nya-inskick")
+    status_action_lines = build_submission_status_actions_text(submission_id, current_status)
+    status_actions_html = build_submission_status_actions_html(submission_id, current_status)
     ai_reply_lines = ""
     preview_lines = "\n".join(line for line in [preview_title, preview_message] if line)
     if preview_lines:
@@ -3204,6 +3331,7 @@ def send_mailgun_submission_notification(
         f"{field_lines}"
         f"{attachment_lines}\n\n"
         f"{ai_reply_lines}"
+        f"{status_action_lines}"
         f"Tid (UTC): {timestamp_iso}\n"
         f"ID: {submission_id}\n"
     )
@@ -3216,6 +3344,7 @@ def send_mailgun_submission_notification(
         proposed_response=proposed_response,
         preview_title=preview_title,
         preview_message=preview_message,
+        status_actions_html=status_actions_html,
     )
     ok, info = send_mailgun_email(
         recipients=recipients,
@@ -3291,7 +3420,7 @@ def process_form_submission(
     normalized_form_type = display_form_type(form_type)
     safe_fields = sanitize_fields(fields, submitted_via=submitted_via)
     form_summary = build_form_summary(normalized_form_type, safe_fields)
-    category, title = generate_submission_metadata(normalized_form_type, safe_fields, form_summary)
+    category, title = generate_submission_metadata_fallback(normalized_form_type, safe_fields)
     submission_id = f"form_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{os.urandom(4).hex()}"
     submission = {
         "id": submission_id,
@@ -3308,8 +3437,17 @@ def process_form_submission(
     }
     save_submission_record(submission)
     saved_attachments = save_submission_attachments(submission_id, upload_files or [])
-    send_mailgun_submission_notification(submission, attachments=saved_attachments)
-    send_mailgun_customer_confirmation(submission)
+    enqueue_form_background_task(
+        "Mailgun submission notification",
+        send_mailgun_submission_notification,
+        submission,
+        attachments=saved_attachments,
+    )
+    enqueue_form_background_task(
+        "Mailgun customer confirmation",
+        send_mailgun_customer_confirmation,
+        submission,
+    )
     return submission_id
 
 
@@ -4105,6 +4243,115 @@ def update_submission_status_route():
     if not updated:
         return jsonify(error="Submission not found"), 404
     return jsonify(success=True)
+
+
+def render_email_status_action_page(
+    title: str,
+    message: str,
+    *,
+    status_code: int = 200,
+    auto_submit: bool = False,
+    form_values: Optional[Dict[str, str]] = None,
+) -> Tuple[str, int]:
+    form_values = form_values or {}
+    hidden_inputs = "".join(
+        f'<input type="hidden" name="{html.escape(key, quote=True)}" value="{html.escape(value, quote=True)}">'
+        for key, value in form_values.items()
+    )
+    form_html = ""
+    script_html = ""
+    if auto_submit:
+        form_html = (
+            '<form id="status-action-form" method="post" action="/api/email_status_action">'
+            f"{hidden_inputs}"
+            '<button type="submit">Bekräfta</button>'
+            "</form>"
+        )
+        script_html = "<script>setTimeout(function(){document.getElementById('status-action-form').submit();},80);</script>"
+    admin_href = "/admin"
+    return render_template_string(
+        """<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ title }}</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f5f5;color:#222831;font-family:Arial,Helvetica,sans-serif}
+    main{width:min(92vw,460px);background:#fff;border:1px solid #d9dee5;padding:28px;box-shadow:0 14px 32px rgba(12,26,43,.12)}
+    h1{margin:0 0 10px;font-size:22px}
+    p{margin:0 0 20px;color:#4b5563;line-height:1.55}
+    button,a{display:inline-block;border:0;border-radius:999px;background:#2563eb;color:#fff;text-decoration:none;padding:11px 16px;font-weight:700;font-size:14px;cursor:pointer}
+    a.secondary{background:#eef2f7;color:#222831;margin-left:8px}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    {{ form_html|safe }}
+    {% if not auto_submit %}<a href="{{ admin_href }}">Öppna admin</a>{% endif %}
+    {{ script_html|safe }}
+  </main>
+</body>
+</html>""",
+        title=title,
+        message=message,
+        form_html=form_html,
+        script_html=script_html,
+        auto_submit=auto_submit,
+        admin_href=admin_href,
+    ), status_code
+
+
+@app.route("/api/email_status_action", methods=["GET", "POST"])
+def email_status_action_route():
+    source = request.form if request.method == "POST" else request.args
+    submission_id = str(source.get("id", "") or "").strip()
+    status_id = str(source.get("status", "") or "").strip()
+    token = str(source.get("token", "") or "").strip()
+    try:
+        issued_at = int(str(source.get("ts", "") or "0"))
+    except ValueError:
+        issued_at = 0
+
+    if not verify_submission_status_action(submission_id, status_id, issued_at, token):
+        return render_email_status_action_page(
+            "Länken gäller inte",
+            "Statusen kunde inte uppdateras. Öppna adminpanelen och flytta ärendet manuellt.",
+            status_code=403,
+        )
+    if status_id not in get_valid_submission_status_ids():
+        return render_email_status_action_page(
+            "Statusmappen saknas",
+            "Den här statusmappen finns inte längre.",
+            status_code=400,
+        )
+
+    if request.method == "GET":
+        return render_email_status_action_page(
+            "Flyttar ärendet",
+            f"Ärendet flyttas till {get_status_name(status_id)}.",
+            auto_submit=True,
+            form_values={
+                "id": submission_id,
+                "status": status_id,
+                "ts": str(issued_at),
+                "token": token,
+            },
+        )
+
+    updated = update_submission_status_record(submission_id, status_id, None)
+    if not updated:
+        return render_email_status_action_page(
+            "Ärendet hittades inte",
+            "Statusen kunde inte uppdateras eftersom ärendet saknas.",
+            status_code=404,
+        )
+    return render_email_status_action_page(
+        "Status uppdaterad",
+        f"Ärendet har flyttats till {get_status_name(status_id)}.",
+    )
 
 
 @app.route("/api/delete_submission", methods=["POST"])
@@ -5418,6 +5665,10 @@ def temp_product_page(slug: str):
 
 def build_analytics_summary(days: int = 30) -> Dict[str, Any]:
     days = max(1, min(int(days or 30), 365))
+    analytics_tz = ZoneInfo("Europe/Stockholm")
+    today_local = datetime.now(analytics_tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_local = today_local - timedelta(days=days - 1)
+    start_at = start_local.astimezone(timezone.utc).replace(tzinfo=None)
     db = get_db()
     if not db:
         return {
@@ -5429,9 +5680,6 @@ def build_analytics_summary(days: int = 30) -> Dict[str, Any]:
             "top_searches": [],
         }
     try:
-        cutoff = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        cutoff_ts = cutoff.timestamp() - ((days - 1) * 86400)
-        start_at = datetime.utcfromtimestamp(cutoff_ts)
         events = (
             db.query(AnalyticsEvent)
             .filter(AnalyticsEvent.created_at >= start_at)
@@ -5440,6 +5688,36 @@ def build_analytics_summary(days: int = 30) -> Dict[str, Any]:
         )
     finally:
         db.close()
+
+    day_stats: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "total": 0,
+            "empty_referrer": 0,
+            "example": 0,
+            "paths": set(),
+        }
+    )
+    for event in events:
+        created_at = event.created_at or datetime.utcnow()
+        local_created_at = created_at.replace(tzinfo=timezone.utc).astimezone(analytics_tz)
+        day_key = local_created_at.strftime("%Y-%m-%d")
+        path = str(event.path or "/")
+        stats = day_stats[day_key]
+        stats["total"] += 1
+        stats["paths"].add(path)
+        if not str(event.referrer_host or "").strip():
+            stats["empty_referrer"] += 1
+        if path.startswith("/exempel/"):
+            stats["example"] += 1
+
+    crawler_sweep_days = {
+        day
+        for day, stats in day_stats.items()
+        if stats["total"] >= 500
+        and len(stats["paths"]) >= 200
+        and stats["example"] >= int(stats["total"] * 0.6)
+        and stats["empty_referrer"] >= int(stats["total"] * 0.8)
+    }
 
     daily_map: Dict[str, Dict[str, int]] = defaultdict(lambda: {"pageviews": 0, "searches": 0})
     page_counts: Dict[str, int] = defaultdict(int)
@@ -5451,12 +5729,16 @@ def build_analytics_summary(days: int = 30) -> Dict[str, Any]:
     for event in events:
         event_type = str(event.event_type or "pageview").strip().lower()
         created_at = event.created_at or datetime.utcnow()
-        day_key = created_at.strftime("%Y-%m-%d")
+        local_created_at = created_at.replace(tzinfo=timezone.utc).astimezone(analytics_tz)
+        day_key = local_created_at.strftime("%Y-%m-%d")
+        path = str(event.path or "/")
+        referrer_host = str(event.referrer_host or "").strip().lower()
+        if day_key in crawler_sweep_days and not referrer_host and path.startswith("/exempel/"):
+            continue
         daily_map[day_key]["pageviews"] += 1
         totals["pageviews"] += 1
-        page_counts[str(event.path or "/")] += 1
+        page_counts[path] += 1
 
-        referrer_host = str(event.referrer_host or "").strip().lower()
         if referrer_host:
             referrer_counts[referrer_host] += 1
 
@@ -5468,7 +5750,7 @@ def build_analytics_summary(days: int = 30) -> Dict[str, Any]:
 
     daily = []
     for offset in range(days):
-        current = datetime.utcfromtimestamp(cutoff_ts + (offset * 86400))
+        current = start_local + timedelta(days=offset)
         day_key = current.strftime("%Y-%m-%d")
         counts = daily_map.get(day_key, {"pageviews": 0, "searches": 0})
         daily.append({"date": day_key, "pageviews": counts["pageviews"], "searches": counts["searches"]})
