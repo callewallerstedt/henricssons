@@ -99,6 +99,17 @@
         </div>
     </section>
 
+    <section class="hb-section hb-section--tight hb-dyn-brands-section">
+        <div class="wrap">
+            <span class="eyebrow">Vi levererar till</span><span class="rule"></span>
+            <h2 class="hb-dyn-brands-heading">Välj ditt båtmärke</h2>
+            <p class="hb-dyn-brands-lead">Klicka på ditt märke för att se bilder och läsa mer om vilka dynsatser vi kan erbjuda.</p>
+            <div id="dyn-brands-loading" class="hb-dyn-brands-status">Laddar märken...</div>
+            <div id="dyn-brands-error" class="hb-dyn-brands-status" style="display:none;">Kunde inte ladda märken.</div>
+            <div id="dyn-brands-grid" class="hb-dyn-brands-grid"></div>
+        </div>
+    </section>
+
     <section class="hb-section">
         <div class="wrap hb-contact-grid">
             <aside class="hb-contact-info">
@@ -158,13 +169,14 @@
                 </div>
                 <div>
                     <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
+                    <div class="hb-footer-partners" aria-label="Partners">
+                        <img src="assets/optimized/partner-jens-sagen.webp" alt="Jens Sagen" loading="lazy" decoding="async"/>
+                        <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-varuste.webp" alt="VA Varuste" loading="lazy" decoding="async"/>
+                        <img src="assets/schultz.png" alt="Schultz Kalecher" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-hansenprotection.png" alt="Hansen Protection" loading="lazy" decoding="async"/>
+                    </div>
                 </div>
             </div>
             <div class="hb-footer-bottom">
@@ -173,6 +185,44 @@
             </div>
         </div>
     </footer>
+    <script>
+    (function () {
+        const apiBase = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+            ? `${location.protocol}//${location.hostname}:25565` : '';
+        const grid = document.getElementById('dyn-brands-grid');
+        const loading = document.getElementById('dyn-brands-loading');
+        const error = document.getElementById('dyn-brands-error');
+
+        fetch(`${apiBase}/api/boat_brands`)
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(brands => {
+                loading.style.display = 'none';
+                if (!Array.isArray(brands) || brands.length === 0) return;
+                brands.forEach(brand => {
+                    const primary = (brand.images || [])[0];
+                    const card = document.createElement('a');
+                    card.className = 'hb-dyn-brand-card';
+                    card.href = brand.href || `/dynsatser/${brand.slug}`;
+                    card.innerHTML = `
+                        <div class="hb-dyn-brand-media">
+                            ${primary
+                                ? `<img src="${apiBase}${primary.url}" alt="${brand.name}" loading="lazy" decoding="async">`
+                                : `<div class="hb-dyn-brand-media-empty"></div>`}
+                        </div>
+                        <div class="hb-dyn-brand-body">
+                            <span class="hb-dyn-brand-name">${brand.name}</span>
+                            <span class="hb-dyn-brand-cta">Se dynsatser →</span>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            })
+            .catch(() => {
+                loading.style.display = 'none';
+                error.style.display = 'block';
+            });
+    })();
+    </script>
     <script src="form_attachments.js?v=20260419d"></script>
     <script>
         const dynAttachmentWidget = window.HenricssonsAttachments ? window.HenricssonsAttachments.create('#dynAttachments', { label: 'Bifoga bilder (valfritt)', helper: 'Ladda upp här' }) : { getFiles: () => [], reset: () => {} };

@@ -1475,10 +1475,13 @@
 }
 .hb-footer ul { list-style: none; padding: 0; }
 .hb-footer ul li { margin-bottom: 0; }
-.hb-footer .brand img {
+.hb-footer .brand > img {
     height: 48px;
+    width: auto;
+    max-width: 220px;
     margin-bottom: 1.25rem;
     filter: brightness(1.1);
+    object-fit: contain;
 }
 .hb-footer .credit {
     display: flex;
@@ -1501,6 +1504,27 @@
     color: var(--cream);
     letter-spacing: 0.08em;
     font-size: 0.72rem;
+}
+.hb-footer-partners {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem 1rem;
+    align-items: center;
+}
+.hb-footer-partners img {
+    display: block;
+    width: 100%;
+    max-width: 120px;
+    max-height: 42px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    opacity: 0.86;
+}
+.hb-footer-partners img[alt="Hansen Protection"] {
+    filter: none;
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 4px;
+    padding: 5px 7px;
 }
 .hb-footer-bottom {
     border-top: 1px solid #1e2a3d;
@@ -1671,7 +1695,7 @@
     /* Footer */
     .hb-footer { padding: 2.75rem 0 1.25rem; }
     .hb-footer .grid { gap: 1.5rem; }
-    .hb-footer .brand img { height: 40px; margin-bottom: 0.85rem; }
+    .hb-footer .brand > img { height: 40px; margin-bottom: 0.85rem; }
     .hb-footer h5 { margin-bottom: 0.75rem; font-size: 0.9rem; }
     .hb-footer-bottom {
         margin-top: 2rem;
@@ -2125,3 +2149,91 @@
     .hb-premium .hb-tp-lightbox-prev { left: 0.5rem; }
     .hb-premium .hb-tp-lightbox-next { right: 0.5rem; }
 }
+
+/* ============================================================
+   DYNSATSER – BOAT BRAND CARDS
+   ============================================================ */
+.hb-premium .hb-dyn-brands-section { background: var(--cream-2); }
+.hb-premium .hb-dyn-brands-heading {
+    margin: 0.5rem 0 0.6rem;
+    font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+}
+.hb-premium .hb-dyn-brands-lead {
+    color: var(--muted);
+    font-size: 1rem;
+    margin: 0 0 2rem;
+    max-width: 520px;
+}
+.hb-premium .hb-dyn-brands-status {
+    color: var(--muted);
+    font-size: 0.95rem;
+    padding: 0.5rem 0;
+}
+.hb-premium .hb-dyn-brands-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+}
+@media (max-width: 1000px) {
+    .hb-premium .hb-dyn-brands-grid { grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+}
+@media (max-width: 640px) {
+    .hb-premium .hb-dyn-brands-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+}
+.hb-premium .hb-dyn-brand-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--white);
+    border: 1px solid var(--line);
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.hb-premium .hb-dyn-brand-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -20px rgba(12, 26, 43, 0.28);
+}
+.hb-premium .hb-dyn-brand-media {
+    aspect-ratio: 4 / 3;
+    background: var(--cream-2);
+    overflow: hidden;
+    position: relative;
+}
+.hb-premium .hb-dyn-brand-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.55s ease;
+    display: block;
+}
+.hb-premium .hb-dyn-brand-card:hover .hb-dyn-brand-media img { transform: scale(1.05); }
+.hb-premium .hb-dyn-brand-media-empty {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, var(--cream-2) 0%, var(--cream-3, #ddd) 100%);
+}
+.hb-premium .hb-dyn-brand-body {
+    padding: 1rem 1.1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1;
+}
+.hb-premium .hb-dyn-brand-name {
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: 0.01em;
+}
+.hb-premium .hb-dyn-brand-cta {
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--brass);
+    font-weight: 700;
+    margin-top: 0.25rem;
+    transition: color 0.2s;
+}
+.hb-premium .hb-dyn-brand-card:hover .hb-dyn-brand-cta { color: var(--brass-dark); }

@@ -203,7 +203,7 @@ DEFAULT_STATUS_CONFIG: List[Dict[str, Any]] = [
 ]
 MAX_WORKFLOW_STATUSES = 12
 MAX_STATUS_NAME_CHARS = 40
-RESERVED_STATUS_IDS = {"todo"}
+RESERVED_STATUS_IDS = {"todo", "arkiv"}
 MOJIBAKE_MARKERS = ("Ã", "Â", "â")
 ADMIN_SESSION_COOKIE = "henricssons_admin"
 ADMIN_SESSION_MAX_AGE = 60 * 60 * 12
@@ -416,6 +416,50 @@ class TempProductImage(Base):
         }
 
 
+class BoatBrand(Base):
+    __tablename__ = "boat_brands"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, default="")
+    description = Column(Text, nullable=False, default="")
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self, images: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name or "",
+            "description": self.description or "",
+            "sort_order": int(self.sort_order or 0),
+            "images": images or [],
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class BoatBrandImage(Base):
+    __tablename__ = "boat_brand_images"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id = Column(Integer, ForeignKey("boat_brands.id", ondelete="CASCADE"), index=True, nullable=False)
+    filename = Column(String, nullable=False, default="")
+    mime = Column(String, nullable=False, default="image/jpeg")
+    data = Column(LargeBinary, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_meta(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "brand_id": self.brand_id,
+            "filename": self.filename or "",
+            "mime": self.mime or "image/jpeg",
+            "sort_order": int(self.sort_order or 0),
+            "url": f"/api/boat_brand_image/{self.id}",
+        }
+
+
 engine = None
 SessionLocal = None
 
@@ -613,6 +657,34 @@ def normalize_tracked_path(path: str) -> str:
 def normalize_search_query(value: str) -> str:
     query = " ".join(str(value or "").split()).strip()
     return query[:200]
+
+
+def normalize_search_text(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", str(value or "").lower())
+    without_marks = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", " ", without_marks).strip()
+
+
+def example_matches_search(item: Dict[str, Any], query: str) -> bool:
+    normalized_query = normalize_search_text(query)
+    if not normalized_query:
+        return True
+    fields = [
+        item.get("manufacturer", ""),
+        item.get("model", ""),
+        item.get("category", ""),
+        item.get("variant", ""),
+        item.get("description", ""),
+        item.get("delivery", ""),
+        item.get("canonical_slug", ""),
+        item.get("fallback_slug", ""),
+    ]
+    haystack = normalize_search_text(" ".join(str(field or "") for field in fields))
+    compact_haystack = haystack.replace(" ", "")
+    compact_query = normalized_query.replace(" ", "")
+    if compact_query and compact_query in compact_haystack:
+        return True
+    return all(token in haystack or token in compact_haystack for token in normalized_query.split())
 
 
 def extract_referrer_host(referrer: str) -> str:
@@ -1564,13 +1636,14 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
                 </div>
                 <div>
                     <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
+                    <div class="hb-footer-partners" aria-label="Partners">
+                        <img src="/assets/optimized/partner-jens-sagen.webp" alt="Jens Sagen"/>
+                        <img src="/assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen"/>
+                        <img src="/assets/optimized/partner-varuste.webp" alt="VA Varuste"/>
+                        <img src="/assets/schultz.png" alt="Schultz Kalecher"/>
+                        <img src="/assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu"/>
+                        <img src="/assets/optimized/partner-hansenprotection.png" alt="Hansen Protection"/>
+                    </div>
                 </div>
             </div>
             <div class="hb-footer-bottom">
@@ -1743,7 +1816,9 @@ def save_status_config(data: Any) -> List[Dict[str, Any]]:
 
 
 def get_valid_submission_status_ids() -> set[str]:
-    return {str(item.get("id", "")).strip() for item in load_status_config() if str(item.get("id", "")).strip()}
+    ids = {str(item.get("id", "")).strip() for item in load_status_config() if str(item.get("id", "")).strip()}
+    ids.add("arkiv")
+    return ids
 
 
 def get_status_name(status_id: str) -> str:
@@ -1799,7 +1874,7 @@ Regler:
 - Föreslå rätt nästa steg när kunden verkar vilja gå vidare.
 - Du har inga verktyg och kan inte boka tider, skapa bokningar, bekräfta besök, kontrollera kalender, se öppettider som inte uttryckligen står i underlaget eller lova att någon är på plats.
 - Påstå aldrig att du har gjort något i verkligheten. Skriv aldrig att du har bokat, reserverat, meddelat personalen eller lagt in något.
-- Om kunden föreslår en tid eller ett besök: bekräfta inte tiden som bokad. Säg bara att tiden behöver bekräftas av företaget och hänvisa vidare till kontakt om det behövs.
+- Om kunden föreslår en tid eller ett besök: bekräfta inte tiden som bokad. Säg att tiden behöver bekräftas av företaget och att kunden gärna ska ringa innan besök.
 - Om du inte vet ett faktum säkert från sammanhanget: säg det tydligt och hitta inte på.
 - Fråga aldrig efter namn, telefon, e-post, adress, båtmodell, årsmodell eller andra formulärfält.
 - Offentliga chatten ska inte samla in uppgifter och inte skicka formulär.
@@ -4909,6 +4984,247 @@ def delete_temp_product_image(image_id: int):
         db.close()
 
 
+BOAT_BRAND_MAX_IMAGE_BYTES = 8 * 1024 * 1024
+BOAT_BRAND_MAX_IMAGES = 20
+BOAT_BRAND_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+
+def slugify_boat_brand(value: Any, fallback: str = "marke") -> str:
+    raw = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_value = raw.encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_value.lower()).strip("-")
+    return slug or fallback
+
+
+def _fetch_boat_brands(include_images: bool = True) -> List[Dict[str, Any]]:
+    db = get_db()
+    if not db:
+        return []
+    try:
+        rows = db.query(BoatBrand).order_by(BoatBrand.sort_order.asc(), BoatBrand.id.asc()).all()
+        images_by_brand: Dict[int, List[Dict[str, Any]]] = {}
+        if include_images and rows:
+            img_rows = (
+                db.query(BoatBrandImage)
+                .order_by(BoatBrandImage.sort_order.asc(), BoatBrandImage.id.asc())
+                .all()
+            )
+            for img in img_rows:
+                images_by_brand.setdefault(img.brand_id, []).append(img.to_meta())
+        return [row.to_dict(images=images_by_brand.get(row.id, [])) for row in rows]
+    except Exception as exc:
+        print(f"_fetch_boat_brands failed: {exc}")
+        return []
+    finally:
+        db.close()
+
+
+def enrich_boat_brands(brands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    used_slugs: set[str] = set()
+    enriched: List[Dict[str, Any]] = []
+    for item in brands:
+        brand = dict(item)
+        base_slug = slugify_boat_brand(brand.get("name"), fallback=f"marke-{brand.get('id') or 'x'}")
+        slug = base_slug
+        suffix = 2
+        while slug in used_slugs:
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+        used_slugs.add(slug)
+        brand["slug"] = slug
+        brand["href"] = f"/dynsatser/{slug}"
+        images = brand.get("images") if isinstance(brand.get("images"), list) else []
+        brand["images"] = images
+        brand["primary_image_url"] = images[0]["url"] if images else ""
+        enriched.append(brand)
+    return enriched
+
+
+def get_boat_brand_by_slug(slug: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
+    brands = enrich_boat_brands(_fetch_boat_brands())
+    clean_slug = str(slug or "").strip().strip("/")
+    for brand in brands:
+        if brand.get("slug") == clean_slug:
+            return brand, brands
+    return None, brands
+
+
+@app.route("/api/boat_brands", methods=["GET"])
+def list_boat_brands():
+    return jsonify(enrich_boat_brands(_fetch_boat_brands()))
+
+
+@app.route("/api/boat_brands", methods=["POST"])
+@admin_required
+def create_boat_brand():
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        next_order = db.query(BoatBrand).count() or 0
+        brand = BoatBrand(
+            name=str(payload.get("name", "") or "").strip()[:300],
+            description=str(payload.get("description", "") or "").strip()[:4000],
+            sort_order=int(payload.get("sort_order", next_order) or next_order),
+        )
+        db.add(brand)
+        db.commit()
+        db.refresh(brand)
+        return jsonify(brand.to_dict())
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brands/<int:brand_id>", methods=["PUT"])
+@admin_required
+def update_boat_brand(brand_id: int):
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        brand = db.query(BoatBrand).filter_by(id=brand_id).first()
+        if not brand:
+            return jsonify(error="Not found"), 404
+        if "name" in payload:
+            brand.name = str(payload.get("name", "") or "").strip()[:300]
+        if "description" in payload:
+            brand.description = str(payload.get("description", "") or "").strip()[:4000]
+        if "sort_order" in payload:
+            try:
+                brand.sort_order = int(payload.get("sort_order") or 0)
+            except (TypeError, ValueError):
+                pass
+        db.commit()
+        db.refresh(brand)
+        return jsonify(brand.to_dict())
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brands/<int:brand_id>", methods=["DELETE"])
+@admin_required
+def delete_boat_brand(brand_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        brand = db.query(BoatBrand).filter_by(id=brand_id).first()
+        if not brand:
+            return jsonify(error="Not found"), 404
+        db.query(BoatBrandImage).filter_by(brand_id=brand_id).delete(synchronize_session=False)
+        db.delete(brand)
+        db.commit()
+        return jsonify(success=True)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brands/<int:brand_id>/images", methods=["POST"])
+@admin_required
+def upload_boat_brand_image(brand_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        brand = db.query(BoatBrand).filter_by(id=brand_id).first()
+        if not brand:
+            return jsonify(error="Brand not found"), 404
+        existing_count = db.query(BoatBrandImage).filter_by(brand_id=brand_id).count()
+        files = request.files.getlist("images") or request.files.getlist("image")
+        if not files:
+            return jsonify(error="No images provided"), 400
+        saved: List[Dict[str, Any]] = []
+        next_order = existing_count
+        for file_storage in files:
+            if existing_count + len(saved) >= BOAT_BRAND_MAX_IMAGES:
+                break
+            raw_name = getattr(file_storage, "filename", "") or f"image-{int(time.time())}"
+            mime = (getattr(file_storage, "mimetype", "") or "").lower()
+            if mime not in BOAT_BRAND_ALLOWED_MIMES:
+                ext = os.path.splitext(raw_name)[1].lower()
+                mime = {
+                    ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                    ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
+                }.get(ext, "")
+            if mime not in BOAT_BRAND_ALLOWED_MIMES:
+                continue
+            blob = file_storage.read()
+            if not blob or len(blob) > BOAT_BRAND_MAX_IMAGE_BYTES:
+                continue
+            image = BoatBrandImage(
+                brand_id=brand_id,
+                filename=sanitize_attachment_filename(raw_name, fallback_ext=os.path.splitext(raw_name)[1]),
+                mime=mime,
+                data=blob,
+                sort_order=next_order,
+            )
+            db.add(image)
+            db.flush()
+            saved.append(image.to_meta())
+            next_order += 1
+        db.commit()
+        return jsonify(success=True, images=saved)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brand_image/<int:image_id>", methods=["GET"])
+def get_boat_brand_image(image_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        row = db.query(BoatBrandImage).filter_by(id=image_id).first()
+        if not row:
+            return jsonify(error="Not found"), 404
+        response = Response(row.data, mimetype=row.mime or "image/jpeg")
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        response.headers["Content-Length"] = str(len(row.data or b""))
+        return response
+    except Exception as exc:
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brand_image/<int:image_id>", methods=["DELETE"])
+@admin_required
+def delete_boat_brand_image(image_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        row = db.query(BoatBrandImage).filter_by(id=image_id).first()
+        if not row:
+            return jsonify(error="Not found"), 404
+        db.delete(row)
+        db.commit()
+        return jsonify(success=True)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
 @app.route("/api/mailgun_test", methods=["POST"])
 @admin_required
 def mailgun_test():
@@ -5133,7 +5449,7 @@ def assistant_chat():
         "- Answer customer questions directly in chat whenever possible.\n"
         "- Never pretend to book, reserve, schedule, confirm a visit, confirm a time slot, or perform any real-world action.\n"
         "- Never claim you checked availability, a calendar, opening hours, or staff presence unless that exact information is explicitly present in the provided context.\n"
-        "- If the customer suggests a time or visit, do not confirm it as booked. State that it must be confirmed by the company.\n"
+        "- If the customer suggests a time or visit, do not confirm it as booked. State that it must be confirmed by the company and ask them to call before visiting.\n"
         "- Never ask the customer for contact details or other form fields in public chat.\n"
         "- Never use hidden command blocks or JSON in the reply.\n"
         "- Only show route buttons by writing one of these exact visible tokens on its own line at the end: %kapellförfrågan% or %fenderförfrågan% or %kontakt%.\n"
@@ -5271,22 +5587,9 @@ def sitemap_xml():
 @app.route("/search", methods=["GET"])
 def search_page():
     query = str(request.args.get("q") or request.args.get("query") or "").strip()
-    query_lower = query.lower()
     examples = list_canonical_examples()
-    if query_lower:
-        results = [
-            item
-            for item in examples
-            if query_lower in " ".join(
-                [
-                    str(item.get("manufacturer", "")),
-                    str(item.get("model", "")),
-                    str(item.get("category", "")),
-                    str(item.get("variant", "")),
-                    str(item.get("description", "")),
-                ]
-            ).lower()
-        ]
+    if query:
+        results = [item for item in examples if example_matches_search(item, query)]
     else:
         results = examples[:48]
 
@@ -5716,6 +6019,135 @@ def temp_product_page(slug: str):
     )
 
 
+@app.route("/dynsatser/<path:slug>", methods=["GET"])
+def boat_brand_page(slug: str):
+    clean_slug = slug.strip().rstrip("/")
+    if clean_slug.endswith(".html"):
+        return redirect(f"/dynsatser/{clean_slug[:-5]}", code=301)
+
+    brand, brands = get_boat_brand_by_slug(clean_slug)
+    if not brand:
+        abort(404)
+
+    canonical_slug = str(brand.get("slug") or "").strip()
+    if clean_slug != canonical_slug:
+        return redirect(f"/dynsatser/{canonical_slug}", code=301)
+
+    name_text = str(brand.get("name") or "Båtmärke").strip()
+    description_text = str(brand.get("description") or "").strip()
+    images = [absolute_public_url(img.get("url", "")) for img in brand.get("images", []) if img.get("url")]
+    image_urls = images or [absolute_public_url("/logo.png")]
+    page_title = f"Dynsatser till {name_text} - Henricssons Båtkapell"
+    page_description = (description_text[:160] if description_text else f"Dynsatser och båtdynor till {name_text} hos Henricssons Båtkapell.")
+    contact_query = urlencode({"manufacturer": name_text})
+    contact_href = f"/dynsatser?{contact_query}#dynForm"
+
+    other_brands: List[str] = []
+    for other in brands:
+        if other.get("slug") == canonical_slug:
+            continue
+        other_name = html.escape(str(other.get("name") or ""))
+        other_href = html.escape(str(other.get("href") or "/dynsatser"))
+        other_image = html.escape(absolute_public_url(str(other.get("primary_image_url") or "/logo.png")))
+        other_brands.append(
+            f"""
+            <a class="seo-related-card" href="{other_href}">
+                <img src="{other_image}" alt="{other_name}" loading="lazy" decoding="async">
+                <div class="seo-related-copy">
+                    <strong>{other_name}</strong>
+                    <span>Visa dynsatser</span>
+                </div>
+            </a>
+            """
+        )
+        if len(other_brands) >= 4:
+            break
+
+    nav_style = "" if len(image_urls) > 1 else ' style="display:none;"'
+    thumbs_html = "".join(
+        f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(url)}" alt="{html.escape(name_text)} bild {idx + 1}" loading="lazy" decoding="async"></button>'
+        for idx, url in enumerate(image_urls[:10])
+    )
+    gallery_html = f"""
+    <div class="seo-gallery">
+        <div class="seo-gallery-stage">
+            <button type="button" class="seo-gallery-nav seo-gallery-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
+            <div class="seo-gallery-main">
+                <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(name_text)}" loading="eager" decoding="async" fetchpriority="high">
+            </div>
+            <button type="button" class="seo-gallery-nav seo-gallery-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
+        </div>
+        {f'<div class="seo-thumbs">{thumbs_html}</div>' if len(image_urls) > 1 else ''}
+    </div>
+    """
+
+    meta_html = f"""
+    <div class="seo-meta">
+        <div class="seo-meta-block">
+            <div class="seo-meta-label">Om {html.escape(name_text)}</div>
+            <p style="margin:0;">{html.escape(description_text or f'Vi tillverkar dynsatser anpassade för {name_text}. Kontakta oss för mer information och prisförfrågan.')}</p>
+        </div>
+        <p class="seo-interest-text">Intresserad av dynsatser till din {html.escape(name_text)}? Kontakta oss så återkommer vi.</p>
+        <div class="seo-cta-row">
+            <a class="seo-btn seo-btn-primary" href="{html.escape(contact_href)}">Skicka förfrågan</a>
+            <a class="seo-btn" href="/dynsatser">Alla märken</a>
+        </div>
+    </div>
+    """
+
+    content_html = f"""
+    <main class="seo-page">
+        <section class="seo-hero">
+            <nav class="seo-breadcrumbs" aria-label="Brödsmulor">
+                <a href="/">Hem</a>
+                <span>/</span>
+                <a href="/dynsatser">Dynsatser</a>
+                <span>/</span>
+                <span>{html.escape(name_text)}</span>
+            </nav>
+            <span class="seo-kicker">Dynsatser</span>
+            <h1>{html.escape(name_text)}</h1>
+        </section>
+        <section class="seo-grid">
+            <article class="seo-card">{gallery_html}</article>
+            <aside class="seo-card">{meta_html}</aside>
+        </section>
+        <section class="seo-related">
+            <h2>Fler båtmärken</h2>
+            <div class="seo-related-grid">
+                {''.join(other_brands) if other_brands else '<div class="seo-card"><p style="margin:0;">Kontakta oss för information om fler märken.</p></div>'}
+            </div>
+        </section>
+    </main>
+    <script>
+        (function () {{
+            const images = {json.dumps(image_urls[:10])};
+            if (images.length < 2) return;
+            const mainImage = document.getElementById('seoGalleryMainImage');
+            const thumbs = Array.from(document.querySelectorAll('.seo-thumb'));
+            const prevButton = document.querySelector('.seo-gallery-prev');
+            const nextButton = document.querySelector('.seo-gallery-next');
+            let currentIndex = 0;
+            function render(index) {{
+                currentIndex = (index + images.length) % images.length;
+                if (mainImage) mainImage.src = images[currentIndex];
+                thumbs.forEach((thumb, i) => thumb.classList.toggle('is-active', i === currentIndex));
+            }}
+            thumbs.forEach((thumb, index) => thumb.addEventListener('click', () => render(index)));
+            if (prevButton) prevButton.addEventListener('click', () => render(currentIndex - 1));
+            if (nextButton) nextButton.addEventListener('click', () => render(currentIndex + 1));
+        }})();
+    </script>
+    """
+    return render_public_page(
+        title=page_title,
+        description=page_description,
+        canonical_path=f"/dynsatser/{canonical_slug}",
+        content_html=content_html,
+        og_image=image_urls[0],
+    )
+
+
 def build_analytics_summary(days: int = 30) -> Dict[str, Any]:
     days = max(1, min(int(days or 30), 365))
     analytics_tz = ZoneInfo("Europe/Stockholm")
@@ -5939,6 +6371,30 @@ if repaired_files:
         print(f" - {repaired_path.name}")
 
 init_db()
+
+
+def seed_boat_brands() -> None:
+    db = get_db()
+    if not db:
+        return
+    try:
+        count = db.query(BoatBrand).count()
+        if count == 0:
+            default_brands = ["Uttern", "Bella", "Buster", "Yamarin", "Flipper", "Finnmaster", "MV Marin"]
+            for i, name in enumerate(default_brands):
+                db.add(BoatBrand(name=name, description="", sort_order=i))
+            db.commit()
+    except Exception as exc:
+        print(f"seed_boat_brands failed: {exc}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+seed_boat_brands()
 
 
 if __name__ == "__main__":

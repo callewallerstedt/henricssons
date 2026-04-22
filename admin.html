@@ -670,6 +670,106 @@
             padding: 0.25rem 0.5rem;
             min-height: auto;
         }
+        .status-folder-menu-wrap {
+            position: relative;
+            flex: 0 0 auto;
+        }
+        .status-folder-menu-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            font-size: 0;
+        }
+        .status-folder-menu-btn::before {
+            content: "";
+            width: 4px;
+            height: 4px;
+            border-radius: 999px;
+            background: currentColor;
+            box-shadow: -7px 0 0 currentColor, 7px 0 0 currentColor;
+        }
+        .status-folder-menu-btn:hover,
+        .status-folder-menu-btn[aria-expanded="true"] {
+            color: var(--text);
+            border-color: var(--brand);
+            background: #eef5ff;
+        }
+        .status-folder-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            z-index: 30;
+            min-width: 150px;
+            display: none;
+            padding: 0.35rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+        .status-folder-menu.active {
+            display: block;
+        }
+        .status-folder-menu button {
+            width: 100%;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text);
+            padding: 0.55rem 0.65rem;
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.82rem;
+        }
+        .status-folder-menu button:hover {
+            background: var(--surface-2);
+        }
+        .archive-drop-zone {
+            margin-top: 0.9rem;
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .archive-drop-zone.drag-over {
+            border-color: #64748b;
+            background: #f1f5f9;
+        }
+        .archive-open-btn {
+            width: 100%;
+            min-height: 42px;
+            border: 0;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.55rem 0.8rem;
+            font-size: 0.82rem;
+            font-weight: 650;
+        }
+        .archive-open-btn:hover {
+            color: var(--text);
+        }
+        .archive-count {
+            min-width: 24px;
+            border-radius: 999px;
+            padding: 0.15rem 0.45rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.76rem;
+        }
         .folder-items {
             flex: 1;
             min-height: 140px;
@@ -839,6 +939,61 @@
             margin: 0;
             font-size: 0.82rem;
             color: var(--text-muted);
+        }
+        .archive-modal-content {
+            max-width: 980px;
+            width: min(94vw, 980px);
+        }
+        .archive-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+        .archive-toolbar input {
+            flex: 1 1 260px;
+            min-width: 0;
+        }
+        .archive-list {
+            display: grid;
+            gap: 0.55rem;
+            max-height: min(64vh, 680px);
+            overflow: auto;
+            padding-right: 2px;
+        }
+        .archive-item {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--surface);
+            padding: 0.75rem 0.85rem;
+            cursor: pointer;
+        }
+        .archive-item:hover {
+            border-color: var(--brand);
+            box-shadow: var(--shadow-sm);
+        }
+        .archive-item-title {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.75rem;
+            color: var(--text);
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+        .archive-item-meta {
+            margin-top: 0.35rem;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+        .archive-empty {
+            padding: 2rem 1rem;
+            text-align: center;
+            color: var(--text-muted);
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+            background: var(--surface-2);
         }
 
         /* ================ CHATBOT ================ */
@@ -1102,6 +1257,97 @@
         }
         .tp-dropzone input[type="file"] { display: none; }
         .tp-upload-status { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.4rem; min-height: 1.1em; }
+
+        /* ================ BOAT BRANDS (DYNSATSER) ================ */
+        .bb-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+        .bb-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 1rem;
+        }
+        @media (min-width: 900px) {
+            .bb-card { grid-template-columns: 1fr 1.4fr; }
+        }
+        .bb-card .bb-fields { display: flex; flex-direction: column; gap: 0.75rem; }
+        .bb-card label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 0.35rem;
+        }
+        .bb-card input[type="text"],
+        .bb-card textarea {
+            width: 100%;
+            padding: 0.6rem 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 0.95rem;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        .bb-card textarea { min-height: 90px; resize: vertical; line-height: 1.5; }
+        .bb-card input[type="text"]:focus,
+        .bb-card textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(178, 138, 76, 0.2);
+        }
+        .bb-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        @media (max-width: 600px) { .bb-row-2col { grid-template-columns: 1fr; } }
+        .bb-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem; flex-wrap: wrap; }
+        .bb-save-status { font-size: 0.82rem; color: var(--text-muted); align-self: center; margin-right: auto; }
+        .bb-save-status.is-saved { color: #16a34a; }
+        .bb-save-status.is-error { color: #dc2626; }
+        .bb-images { display: flex; flex-direction: column; gap: 0.75rem; }
+        .bb-images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 0.6rem;
+        }
+        .bb-thumb {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+        }
+        .bb-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .bb-thumb .bb-thumb-del {
+            position: absolute; top: 4px; right: 4px;
+            width: 26px; height: 26px; border-radius: 50%;
+            border: 0; background: rgba(17,24,39,0.82); color: #fff;
+            cursor: pointer; font-size: 16px; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .bb-thumb .bb-thumb-del:hover { background: #dc2626; }
+        .bb-dropzone {
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            padding: 1.4rem 1rem;
+            text-align: center;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            background: var(--bg);
+        }
+        .bb-dropzone:hover, .bb-dropzone.is-drag {
+            border-color: var(--primary);
+            background: var(--surface);
+            color: var(--text);
+        }
+        .bb-dropzone input[type="file"] { display: none; }
+        .bb-upload-status { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.4rem; min-height: 1.1em; }
+
         .btn-danger {
             background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;
         }
@@ -1683,6 +1929,10 @@
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
                 Tillfälliga produkter
             </button>
+            <button class="primary-tab-btn" data-primary="dynsatser">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                Dynsatser
+            </button>
         </div>
 
         <div class="sidebar-label">AI</div>
@@ -1746,6 +1996,12 @@
                             </div>
                         </div>
                         <div class="status-folders" id="status-folders-workflow"></div>
+                        <div id="archive-drop-zone" class="archive-drop-zone droppable-folder" data-status="arkiv">
+                            <button id="archive-open-btn" class="archive-open-btn" type="button">
+                                <span>Arkiv</span>
+                                <span id="archive-count" class="archive-count">0</span>
+                            </button>
+                        </div>
                         <div style="margin-top:1rem;">
                             <h2 class="statusmappar-title" style="margin-bottom:0.75rem;">To-do</h2>
                             <div class="status-folders" style="grid-template-columns:minmax(220px, 1fr);">
@@ -1983,6 +2239,23 @@
                 </div>
             </div>
 
+            <!-- DYNSATSER / BOAT BRANDS -->
+            <div id="dynsatser-section" style="display:none;">
+                <div class="card">
+                    <h2 style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+                        <span>Dynsatser – båtmärken</span>
+                        <button class="btn" id="bb-add-btn">+ Nytt märke</button>
+                    </h2>
+                    <p style="color:var(--text-muted);margin-top:-0.5rem;font-size:0.92rem;">
+                        Hantera de båtmärken som visas på <strong>Dynsatser</strong>-sidan. Varje märke får en egen sida med bildgalleri och beskrivning.
+                    </p>
+                    <div id="bb-empty-state" style="display:none;padding:2rem;text-align:center;color:var(--text-muted);border:1px dashed var(--border);border-radius:12px;margin-top:1rem;">
+                        Inga märken ännu. Klicka på <strong>+ Nytt märke</strong> för att lägga till.
+                    </div>
+                    <div id="bb-list" class="bb-list"></div>
+                </div>
+            </div>
+
             <!-- TEMP PRODUCTS -->
             <div id="tempproducts-section" style="display:none;">
                 <div class="card">
@@ -2044,6 +2317,20 @@
     </div>
 </div>
 
+<div id="archive-modal" class="item-modal">
+    <div class="item-modal-content archive-modal-content">
+        <div class="modal-header">
+            <h2>Arkiv</h2>
+            <button type="button" class="modal-close" id="archive-close-btn" aria-label="Stäng">×</button>
+        </div>
+        <div class="archive-toolbar">
+            <input type="search" id="archive-search" placeholder="Sök namn, båt, mejl..." autocomplete="off" />
+            <button type="button" class="btn-secondary" id="archive-export-btn">Exportera Excel</button>
+        </div>
+        <div id="archive-list" class="archive-list"></div>
+    </div>
+</div>
+
 <div id="status-config-modal" class="item-modal">
     <div class="item-modal-content">
         <div class="modal-header">
@@ -2075,7 +2362,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260422d" defer></script>
+<script src="admin.js?v=20260422k" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle
@@ -2109,7 +2396,8 @@
         settings: { t: 'Inställningar', s: 'Mailgun och administrativa inställningar' },
         boats: { t: 'Tillverkare & modeller', s: 'Hantera båtdatabasen' },
         images: { t: 'Bilder & exempel', s: 'Galleri och kategorier' },
-        tempproducts: { t: 'Tillfälliga produkter', s: 'Hantera produkter med bilder, pris och beskrivning' }
+        tempproducts: { t: 'Tillfälliga produkter', s: 'Hantera produkter med bilder, pris och beskrivning' },
+        dynsatser: { t: 'Dynsatser', s: 'Hantera båtmärken med bilder och beskrivning på dynsatser-sidan' }
     };
     function syncTitle(primary) {
         const t = titles[primary];
