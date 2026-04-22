@@ -223,6 +223,15 @@
             });
     })();
     </script>
+    <script>
+    (function () {
+        const manufacturer = new URLSearchParams(location.search).get('manufacturer');
+        if (manufacturer) {
+            const field = document.getElementById('dyn-maker');
+            if (field) field.value = manufacturer;
+        }
+    })();
+    </script>
     <script src="form_attachments.js?v=20260419d"></script>
     <script>
         const dynAttachmentWidget = window.HenricssonsAttachments ? window.HenricssonsAttachments.create('#dynAttachments', { label: 'Bifoga bilder (valfritt)', helper: 'Ladda upp här' }) : { getFiles: () => [], reset: () => {} };
