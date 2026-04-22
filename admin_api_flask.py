@@ -208,6 +208,30 @@ MOJIBAKE_MARKERS = ("Ã", "Â", "â")
 ADMIN_SESSION_COOKIE = "henricssons_admin"
 ADMIN_SESSION_MAX_AGE = 60 * 60 * 12
 EMAIL_STATUS_ACTION_MAX_AGE = 60 * 60 * 24 * 30
+EMAIL_STATUS_ACTION_SCANNER_UA_PARTS = (
+    "bot",
+    "crawl",
+    "headless",
+    "lighthouse",
+    "monitor",
+    "preview",
+    "python-requests",
+    "spider",
+    "uptime",
+    "validator",
+    "wget/",
+    "curl/",
+    "barracuda",
+    "defender",
+    "mimecast",
+    "proofpoint",
+    "safe links",
+    "safelinks",
+    "scanner",
+    "security",
+    "urlscan",
+    "virustotal",
+)
 FORM_RATE_LIMIT_WINDOW = 60
 FORM_RATE_LIMIT_MAX = 8
 FORM_RATE_LIMIT_LONG_WINDOW = 60 * 60
@@ -509,6 +533,19 @@ def verify_submission_status_action(submission_id: str, status_id: str, issued_a
         return False
     expected = sign_submission_status_action(submission_id, status_id, issued_at)
     return hmac.compare_digest(expected, str(token or "").strip())
+
+
+def is_probable_email_link_scanner_request() -> bool:
+    user_agent = str(request.headers.get("User-Agent", "") or "").strip().lower()
+    if not user_agent:
+        return True
+    if any(part in user_agent for part in EMAIL_STATUS_ACTION_SCANNER_UA_PARTS):
+        return True
+    purpose_headers = " ".join(
+        str(request.headers.get(name, "") or "").strip().lower()
+        for name in ("Purpose", "Sec-Purpose", "X-Purpose", "X-Moz")
+    )
+    return "prefetch" in purpose_headers or "preview" in purpose_headers
 
 
 def check_admin_access() -> bool:
@@ -4267,7 +4304,19 @@ def render_email_status_action_page(
             '<button type="submit">Bekräfta</button>'
             "</form>"
         )
-        script_html = "<script>setTimeout(function(){document.getElementById('status-action-form').submit();},80);</script>"
+        script_html = (
+            "<script>(function(){"
+            "var form=document.getElementById('status-action-form');"
+            "var done=false;"
+            "function submit(){"
+            "if(done||!form||document.visibilityState!=='visible'||!document.hasFocus())return;"
+            "done=true;form.submit();"
+            "}"
+            "window.addEventListener('focus',function(){setTimeout(submit,250);},{once:true});"
+            "document.addEventListener('visibilitychange',function(){setTimeout(submit,250);},{once:true});"
+            "setTimeout(submit,650);"
+            "})();</script>"
+        )
     admin_href = "/admin"
     return render_template_string(
         """<!doctype html>
@@ -4275,6 +4324,7 @@ def render_email_status_action_page(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
   <title>{{ title }}</title>
   <style>
     body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f5f5;color:#222831;font-family:Arial,Helvetica,sans-serif}
@@ -4314,6 +4364,9 @@ def email_status_action_route():
         issued_at = int(str(source.get("ts", "") or "0"))
     except ValueError:
         issued_at = 0
+
+    if is_probable_email_link_scanner_request():
+        return Response(status=204)
 
     if not verify_submission_status_action(submission_id, status_id, issued_at, token):
         return render_email_status_action_page(
