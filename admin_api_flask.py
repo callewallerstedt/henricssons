@@ -85,6 +85,7 @@ PUBLIC_ATTACHMENT_BASE_URL = os.getenv(
     os.getenv("PUBLIC_API_BASE_URL", PUBLIC_BASE_URL),
 ).rstrip("/")
 STATUS_ACTION_BASE_URL = os.getenv("STATUS_ACTION_BASE_URL", "").strip().rstrip("/")
+SWEDEN_TZ = ZoneInfo("Europe/Stockholm")
 GENERIC_EXAMPLE_DESCRIPTION = (
     "Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning "
     "och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi "
@@ -311,7 +312,7 @@ class FormSubmission(Base):
             "fields": self.fields,
             "form_summary": self.form_summary,
             "proposed_response": self.proposed_response,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "timestamp": serialize_utc_datetime(self.timestamp),
             "status": self.status,
             "read": self.read,
             "submitted_via": submitted_via,
@@ -659,6 +660,35 @@ def normalize_search_query(value: str) -> str:
     return query[:200]
 
 
+def ensure_utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def serialize_utc_datetime(value: Optional[datetime]) -> Optional[str]:
+    if value is None:
+        return None
+    return ensure_utc_datetime(value).isoformat().replace("+00:00", "Z")
+
+
+def format_swedish_timestamp(value: Any) -> str:
+    try:
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            raw = str(value or "").strip()
+            if not raw:
+                return ""
+            if raw.endswith("Z"):
+                raw = raw.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(raw)
+        localized = ensure_utc_datetime(dt).astimezone(SWEDEN_TZ)
+        return localized.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(value or "")
+
+
 def normalize_search_text(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", str(value or "").lower())
     without_marks = "".join(char for char in decomposed if not unicodedata.combining(char))
@@ -926,6 +956,15 @@ def normalize_example_payload(data: Any) -> Dict[str, Dict[str, Any]]:
     return normalized
 
 
+def merge_example_payload_dicts(*payloads: Any) -> Dict[str, Dict[str, Any]]:
+    merged: Dict[str, Dict[str, Any]] = {}
+    for payload in payloads:
+        normalized = normalize_example_payload(payload)
+        for key, record in normalized.items():
+            merged[key] = merge_example_records(merged.get(key, {}), record)
+    return merged
+
+
 def extract_example_slug(source: str, fallback_slug: str = "") -> str:
     source = str(source or "").strip()
     if source:
@@ -995,8 +1034,94 @@ def merge_example_records(base_record: Dict[str, Any], override_record: Dict[str
     return merged
 
 
+def example_identity_key(record: Dict[str, Any]) -> Tuple[str, str]:
+    return (
+        normalize_search_text(str(record.get("manufacturer", "") or "")),
+        normalize_search_text(str(record.get("model", "") or "")),
+    )
+
+
+def example_fields_match(left: Any, right: Any) -> bool:
+    left_normalized = normalize_search_text(str(left or ""))
+    right_normalized = normalize_search_text(str(right or ""))
+    if not left_normalized or not right_normalized:
+        return False
+    return (
+        left_normalized == right_normalized
+        or left_normalized in right_normalized
+        or right_normalized in left_normalized
+    )
+
+
+def score_authoritative_example_match(
+    example_record: Dict[str, Any],
+    candidate_record: Dict[str, Any],
+    fallback_slug: str,
+    source_slug: str,
+) -> int:
+    score = 0
+    candidate_canonical = str(candidate_record.get("canonical_slug", "") or "").strip()
+    candidate_fallback = str(candidate_record.get("fallback_slug", "") or "").strip()
+
+    if fallback_slug and fallback_slug == candidate_fallback:
+        score += 100
+    if fallback_slug and fallback_slug == candidate_canonical:
+        score += 80
+    if source_slug and source_slug == candidate_canonical:
+        score += 60
+    if example_fields_match(example_record.get("variant"), candidate_record.get("variant")):
+        score += 30
+    if example_fields_match(example_record.get("delivery"), candidate_record.get("delivery")):
+        score += 20
+    if example_fields_match(example_record.get("category"), candidate_record.get("category")):
+        score += 10
+
+    return score
+
+
+def find_authoritative_example_match(
+    example_record: Dict[str, Any],
+    fallback_slug: str,
+    source_slug: str,
+    authoritative_entries: Dict[str, Dict[str, Any]],
+    authoritative_aliases: Dict[str, str],
+    identity_index: Dict[Tuple[str, str], List[str]],
+) -> Optional[str]:
+    direct_slug = authoritative_aliases.get(fallback_slug)
+    if direct_slug:
+        direct_record = authoritative_entries.get(direct_slug, {})
+        if example_identity_key(example_record) == example_identity_key(direct_record):
+            return direct_slug
+
+    candidates = identity_index.get(example_identity_key(example_record), [])
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    best_slug: Optional[str] = None
+    best_score = -1
+    score_tie = False
+
+    for candidate_slug in candidates:
+        candidate_record = authoritative_entries.get(candidate_slug, {})
+        score = score_authoritative_example_match(example_record, candidate_record, fallback_slug, source_slug)
+        if score > best_score:
+            best_slug = candidate_slug
+            best_score = score
+            score_tie = False
+        elif score == best_score:
+            score_tie = True
+
+    if best_slug and not score_tie and best_score > 0:
+        return best_slug
+    return None
+
+
 def build_example_registry() -> Dict[str, Dict[str, Any]]:
     registry: Dict[str, Dict[str, Any]] = {}
+    authoritative_entries: Dict[str, Dict[str, Any]] = {}
+    authoritative_aliases: Dict[str, str] = {}
 
     models_meta = read_json_file(MODELS_META_FILE, {})
     if isinstance(models_meta, dict):
@@ -1005,9 +1130,16 @@ def build_example_registry() -> Dict[str, Dict[str, Any]]:
             canonical_slug = extract_example_slug(normalized.get("source", ""), str(key))
             normalized["canonical_slug"] = canonical_slug
             if canonical_slug:
-                registry[canonical_slug] = merge_example_records(registry.get(canonical_slug, {}), normalized)
+                authoritative_entries[canonical_slug] = merge_example_records(authoritative_entries.get(canonical_slug, {}), normalized)
+                authoritative_aliases[canonical_slug] = canonical_slug
             if key and str(key) != canonical_slug:
-                registry[str(key)] = merge_example_records(registry.get(str(key), {}), normalized)
+                authoritative_aliases[str(key)] = canonical_slug
+
+    identity_index: Dict[Tuple[str, str], List[str]] = defaultdict(list)
+    for canonical_slug, record in authoritative_entries.items():
+        identity = example_identity_key(record)
+        if all(identity):
+            identity_index[identity].append(canonical_slug)
 
     examples_meta = read_json_file(EXAMPLES_META_FILE, {})
     if isinstance(examples_meta, dict):
@@ -1016,10 +1148,36 @@ def build_example_registry() -> Dict[str, Dict[str, Any]]:
             normalized = normalize_example_record(raw, fallback_slug=fallback_slug)
             canonical_slug = extract_example_slug(normalized.get("source", ""), fallback_slug)
             normalized["canonical_slug"] = canonical_slug
+
+            matched_slug = find_authoritative_example_match(
+                normalized,
+                fallback_slug,
+                canonical_slug,
+                authoritative_entries,
+                authoritative_aliases,
+                identity_index,
+            )
+            if matched_slug:
+                base_record = authoritative_entries.get(matched_slug, {})
+                enrichment = dict(normalized)
+                enrichment["source"] = str(base_record.get("source", "") or "").strip()
+                enrichment["canonical_slug"] = matched_slug
+                enrichment["fallback_slug"] = str(base_record.get("fallback_slug", "") or "").strip() or matched_slug
+                authoritative_entries[matched_slug] = merge_example_records(base_record, enrichment)
+                continue
+
             if canonical_slug:
                 registry[canonical_slug] = merge_example_records(registry.get(canonical_slug, {}), normalized)
             if fallback_slug and fallback_slug != canonical_slug:
                 registry[fallback_slug] = merge_example_records(registry.get(fallback_slug, {}), normalized)
+
+    for canonical_slug, record in authoritative_entries.items():
+        registry[canonical_slug] = merge_example_records(registry.get(canonical_slug, {}), record)
+
+    for alias_slug, canonical_slug in authoritative_aliases.items():
+        base_record = authoritative_entries.get(canonical_slug, {})
+        if base_record:
+            registry[alias_slug] = merge_example_records(registry.get(alias_slug, {}), base_record)
 
     return registry
 
@@ -2454,7 +2612,7 @@ FIELD_LABELS_SV: Dict[str, str] = {
     "manufacturer": "Tillverkare",
     "model": "Modell",
     "boat_year": "Årsmodell",
-    "home_port": "Hemmahamn",
+    "home_port": "Hemmahamn + Ort",
     "old_canopy": "Tillverkare av befintligt kapell",
     "wants_cover": "Önskar kapell",
     "wants_fender_socks": "Önskar fenderstrumpor",
@@ -2638,12 +2796,7 @@ def build_notification_html(
             "color:#6b7280;font-style:italic;'>Inga fält</td></tr>"
         )
 
-    try:
-        from datetime import datetime, timezone
-        dt = datetime.fromisoformat(timestamp_iso.replace("Z", "+00:00"))
-        local_str = dt.strftime("%d %b %Y, %H:%M") + " UTC"
-    except Exception:
-        local_str = html.escape(timestamp_iso)
+    local_str = html.escape(format_swedish_timestamp(timestamp_iso))
 
     attachments_block = ""
     if attachments:
@@ -2702,7 +2855,7 @@ def build_notification_html(
 
     meta_block = (
         "<div style='margin-top:18px;padding:12px 14px;background:#fafafa;border:1px solid #e5e7eb;'>"
-        f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Tid (UTC): {local_str}</div>"
+        f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Tid (svensk tid): {local_str}</div>"
         f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Referens-ID: {html.escape(submission_id)}</div>"
         "</div>"
     )
@@ -3444,7 +3597,7 @@ def send_mailgun_submission_notification(
         f"{attachment_lines}\n\n"
         f"{ai_reply_lines}"
         f"{status_action_lines}"
-        f"Tid (UTC): {timestamp_iso}\n"
+        f"Tid (svensk tid): {format_swedish_timestamp(timestamp_iso)}\n"
         f"ID: {submission_id}\n"
     )
     html_body = build_notification_html(
@@ -3542,7 +3695,7 @@ def process_form_submission(
         "fields": safe_fields,
         "form_summary": form_summary,
         "proposed_response": "",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "status": "nya-inskick",
         "read": False,
         "submitted_via": submitted_via,
@@ -3920,7 +4073,7 @@ FIELD_LABELS: Dict[str, str] = {
     "size": "Storlek",
     "address": "Adress",
     "boat_year": "Årsmodell",
-    "home_port": "Hemmahamn",
+    "home_port": "Hemmahamn + Ort",
     "old_canopy": "Tillverkare av befintligt kapell",
 }
 
@@ -3936,7 +4089,7 @@ FIELD_LABELS_EN: Dict[str, str] = {
     "size": "Size",
     "address": "Address",
     "boat_year": "Year model",
-    "home_port": "Home port",
+    "home_port": "Home port + City",
     "old_canopy": "Current canopy manufacturer",
 }
 
@@ -4128,7 +4281,7 @@ def map_draft_to_submission(intent: str, draft: Dict[str, Any]) -> Tuple[str, Di
                 "4. Tillverkare": str(normalized.get("manufacturer", "")).strip(),
                 "5. Modell": str(normalized.get("model", "")).strip(),
                 "6. Årsmodell": str(normalized.get("boat_year", "")).strip(),
-                "7. Hemmahamn": str(normalized.get("home_port", "")).strip(),
+                "7. Hemmahamn + Ort": str(normalized.get("home_port", "")).strip(),
                 "8. Tillverkare av befintligt kapell": str(normalized.get("old_canopy", "")).strip(),
                 "9. Övrig information": str(normalized.get("message", "")).strip(),
             },
@@ -5255,10 +5408,9 @@ def get_boat_data():
 @app.route("/henricssons_bilder/<path:filename>")
 def get_henricssons_files(filename: str):
     if filename == "models_meta.json":
-        data = get_site_content("models_meta")
-        if not isinstance(data, dict):
-            data = read_json_file(MODELS_META_FILE, {})
-        normalized = normalize_example_payload(data)
+        stored = get_site_content("models_meta")
+        file_data = read_json_file(MODELS_META_FILE, {})
+        normalized = merge_example_payload_dicts(stored if isinstance(stored, dict) else {}, file_data)
         return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
     full_path = (IMAGES_ROOT / filename).resolve()
@@ -5271,10 +5423,9 @@ def get_henricssons_files(filename: str):
 
 @app.route("/examples_meta.json")
 def get_examples_meta():
-    data = get_site_content("examples_meta")
-    if not isinstance(data, dict):
-        data = read_json_file(EXAMPLES_META_FILE, {})
-    normalized = normalize_example_payload(data)
+    stored = get_site_content("examples_meta")
+    file_data = read_json_file(EXAMPLES_META_FILE, {})
+    normalized = merge_example_payload_dicts(stored if isinstance(stored, dict) else {}, file_data)
     return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
 
@@ -5382,7 +5533,7 @@ def assistant_chat():
                     "manufacturer": "Tillverkare",
                     "model": "Modell",
                     "boat_year": "Årsmodell",
-                    "home_port": "Hemmahamn",
+                "home_port": "Hemmahamn + Ort",
                     "old_canopy": "Tillverkare av befintligt kapell",
                     "message": "Meddelande",
                 },
@@ -5393,7 +5544,7 @@ def assistant_chat():
                     "manufacturer": "Manufacturer",
                     "model": "Model",
                     "boat_year": "Year model",
-                    "home_port": "Home port",
+                    "home_port": "Home port + City",
                     "old_canopy": "Current canopy manufacturer",
                     "message": "Message",
                 },

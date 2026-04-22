@@ -1318,7 +1318,8 @@
 .hb-item img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    object-position: center;
     display: block;
     transition: transform 0.5s ease;
 }
@@ -1328,7 +1329,7 @@
 .hb-item > a.is-placeholder-thumb img {
     object-fit: contain;
 }
-.hb-item:hover img { transform: scale(1.04); }
+.hb-item:hover img { transform: none; }
 .hb-item:hover > a.is-placeholder-thumb img { transform: none; }
 .hb-item .caption {
     padding: 1rem 1.1rem 1.2rem;
@@ -1423,10 +1424,24 @@
     color: var(--ink);
     line-height: 1.55;
 }
+.hb-kapell-intro-section {
+    padding-bottom: 1rem;
+}
+.hb-kapell-form-section {
+    padding-top: 0;
+}
 .hb-contact-context a {
     color: var(--ink);
     text-decoration: underline;
     text-underline-offset: 0.15em;
+}
+.hb-contact-highlight {
+    display: inline-block;
+    padding: 0.55rem 0.75rem;
+    background: rgba(178, 138, 76, 0.16);
+    border-left: 3px solid var(--brass);
+    color: var(--cream);
+    font-weight: 600;
 }
 
 /* ---------- Map ---------- */
@@ -1520,12 +1535,6 @@
     filter: brightness(0) invert(1);
     opacity: 0.86;
 }
-.hb-footer-partners img[alt="Hansen Protection"] {
-    filter: none;
-    background: rgba(255, 255, 255, 0.92);
-    border-radius: 4px;
-    padding: 5px 7px;
-}
 .hb-footer-bottom {
     border-top: 1px solid #1e2a3d;
     margin-top: 3rem;
@@ -1547,6 +1556,8 @@
     .hb-premium .wrap { padding: 0 1.1rem; }
     .hb-section { padding: 3.25rem 0; }
     .hb-section--tight { padding: 2.5rem 0; }
+    .hb-kapell-intro-section { padding-bottom: 0.75rem; }
+    .hb-kapell-form-section { padding-top: 0; }
 
     /* Top / nav */
     .hb-top { font-size: 0.72rem; }

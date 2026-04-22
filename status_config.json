@@ -19,11 +19,6 @@
       "id": "redo-for-leverans",
       "name": "Redo för leverans",
       "fixed": false
-    },
-    {
-      "id": "test",
-      "name": "Test",
-      "fixed": false
     }
   ]
 }

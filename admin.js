@@ -222,8 +222,8 @@ const SUBMISSION_FIELD_LABELS = {
     boat_model: 'Båtmodell',
     boat_year: 'Årsmodell',
     arsmodell: 'Årsmodell',
-    home_port: 'Hemmahamn',
-    hemmahamn: 'Hemmahamn',
+    home_port: 'Hemmahamn + Ort',
+    hemmahamn: 'Hemmahamn + Ort',
     old_canopy: 'Tillverkare av befintligt kapell',
     tillverkare_av_befintligt_kapell: 'Tillverkare av befintligt kapell',
     wants_cover: 'Önskar kapell',
@@ -512,7 +512,7 @@ const ADVANCED_SUMMARY_FIELD_LABELS = {
         manufacturer: 'Tillverkare',
         model: 'Modell',
         boat_year: 'Arsmodell',
-        home_port: 'Hemmahamn',
+        home_port: 'Hemmahamn + Ort',
         old_canopy: 'Tillverkare av befintligt kapell',
         message: 'Meddelande',
         quantity: 'Antal',
@@ -527,7 +527,7 @@ const ADVANCED_SUMMARY_FIELD_LABELS = {
         manufacturer: 'Manufacturer',
         model: 'Model',
         boat_year: 'Year model',
-        home_port: 'Home port',
+        home_port: 'Home port + City',
         old_canopy: 'Current canopy manufacturer',
         message: 'Message',
         quantity: 'Quantity',
@@ -991,6 +991,50 @@ function bindImageDelete() {
 
 function formatAnalyticsNumber(value) {
     return new Intl.NumberFormat('sv-SE').format(Number(value || 0));
+}
+
+function parseSubmissionDateValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const normalized = /(?:Z|[+-]\d{2}:\d{2})$/.test(raw) ? raw : `${raw}Z`;
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatSubmissionDateTime(value) {
+    const date = parseSubmissionDateValue(value);
+    if (!date) return '';
+    return new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Stockholm',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
+}
+
+function formatSubmissionDateOnly(value) {
+    const date = parseSubmissionDateValue(value);
+    if (!date) return '';
+    return new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Stockholm',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(date);
+}
+
+function formatSubmissionDateShortLabel(value) {
+    const date = parseSubmissionDateValue(value);
+    if (!date) return '';
+    return new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Stockholm',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
 }
 
 function renderAnalyticsBarList(targetSelector, items, labelKey, emptyLabel) {
@@ -2312,8 +2356,8 @@ function sortNyaInskick() {
     }
 
     statusItems['nya-inskick'].sort((a, b) => {
-        const dateA = new Date(a.date || a.timestamp || 0);
-        const dateB = new Date(b.date || b.timestamp || 0);
+        const dateA = parseSubmissionDateValue(a.date || a.timestamp) || new Date(0);
+        const dateB = parseSubmissionDateValue(b.date || b.timestamp) || new Date(0);
 
         if (nyaInskickSortOrder === 'oldest') {
             return dateA - dateB; // Oldest first
@@ -2471,14 +2515,9 @@ function renderStatusFolders() {
 
                     // Add date and time for form submissions
                     if (item.date || item.timestamp) {
-                        const date = new Date(item.date || item.timestamp);
+                        const date = parseSubmissionDateValue(item.date || item.timestamp);
                         if (!isNaN(date.getTime())) {
-                            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                            const month = months[date.getMonth()];
-                            const day = date.getDate();
-                            const hours = String(date.getHours()).padStart(2, '0');
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            const dateTimeDiv = $('<div>').addClass('folder-item-content').text(`${month} ${day} ${hours}:${minutes}`);
+                            const dateTimeDiv = $('<div>').addClass('folder-item-content').text(formatSubmissionDateShortLabel(item.date || item.timestamp));
                             itemDiv.append(dateTimeDiv);
                         }
                     }
@@ -2516,7 +2555,7 @@ function renderStatusFolders() {
                         itemDiv.append(desc);
                     }
                     if (item.date) {
-                        itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + new Date(item.date).toLocaleDateString('sv-SE')));
+                        itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + formatSubmissionDateOnly(item.date)));
                     }
                 }
 
@@ -2634,6 +2673,18 @@ function moveStatusDraftItem(clientId, direction) {
     renderStatusConfigDraftList();
 }
 
+function moveStatusDraftClientId(clientId, targetIndex) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index <= 0) return;
+    const status = statusConfigDraft[index];
+    if (!status || status.fixed) return;
+    const boundedIndex = Math.max(1, Math.min(targetIndex, statusConfigDraft.length - 1));
+    if (boundedIndex === index) return;
+    const [item] = statusConfigDraft.splice(index, 1);
+    statusConfigDraft.splice(boundedIndex, 0, item);
+    renderStatusConfigDraftList();
+}
+
 function removeStatusDraftItem(clientId) {
     const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
     if (index < 0) return;
@@ -2654,6 +2705,7 @@ function renderStatusConfigDraftList() {
     const list = $('#status-config-list');
     if (!list.length) return;
     list.empty();
+    list.off('dragover.statusConfigList drop.statusConfigList');
 
     statusConfigDraft.forEach((status, index) => {
         const row = $('<div>').addClass('status-config-row');
@@ -2904,8 +2956,8 @@ function sortNyaInskick() {
     }
 
     (statusItems['nya-inskick'] || []).sort((a, b) => {
-        const dateA = new Date(a.date || a.timestamp || 0);
-        const dateB = new Date(b.date || b.timestamp || 0);
+        const dateA = parseSubmissionDateValue(a.date || a.timestamp) || new Date(0);
+        const dateB = parseSubmissionDateValue(b.date || b.timestamp) || new Date(0);
 
         if (nyaInskickSortOrder === 'oldest') {
             return dateA - dateB;
@@ -3047,14 +3099,9 @@ function renderStatusFolders() {
                     }
 
                     if (item.date || item.timestamp) {
-                        const date = new Date(item.date || item.timestamp);
+                        const date = parseSubmissionDateValue(item.date || item.timestamp);
                         if (!isNaN(date.getTime())) {
-                            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                            const month = months[date.getMonth()];
-                            const day = date.getDate();
-                            const hours = String(date.getHours()).padStart(2, '0');
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            const dateTimeDiv = $('<div>').addClass('folder-item-content').text(`${month} ${day} ${hours}:${minutes}`);
+                            const dateTimeDiv = $('<div>').addClass('folder-item-content').text(formatSubmissionDateShortLabel(item.date || item.timestamp));
                             itemDiv.append(dateTimeDiv);
                         }
                     }
@@ -3089,7 +3136,7 @@ function renderStatusFolders() {
                         itemDiv.append(desc);
                     }
                     if (item.date) {
-                        itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + new Date(item.date).toLocaleDateString('sv-SE')));
+                        itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + formatSubmissionDateOnly(item.date)));
                     }
                 }
 
@@ -3350,7 +3397,7 @@ async function viewFormSubmission(status, index) {
 
     // Just show date/time in small text at the top
     if (item.date) {
-        formSection.append($('<div>').addClass('submission-date').text(`Inskickad: ${new Date(item.date).toLocaleString('sv-SE')}`));
+        formSection.append($('<div>').addClass('submission-date').text(`Inskickad: ${formatSubmissionDateTime(item.date)}`));
     }
 
     // Form fields - the main content
@@ -4625,8 +4672,8 @@ function sortNyaInskick() {
         nyaInskickSortOrder = savedSort;
     }
     (statusItems['nya-inskick'] || []).sort((a, b) => {
-        const dateA = new Date(a.date || a.timestamp || 0);
-        const dateB = new Date(b.date || b.timestamp || 0);
+        const dateA = parseSubmissionDateValue(a.date || a.timestamp) || new Date(0);
+        const dateB = parseSubmissionDateValue(b.date || b.timestamp) || new Date(0);
         return nyaInskickSortOrder === 'oldest' ? dateA - dateB : dateB - dateA;
     });
 }
@@ -4825,14 +4872,9 @@ function renderStatusFolders() {
                         );
                     }
                     if (item.date || item.timestamp) {
-                        const date = new Date(item.date || item.timestamp);
-                        if (!isNaN(date.getTime())) {
-                            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                            const month = months[date.getMonth()];
-                            const day = date.getDate();
-                            const hours = String(date.getHours()).padStart(2, '0');
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            itemDiv.append($('<div>').addClass('folder-item-content').text(`${month} ${day} ${hours}:${minutes}`));
+                        const date = parseSubmissionDateValue(item.date || item.timestamp);
+                        if (date) {
+                            itemDiv.append($('<div>').addClass('folder-item-content').text(formatSubmissionDateShortLabel(item.date || item.timestamp)));
                         }
                     }
                 } else {
@@ -4866,7 +4908,7 @@ function renderStatusFolders() {
                         itemDiv.append(desc);
                     }
                     if (item.date) {
-                        itemDiv.append($('<div>').addClass('folder-item-content').text(`Datum: ${new Date(item.date).toLocaleDateString('sv-SE')}`));
+                        itemDiv.append($('<div>').addClass('folder-item-content').text(`Datum: ${formatSubmissionDateOnly(item.date)}`));
                     }
                 }
 
@@ -5032,9 +5074,7 @@ setTimeout(function installArchiveAndExportTools() {
     };
 
     function formatSubmissionDateForDisplay(item) {
-        const date = new Date(item.date || item.timestamp || '');
-        if (isNaN(date.getTime())) return '';
-        return date.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+        return formatSubmissionDateTime(item.date || item.timestamp);
     }
 
     function getArchiveSearchText(item) {
@@ -5252,11 +5292,11 @@ setTimeout(function installArchiveAndExportTools() {
   </Table>
  </Worksheet>
 </Workbook>`;
-        const blob = new Blob(['\ufeff', workbookXml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        const blob = new Blob(['\ufeff', workbookXml], { type: 'application/xml;charset=utf-8' });
         const link = document.createElement('a');
         const stamp = new Date().toISOString().slice(0, 10);
         link.href = URL.createObjectURL(blob);
-        link.download = `${slugifyStatusId(filenameBase || title) || 'export'}-${stamp}.xls`;
+        link.download = `${slugifyStatusId(filenameBase || title) || 'export'}-${stamp}.xml`;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -5307,3 +5347,138 @@ setTimeout(function installArchiveAndExportTools() {
 
     decorateStatusFolders();
 }, 0);
+
+function moveStatusDraftClientId(clientId, targetIndex) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index <= 0) return;
+    const status = statusConfigDraft[index];
+    if (!status || status.fixed) return;
+    const boundedIndex = Math.max(1, Math.min(targetIndex, statusConfigDraft.length - 1));
+    if (boundedIndex === index) return;
+    const [item] = statusConfigDraft.splice(index, 1);
+    statusConfigDraft.splice(boundedIndex, 0, item);
+    renderStatusConfigDraftList();
+}
+
+function reorderStatusDraftClientId(clientId, targetIndex) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index <= 0) return index;
+    const status = statusConfigDraft[index];
+    if (!status || status.fixed) return index;
+    const boundedIndex = Math.max(1, Math.min(targetIndex, statusConfigDraft.length - 1));
+    if (boundedIndex === index) return index;
+    const [item] = statusConfigDraft.splice(index, 1);
+    statusConfigDraft.splice(boundedIndex, 0, item);
+    return boundedIndex;
+}
+
+function syncStatusDraftOrderFromDom(list) {
+    const order = $(list).children('.status-config-row').map(function() {
+        return this.dataset.clientId || '';
+    }).get();
+    const itemsById = new Map(statusConfigDraft.map(status => [status.clientId, status]));
+    statusConfigDraft = order.map(clientId => itemsById.get(clientId)).filter(Boolean);
+}
+
+function renderStatusConfigDraftList() {
+    const list = $('#status-config-list');
+    if (!list.length) return;
+    list.empty();
+    list.off('dragover.statusConfigList drop.statusConfigList');
+
+    statusConfigDraft.forEach((status, index) => {
+        const row = $('<div>')
+            .addClass('status-config-row')
+            .attr('data-client-id', status.clientId || '');
+        if (status.fixed) {
+            row.addClass('is-fixed');
+        } else {
+            row.attr('draggable', 'true');
+        }
+
+        const input = $('<input>')
+            .attr('type', 'text')
+            .addClass('status-config-input')
+            .val(status.name)
+            .prop('disabled', status.fixed)
+            .attr('placeholder', 'Namn på status');
+        input.on('input', function() {
+            status.name = sanitizeStatusName($(this).val());
+        });
+
+        if (!status.fixed) {
+            row
+                .on('dragstart', function(e) {
+                    const event = e.originalEvent;
+                    if (!event || !event.dataTransfer) return;
+                    list.attr('data-dragging-client-id', status.clientId);
+                    row.addClass('is-dragging');
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', status.clientId);
+                })
+                .on('dragend', function() {
+                    list.removeAttr('data-dragging-client-id');
+                    list.find('.status-config-row').removeClass('is-dragging is-drop-target-before is-drop-target-after');
+                });
+        }
+
+        const main = $('<div>').addClass('status-config-main');
+        if (!status.fixed) {
+            main.append(
+                $('<div>')
+                    .addClass('status-config-drag-handle')
+                    .attr('aria-hidden', 'true')
+            );
+        }
+        main.append(input);
+
+        const actions = $('<div>').addClass('status-config-row-actions');
+        if (!status.fixed) {
+            actions.append(
+                $('<button>')
+                    .attr('type', 'button')
+                    .addClass('btn-ghost status-config-delete-btn')
+                    .text('×')
+                    .on('click', function() { removeStatusDraftItem(status.clientId); })
+            );
+        }
+
+        const itemCount = status.id ? getStatusItemCount(status.id) : 0;
+        const meta = $('<div>').addClass('status-config-meta');
+        meta.text(status.fixed ? 'Fast mapp' : (itemCount > 0 ? `${itemCount} objekt i mappen` : 'Tom mapp'));
+
+        row.append(main, actions, meta);
+        list.append(row);
+    });
+
+    list
+        .on('dragover.statusConfigList', function(e) {
+            const draggingId = list.attr('data-dragging-client-id');
+            if (!draggingId) return;
+            e.preventDefault();
+            const event = e.originalEvent;
+            if (!event) return;
+            const draggedRow = list.children(`.status-config-row[data-client-id="${draggingId}"]`).get(0);
+            if (!draggedRow) return;
+            const candidates = list.children('.status-config-row[draggable="true"]').not(`[data-client-id="${draggingId}"]`).get();
+            let insertBefore = null;
+            for (const candidate of candidates) {
+                const rect = candidate.getBoundingClientRect();
+                if (event.clientY < rect.top + (rect.height / 2)) {
+                    insertBefore = candidate;
+                    break;
+                }
+            }
+            if (insertBefore) {
+                this.insertBefore(draggedRow, insertBefore);
+            } else {
+                this.appendChild(draggedRow);
+            }
+            syncStatusDraftOrderFromDom(this);
+        })
+        .on('drop.statusConfigList', function(e) {
+            const draggingId = list.attr('data-dragging-client-id');
+            if (!draggingId) return;
+            e.preventDefault();
+        });
+}

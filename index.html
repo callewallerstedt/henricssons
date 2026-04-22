@@ -766,7 +766,7 @@
     .hb-footer a:hover { color: var(--brass); }
     .hb-footer p, .hb-footer li { font-size: 0.9rem; line-height: 1.9; }
     .hb-footer ul { list-style: none; }
-    .hb-footer .brand img { height: 48px; margin-bottom: 1.25rem; filter: brightness(1.1); }
+    .hb-footer .brand > img { height: 48px; width: auto; max-width: 220px; margin-bottom: 1.25rem; filter: brightness(1.1); object-fit: contain; }
     .hb-footer .credit {
         display: flex; gap: 0.75rem; align-items: center;
         margin-top: 1.25rem;
@@ -775,6 +775,8 @@
     .hb-footer .credit img { width: 36px; height: auto; }
     .hb-footer .credit .t { font-size: 0.7rem; line-height: 1.4; }
     .hb-footer .credit .t strong { color: var(--cream); letter-spacing: 0.08em; font-size: 0.72rem; }
+    .hb-footer-partners { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.85rem 1rem; align-items: center; }
+    .hb-footer-partners img { display: block; width: 100%; max-width: 120px; max-height: 42px; object-fit: contain; filter: brightness(0) invert(1); opacity: 0.86; }
     .hb-footer-bottom {
         border-top: 1px solid #1e2a3d;
         margin-top: 3rem; padding-top: 1.5rem;
@@ -887,7 +889,7 @@
 
         .hb-footer { padding: 2.75rem 0 1.25rem; }
         .hb-footer .grid { gap: 1.5rem; }
-        .hb-footer .brand img { height: 40px; margin-bottom: 0.85rem; }
+        .hb-footer .brand > img { height: 40px; margin-bottom: 0.85rem; }
         .hb-footer h5 { margin-bottom: 0.75rem; font-size: 0.9rem; }
         .hb-footer-bottom { margin-top: 2rem; justify-content: center; text-align: center; font-size: 0.72rem; }
     }
@@ -977,7 +979,7 @@
         <div class="hb-hero-meta">
             <div class="wrap">
                 <div class="item"><div class="k">50+</div><div class="v">Års erfarenhet</div></div>
-                <div class="item"><div class="k">100+</div><div class="v">Båtmodeller</div></div>
+                <div class="item"><div class="k">1000+</div><div class="v">Båtmodeller</div></div>
                 <div class="item"><div class="k">4</div><div class="v">Nordiska länder</div></div>
                 <div class="item"><div class="k">AAA</div><div class="v">Högsta kreditvärdighet</div></div>
             </div>
@@ -996,7 +998,7 @@
                 <span class="rule"></span>
                 <h2>Över 50 års erfarenhet av att skydda båtar i Nordens väder.</h2>
                 <p>
-                    Sedan starten 1967 har vi byggt upp ett mallregister som täcker fler än 100 båtmodeller, från motorbåtar till segelbåtar av alla storlekar. Det vi inte har mall för importerar vi som originalkapell från våra partners i Norge, Finland och Danmark.
+                    Sedan starten 1967 har vi byggt upp ett mallregister som täcker över 1000 båtmodeller, från motorbåtar till segelbåtar av alla storlekar. Det vi inte har mall för importerar vi som originalkapell från våra partners i Norge, Finland och Danmark.
                 </p>
                 <p>
                     Varje kapell sys av erfarna hantverkare i vår verkstad i Kungsbacka. Material, sömmar och detaljer är valda för att hålla år efter år, hamn efter hamn.
@@ -1110,6 +1112,7 @@
                 <img src="assets/optimized/partner-varuste.webp" alt="VA Varuste" width="112" height="112" loading="lazy" decoding="async"/>
                 <img src="assets/schultz.png" alt="Schultz Kalecher" width="81" height="96" loading="lazy" decoding="async"/>
                 <img src="assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu" width="260" height="62" loading="lazy" decoding="async"/>
+                <img src="assets/optimized/partner-hansenprotection.png" alt="Hansen Protection" width="180" height="64" loading="lazy" decoding="async"/>
             </div>
         </div>
     </section>
@@ -1192,13 +1195,14 @@
                 </div>
                 <div>
                     <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
+                    <div class="hb-footer-partners" aria-label="Partners">
+                        <img src="assets/optimized/partner-jens-sagen.webp" alt="Jens Sagen" loading="lazy" decoding="async"/>
+                        <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-varuste.webp" alt="VA Varuste" loading="lazy" decoding="async"/>
+                        <img src="assets/schultz.png" alt="Schultz Kalecher" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-hansenprotection.png" alt="Hansen Protection" loading="lazy" decoding="async"/>
+                    </div>
                 </div>
             </div>
             <div class="hb-footer-bottom">
