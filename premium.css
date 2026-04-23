@@ -1063,6 +1063,15 @@
     font-size: 0.9rem;
     line-height: 1.5;
 }
+.grid-custom-entry {
+    border-style: dashed;
+    background: rgba(255, 255, 255, 0.48);
+    color: var(--muted);
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-weight: 500;
+    text-transform: none;
+}
 @media (max-width: 640px) {
     .grid1,
     .grid2 {
@@ -1076,6 +1085,13 @@
     border-color: var(--brass);
     background: var(--brass);
     color: var(--white);
+}
+.grid-custom-entry:hover,
+.grid-custom-entry.selected-t,
+.grid-custom-entry.selected-m {
+    border-color: rgba(178, 138, 76, 0.65);
+    background: rgba(178, 138, 76, 0.12);
+    color: var(--ink);
 }
 .inaktiv { display: none; }
 .rensa-button {
@@ -1425,7 +1441,8 @@
     line-height: 1.55;
 }
 .hb-kapell-intro-section {
-    padding-bottom: 1rem;
+    padding-top: 2.5rem;
+    padding-bottom: 0.5rem;
 }
 .hb-kapell-form-section {
     padding-top: 0;

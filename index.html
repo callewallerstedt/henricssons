@@ -420,7 +420,7 @@
     .hb-btn-ghost:hover { border-color: var(--cream); background: rgba(245,240,230,0.06); }
     .hb-hero-subcta-wrap {
         grid-column: 1 / -1;
-        margin-top: 1rem;
+        margin-top: 0;
         padding-bottom: 1.1rem;
         display: flex;
         justify-content: center;
@@ -836,24 +836,37 @@
             margin-top: -0.1rem;
         }
 
-        .hb-hero { min-height: 760px; }
-        .hb-hero .wrap { padding-top: 3rem; padding-bottom: 11.4rem; }
+        .hb-hero { min-height: 620px; }
+        .hb-hero .wrap { padding-top: 2rem; padding-bottom: 7.6rem; }
         .hb-hero h1 { font-size: clamp(2rem, 8vw, 2.6rem); margin-top: 0.6rem; }
         .hb-hero .lead { font-size: 0.98rem; margin-top: 1rem; line-height: 1.6; }
         .hb-hero .rule { margin: 1rem 0; }
         .hb-ctas {
             display: flex;
-            gap: 0.6rem;
-            margin-top: 1.4rem;
-            justify-content: flex-start;
+            gap: 0.55rem;
+            max-width: 280px;
+            margin-top: 1.15rem;
+            justify-content: center;
             flex-wrap: wrap;
         }
         .hb-ctas .hb-btn,
-        .hb-ctas .hb-btn-primary { flex: 1 1 100%; justify-content: center; text-align: center; }
+        .hb-ctas .hb-btn-primary {
+            flex: 0 0 100%;
+            justify-content: center;
+            text-align: center;
+            padding: 0.72rem 1rem;
+            font-size: 0.68rem;
+            letter-spacing: 0.11em;
+        }
         .hb-finalcta .hb-ctas .hb-btn,
         .hb-finalcta .hb-ctas .hb-btn-primary { flex: 0 1 auto; }
-        .hb-hero-subcta-wrap { margin-top: 0.7rem; padding-bottom: 0.8rem; }
-        .hb-hero-subcta { width: 100%; }
+        .hb-hero-subcta-wrap { margin-top: 0; padding-bottom: 0; width: 100%; }
+        .hb-hero-subcta {
+            width: 100%;
+            padding: 0.64rem 1rem;
+            font-size: 0.66rem;
+            letter-spacing: 0.12em;
+        }
         .hb-hero-meta .wrap { padding: 0.85rem 1.1rem; gap: 0.5rem; }
         .hb-hero-meta .k { font-size: 1.2rem; }
         .hb-hero-meta .v { font-size: 0.6rem; letter-spacing: 0.14em; margin-top: 0.2rem; }
@@ -970,7 +983,7 @@
             </p>
             <div class="hb-ctas">
                 <a href="/kapellforfragan" class="hb-btn hb-btn-primary"><span>Få en offert</span></a>
-                <a href="/bilder-och-exempel" class="hb-btn hb-btn-ghost">Se våra kapell</a>
+                <a href="/bilder-och-exempel" class="hb-btn hb-btn-ghost">Bilder &amp; Exempel</a>
                 <div class="hb-hero-subcta-wrap">
                     <a href="/dynsatser" class="hb-hero-subcta">Dynsatser</a>
                 </div>
