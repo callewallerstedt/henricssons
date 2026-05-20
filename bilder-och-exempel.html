@@ -269,11 +269,15 @@
             'henricssonsbatkapell.onrender.com',
             'henricssons-api.onrender.com',
             'henricssons.onrender.com',
-            'henricssons-app.onrender.com'
+            'henricssons-app.onrender.com',
+            'localhost',
+            '127.0.0.1'
         ]);
 
         function normalizeLegacyUrl(value) {
-            const raw = String(value || '').trim();
+            // Defensive: any value coming from JSON may use backslashes (dev import)
+            // or point at a dev/legacy host. Always coerce to a path under API_BASE.
+            const raw = String(value || '').trim().replace(/\\/g, '/');
             if (!raw || raw.startsWith('data:')) return raw;
             if (!/^https?:\/\//i.test(raw)) return raw;
             try {

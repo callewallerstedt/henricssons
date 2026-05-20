@@ -1,5 +1,0 @@
-Database connected.
-Starting Flask server on port 25565
-Admin API key configured: yes
- * Serving Flask app 'admin_api_flask'
- * Debug mode: off

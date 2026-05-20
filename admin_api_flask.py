@@ -103,38 +103,201 @@ CORE_PUBLIC_PATHS = [
     "/kapellforfragan",
 ]
 LEGACY_EXAMPLE_REDIRECTS = {
+    "16-4400": "/exempel/16-4400ht",
+    "16-4400-mod3": "/exempel/16-4400-mod-3",
     "16-ht": "/bilder-och-exempel",
+    "18-siesta": "/bilder-och-exempel",
+    "19-20": "/bilder-och-exempel",
+    "20-dc-2": "/exempel/20-dc",
+    "20-med-vindruta-2": "/exempel/20-med-vindruta",
+    "21-22": "/bilder-och-exempel",
+    "21-23": "/bilder-och-exempel",
+    "21-24": "/bilder-och-exempel",
+    "21-wa": "/exempel/21-wa-s",
     "215-pilot-house": "/bilder-och-exempel",
-    "26-2657": "/exempel/26-2656",
+    "2100sc-2": "/exempel/2100sc",
+    "22-hardtop-2": "/exempel/22-hardtop",
+    "23-24": "/bilder-och-exempel",
+    "23-dc-2": "/exempel/23-dc",
+    "23ht": "/exempel/23ht-2002-2004",
+    "235-sundowner-2": "/exempel/235-sundowner",
+    "235-sundowner-3": "/exempel/235-sundowner",
+    "24-25": "/bilder-och-exempel",
+    "24-26": "/bilder-och-exempel",
+    "24-27": "/bilder-och-exempel",
+    "25-27": "/bilder-och-exempel",
+    "25-28": "/bilder-och-exempel",
+    "26-2656": "/exempel/2655",
+    "26-2657": "/exempel/2655",
     "26-aldre-med-traram-doghouse-specialkapell": "/exempel/26-102-71-aldre-korta-std-traram-doghouse",
     "26-dc-utan-targa": "/exempel/26-dc",
+    "26-ht-2": "/exempel/26-ht",
+    "26dc": "/exempel/26-dc",
+    "27-28": "/bilder-och-exempel",
+    "27-de-aldre-arsmodellerna-70-80-tal": "/bilder-och-exempel",
+    "27-oc": "/exempel/27-oc-ver-2",
     "27-sun-cruiser": "/bilder-och-exempel",
     "28-2": "/exempel/28",
+    "28-c": "/exempel/28",
+    "29ht-2": "/exempel/29ht",
     "30-scampi": "/bilder-och-exempel",
+    "3003": "/exempel/3003-originalkapell",
     "31-sprayhood-for-22mm-bagar": "/exempel/if-sprayhood-22mm-bagar",
+    "311-312": "/bilder-och-exempel",
+    "311-313": "/bilder-och-exempel",
+    "311-314": "/bilder-och-exempel",
+    "32-33": "/bilder-och-exempel",
     "32-specialsprayhood": "/exempel/32",
+    "320": "/bilder-och-exempel",
     "33": "/bilder-och-exempel",
+    "330-targa-2": "/exempel/330-targa",
     "34-3": "/exempel/34",
+    "34-35": "/bilder-och-exempel",
+    "34-36": "/bilder-och-exempel",
+    "34-37": "/bilder-och-exempel",
+    "342": "/bilder-och-exempel",
+    "480-akterkapell-original": "/exempel/480-sc-akterkapell-original",
+    "5-5-6": "/exempel/5-5",
+    "50-open": "/bilder-och-exempel",
+    "50-tc-original-hamnkapell": "/bilder-och-exempel",
+    "500-clx-commander-2": "/exempel/500-clx-commander",
+    "5000dc-2": "/exempel/5000dc",
+    "5020": "/bilder-och-exempel",
+    "5031": "/bilder-och-exempel",
     "505-ht-d-a": "/exempel/505-ht",
-    "510gts-konsollhuv": "/exempel/510-pulpethuv",
+    "5057-captainblue": "/exempel/5057-captain-blue",
+    "5058-darknavy": "/exempel/5058-dark-navy",
+    "510-gti-2": "/exempel/510-gti",
+    "510-pulpethuv": "/bilder-och-exempel",
+    "510gts-konsollhuv": "/exempel/510gti",
+    "510ht-2": "/exempel/510ht",
+    "512-excel": "/bilder-och-exempel",
+    "512-excel-2": "/bilder-och-exempel",
+    "512-excel-dynsats-aktersoffa": "/bilder-och-exempel",
+    "515-invader-explorer-2": "/exempel/515-invader-explorer",
+    "5150-5220": "/bilder-och-exempel",
+    "520-ht-2": "/exempel/520-ht",
+    "520dc": "/bilder-och-exempel",
+    "520ht-2": "/exempel/520ht",
+    "5210": "/bilder-och-exempel",
+    "5220-5150": "/bilder-och-exempel",
+    "5220-bow-rider": "/exempel/5220-5150-bow-rider",
+    "52cc": "/bilder-och-exempel",
+    "530dc-2": "/exempel/530dc",
+    "530dc-3": "/exempel/530dc",
+    "535-de-luxe-2": "/exempel/535-de-luxe",
+    "535-invader-2": "/exempel/535-invader",
+    "53br-2": "/exempel/53br",
+    "540-dc-cruiser": "/exempel/540dc-cruiser",
+    "5400": "/bilder-och-exempel",
+    "55-br-original-hamnkapell": "/bilder-och-exempel",
+    "555-611": "/bilder-och-exempel",
+    "561-ht-2": "/exempel/561-ht",
     "565-ht": "/exempel/560-ht",
+    "56sc": "/exempel/56-sc",
+    "57-br-cross": "/bilder-och-exempel",
+    "5700-open-aktersoffa-dynsats": "/bilder-och-exempel",
+    "5700-wa": "/bilder-och-exempel",
+    "575ht-2": "/exempel/575ht",
     "5820-58br-original-dynsats": "/exempel/5820",
+    "5910": "/bilder-och-exempel",
+    "5930": "/bilder-och-exempel",
+    "610-dorado-2": "/exempel/610-dorado",
+    "6110": "/bilder-och-exempel",
+    "6110-6111": "/bilder-och-exempel",
+    "6110-6112": "/bilder-och-exempel",
+    "620-dc-2": "/exempel/620-dc",
+    "620-dc-3": "/exempel/620-dc",
+    "620-dc-4": "/exempel/620-dc",
+    "620-dc-5": "/exempel/620-dc",
+    "620c-d-a-2": "/exempel/620c-d-a",
+    "620dc-2": "/exempel/620dc",
+    "620ht-2": "/exempel/620ht",
+    "620ht-3": "/exempel/620ht",
+    "621-622": "/bilder-och-exempel",
+    "6210-62cc-2": "/exempel/6210-62cc",
+    "6210-62cc-3": "/exempel/6210-62cc",
     "630wa-fam": "/exempel/6230wa",
     "630wa-fam-2": "/exempel/6230wa",
     "635-wa-utan-racke-vindruta": "/exempel/635-wa",
     "640-dc-original-hamnkapell-2": "/exempel/640-dc-original-hamnkapell",
+    "640-weekender-2": "/exempel/640-weekender",
+    "640ht-2": "/exempel/640ht",
+    "645-beetle-2": "/exempel/645-beetle",
+    "64dc": "/exempel/64-dc",
+    "66dc-2": "/exempel/66dc",
+    "6600-wa-korta-kapellversion-utan-targabage": "/bilder-och-exempel",
     "6600-wa-med-targabage": "/bilder-och-exempel",
     "68-br-originalkapell": "/exempel/68-dc-originalkapell",
     "680-snipa-originalkapell": "/bilder-och-exempel",
+    "68dc": "/bilder-och-exempel",
+    "68dc-2": "/bilder-och-exempel",
+    "700-701": "/bilder-och-exempel",
+    "700-miniton-2": "/exempel/700-miniton",
+    "700-weekender-originalkapell-2": "/exempel/700-weekender-originalkapell",
+    "703-704": "/bilder-och-exempel",
+    "705-voyager-2": "/exempel/705-voyager",
+    "705-voyager-3": "/exempel/705-voyager",
+    "740-741": "/bilder-och-exempel",
+    "75-cross-br": "/bilder-och-exempel",
+    "75br": "/bilder-och-exempel",
+    "76dc": "/exempel/76-dc",
+    "760-dc-2": "/exempel/760-dc",
     "7700ht-originalkapell": "/bilder-och-exempel",
+    "78-7801": "/bilder-och-exempel",
+    "78-cirrus-2": "/exempel/78-cirrus",
+    "78-cirrus-7": "/exempel/78-cirrus",
+    "79-dc-hamnkapell": "/bilder-och-exempel",
+    "88-dc-hamnkapell": "/bilder-och-exempel",
+    "900-901": "/bilder-och-exempel",
     "95-sprayhood-till-originalbagar": "/exempel/cumulus-sprayhood-pa-originalbagar",
+    "batstol-mini": "/bilder-och-exempel",
+    "batstol-va-elite-s": "/bilder-och-exempel",
+    "batstol-va-mini-gt": "/bilder-och-exempel",
+    "cumulus": "/exempel/cumulus-sittbrunnskapell",
+    "cumulus-2": "/exempel/cumulus-sittbrunnskapell",
+    "cumulus-3": "/exempel/cumulus-sprayhood-pa-originalbagar",
+    "d-55": "/exempel/d-55-5500dc",
+    "d-55-osv-originalkapell": "/bilder-och-exempel",
+    "d65": "/bilder-och-exempel",
+    "dc-21-22": "/bilder-och-exempel",
+    "hajen-2": "/exempel/hajen",
+    "hajen-3": "/exempel/hajen",
+    "hajen-4": "/exempel/hajen",
+    "hr-510-akterkapell-i-original": "/bilder-och-exempel",
+    "husky-r7": "/bilder-och-exempel",
+    "if": "/exempel/if-sprayhood-22mm-bagar",
+    "if-2": "/exempel/if-sprayhood-22mm-bagar",
+    "imperial": "/bilder-och-exempel",
+    "l-2": "/exempel/l",
     "le": "/exempel/l",
     "magnum-dynsats-original-1999-2001": "/exempel/magnum-dynsats-original",
     "magnum-dynsats-original-2010-2014": "/exempel/magnum-dynsats-original",
     "magnum-original-hamnkapell-02-10": "/exempel/magnum-hamnkapell",
+    "markilux-37-356-cherryred": "/bilder-och-exempel",
+    "maxi": "/bilder-och-exempel",
+    "p023-arcticblue": "/exempel/p023-artic-blue",
+    "p024-atlanticblue": "/exempel/p024-atlantic-blue",
+    "p057": "/bilder-och-exempel",
     "s51": "/exempel/s52",
+    "s64-original-dynsats": "/bilder-och-exempel",
+    "sprayhood-och-sittbrunnskapell-2": "/exempel/sprayhood-och-sittbrunnskapell",
+    "t51": "/bilder-och-exempel",
+    "t62-forkapell": "/bilder-och-exempel",
+    "t7-batkapell-2015--original": "/exempel/t7-batkapell-2015-original",
+    "t8-batkapell--14-16-original": "/exempel/t8-batkapell-14-16-original",
+    "x": "/exempel/x-med-kapellbox",
+    "x-original-hamnkapell-2014-2020": "/bilder-och-exempel",
+    "xl-2000-2003": "/exempel/xl-1997-1999",
+    "xl-2008-original-dynsats": "/exempel/xl-2004-2007-original-dynsats",
+    "xl-2012": "/bilder-och-exempel",
+    "xl-original-dynsats-1999-2003": "/exempel/xl-1997-1999",
+    "xl-originalkapell": "/exempel/xl-originalkapell-2004-2011",
+    "xxl-dynsats": "/bilder-och-exempel",
     "xxl-hamnkapell-2015-2019": "/exempel/xxl",
     "xxl-originalkapell-2015-2019": "/exempel/xxl",
+    "z7-8": "/exempel/z7",
+    "z8-9": "/exempel/z8",
 }
 
 DEFAULT_DATABASE_URL = f"sqlite:///{(BASE_DIR / 'henricssons.db').as_posix()}"
@@ -2196,7 +2359,7 @@ CUSTOMER_CONFIRMATION_TOKEN_PATTERN = re.compile(r"(\{sammanfattning\}|\{kontakt
 DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE = (
     "Hej {namn},\n\n"
     "Tack f\u00f6r att du kontaktade oss p\u00e5 Henricssons B\u00e5tkapell.\n\n"
-    "Vi har tagit emot ditt \u00e4rende och \u00e5terkommer s\u00e5 snart vi kan med information eller eventuella fr\u00e5gor.\n\n"
+    "Vi har tagit emot ditt \u00e4rende. Vi svarar p\u00e5 inkommande f\u00f6rfr\u00e5gningar l\u00f6pande, men det kan dr\u00f6ja under h\u00f6gs\u00e4song eftersom vi har underbart mycket att g\u00f6ra.\n\n"
     "{sammanfattning}\n"
     "Om du vill komplettera ditt \u00e4rende under tiden kan du kontakta oss med uppgifterna nedan.\n\n"
     "{kontaktinfo}\n\n"
@@ -5405,12 +5568,45 @@ def get_boat_data():
     return jsonify({})
 
 
+_LEGACY_ASSET_HOST_RE = re.compile(
+    r"^https?://(localhost|127\.0\.0\.1|([a-z0-9-]+\.)*onrender\.com|(www\.)?henricssonsbatkapell\.se)(:\d+)?/+",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_asset_url(value: Any) -> Any:
+    """Strip dev/legacy hosts and backslashes from image URLs so they always
+    resolve relative to the current origin. Defense against dev-saved data
+    that bakes in localhost:25565 URLs."""
+    if not isinstance(value, str):
+        return value
+    if value.startswith("data:"):
+        return value
+    cleaned = value.replace("\\", "/")
+    cleaned = _LEGACY_ASSET_HOST_RE.sub("", cleaned)
+    cleaned = re.sub(r"(?<!:)/{2,}", "/", cleaned)
+    return cleaned
+
+
+def _sanitize_models_meta_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return payload
+    for key, record in payload.items():
+        if not isinstance(record, dict):
+            continue
+        imgs = record.get("images")
+        if isinstance(imgs, list):
+            record["images"] = [_sanitize_asset_url(img) for img in imgs]
+    return payload
+
+
 @app.route("/henricssons_bilder/<path:filename>")
 def get_henricssons_files(filename: str):
     if filename == "models_meta.json":
         stored = get_site_content("models_meta")
         file_data = read_json_file(MODELS_META_FILE, {})
         normalized = merge_example_payload_dicts(stored if isinstance(stored, dict) else {}, file_data)
+        normalized = _sanitize_models_meta_payload(normalized)
         return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
     full_path = (IMAGES_ROOT / filename).resolve()
@@ -5426,6 +5622,7 @@ def get_examples_meta():
     stored = get_site_content("examples_meta")
     file_data = read_json_file(EXAMPLES_META_FILE, {})
     normalized = merge_example_payload_dicts(stored if isinstance(stored, dict) else {}, file_data)
+    normalized = _sanitize_models_meta_payload(normalized)
     return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
 

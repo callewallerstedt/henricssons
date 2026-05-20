@@ -33,7 +33,10 @@ Thumbs.db
 # Local runtime artifacts
 *.db
 server-*.log
+local-server*.log
+*.err.log
 chrome-profile/
 __*.png
 __*.html
 legacy-live-pages-before-premium/
+_tmp_*
