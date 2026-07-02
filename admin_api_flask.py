@@ -6676,6 +6676,13 @@ def root():
     return jsonify(status="ok")
 
 
+@app.route("/favicon.ico", methods=["GET"])
+def favicon():
+    response = send_from_directory(str(BASE_DIR), "logo.png")
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
 @app.route("/chat_widget.js", methods=["GET"])
 def chat_widget_script():
     if not is_public_chatbot_enabled():
