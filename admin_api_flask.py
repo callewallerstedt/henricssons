@@ -634,6 +634,24 @@ class BoatBrandImage(Base):
         }
 
 
+class SiteImage(Base):
+    """Images uploaded through the admin panel.
+
+    Render's disk is reset on every deploy, so the file written by
+    /api/upload_image disappears. The same bytes are stored here and
+    /henricssons_bilder/<path> falls back to this table when the file is
+    missing from disk.
+    """
+
+    __tablename__ = "site_images"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    rel_path = Column(String, unique=True, index=True, nullable=False)
+    mime = Column(String, nullable=False, default="image/jpeg")
+    data = Column(LargeBinary, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 engine = None
 SessionLocal = None
 
@@ -1296,7 +1314,15 @@ def build_example_registry() -> Dict[str, Dict[str, Any]]:
     authoritative_entries: Dict[str, Dict[str, Any]] = {}
     authoritative_aliases: Dict[str, str] = {}
 
-    models_meta = read_json_file(MODELS_META_FILE, {})
+    # Merge admin edits stored in the database with the in-repo file, same as
+    # the /henricssons_bilder/models_meta.json route, so server-rendered
+    # /exempel pages and the sitemap keep reflecting admin changes after a
+    # redeploy resets the disk.
+    stored_models_meta = get_site_content("models_meta")
+    models_meta = merge_example_payload_dicts(
+        stored_models_meta if isinstance(stored_models_meta, dict) else {},
+        read_json_file(MODELS_META_FILE, {}),
+    )
     if isinstance(models_meta, dict):
         for key, raw in models_meta.items():
             normalized = normalize_example_record(raw, fallback_slug=str(key))
@@ -1314,7 +1340,11 @@ def build_example_registry() -> Dict[str, Dict[str, Any]]:
         if all(identity):
             identity_index[identity].append(canonical_slug)
 
-    examples_meta = read_json_file(EXAMPLES_META_FILE, {})
+    stored_examples_meta = get_site_content("examples_meta")
+    examples_meta = merge_example_payload_dicts(
+        stored_examples_meta if isinstance(stored_examples_meta, dict) else {},
+        read_json_file(EXAMPLES_META_FILE, {}),
+    )
     if isinstance(examples_meta, dict):
         for key, raw in examples_meta.items():
             fallback_slug = str(key).split("::", 1)[-1].strip()
@@ -5048,6 +5078,26 @@ def upload_image():
     with abs_path.open("wb") as handle:
         handle.write(raw)
 
+    # Persist in the database as well; the disk copy does not survive a
+    # redeploy on Render.
+    mime = f"image/{'jpeg' if ext == '.jpg' else ext.lstrip('.')}"
+    db = get_db()
+    if db:
+        try:
+            normalized_rel = safe_rel_path.replace("\\", "/")
+            row = db.query(SiteImage).filter_by(rel_path=normalized_rel).first()
+            if row:
+                row.data = raw
+                row.mime = mime
+            else:
+                db.add(SiteImage(rel_path=normalized_rel, mime=mime, data=raw))
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            print(f"SiteImage save failed for {safe_rel_path}: {exc}")
+        finally:
+            db.close()
+
     return jsonify(success=True, saved_path=safe_rel_path.replace("/", "\\"))
 
 
@@ -5628,6 +5678,22 @@ def get_henricssons_files(filename: str):
         return jsonify(error="Invalid path"), 400
     if full_path.exists() and full_path.is_file():
         return send_from_directory(str(full_path.parent), full_path.name)
+
+    # Admin-uploaded images live in the database; the disk copy is lost on
+    # each redeploy.
+    db = get_db()
+    if db:
+        try:
+            rel = filename.replace("\\", "/").lstrip("/")
+            row = db.query(SiteImage).filter_by(rel_path=rel).first()
+            if row:
+                response = Response(row.data, mimetype=row.mime or "application/octet-stream")
+                response.headers["Cache-Control"] = "public, max-age=3600"
+                return response
+        except Exception as exc:
+            print(f"SiteImage lookup failed for {filename}: {exc}")
+        finally:
+            db.close()
     return jsonify(error="File not found"), 404
 
 
@@ -6694,6 +6760,41 @@ def chat_widget_script():
     return response
 
 
+PUBLIC_STATIC_EXTENSIONS = {
+    ".html", ".css", ".js", ".mjs", ".map",
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico", ".avif",
+    ".woff", ".woff2", ".ttf", ".otf", ".eot",
+    ".json", ".xml", ".webmanifest", ".pdf", ".mp4",
+}
+PRIVATE_STATIC_FILES = {
+    "form_submissions.json",
+    "ai_settings.json",
+    "form_prompts.json",
+    "status_config.json",
+    "package.json",
+    "package-lock.json",
+}
+PRIVATE_STATIC_DIRS = {"arkiv", "archive", "__pycache__", "node_modules", "tasks"}
+
+
+def is_public_static_path(clean_name: str) -> bool:
+    parts = [part for part in clean_name.replace("\\", "/").split("/") if part]
+    if not parts:
+        return False
+    # Dotfiles and dot-directories (.git, .env, .claude, ...)
+    if any(part.startswith(".") for part in parts):
+        return False
+    if parts[0] in PRIVATE_STATIC_DIRS:
+        return False
+    if parts[-1] in PRIVATE_STATIC_FILES:
+        return False
+    suffix = Path(parts[-1]).suffix.lower()
+    # Extensionless paths are page slugs resolved to <slug>.html below.
+    if suffix and suffix not in PUBLIC_STATIC_EXTENSIONS:
+        return False
+    return True
+
+
 @app.route("/<path:filename>", methods=["GET"])
 def serve_static(filename: str):
     if filename.startswith("api/"):
@@ -6702,6 +6803,9 @@ def serve_static(filename: str):
     clean_name = filename.rstrip("/")
     if not clean_name:
         return redirect("/", code=301)
+
+    if not is_public_static_path(clean_name):
+        abort(404)
 
     admin_html_path = (BASE_DIR / "admin.html").resolve()
     requested_file_path = (BASE_DIR / clean_name).resolve()

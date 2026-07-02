@@ -1,143 +1,73 @@
-# Henricssons Kapell & Marintextil – Webbsida & Admin-API
+# Henricssons Båtkapell – Webbsida & Admin-API
 
-Detta repo innehåller den publika webbsidan **henricssonsbatkapell.se** och ett Flask-API som gör det möjligt att uppdatera innehåll (båtmodeller, bilder, texter m.m.) direkt via ett administratörsgränssnitt. Syftet med README:n är att en ny utvecklare snabbt ska förstå hur allt hänger ihop – lokalt och i produktion (Render).
+Detta repo innehåller den publika webbsidan **henricssonsbatkapell.se** och ett Flask-API som gör det möjligt att uppdatera innehåll (båtmodeller, bilder, texter m.m.) direkt via ett administratörsgränssnitt.
 
 > TL;DR
-> 1. Webbsidan körs som **Static Site** på Render.<br/>
-> 2. API-t körs som **Web Service** på Render.<br/>
-> 3. Ändringar som görs i adminpanelen sparas till disk **och** pushas automatiskt till GitHub ➔ överlever om-deploys.
-
----
-
-## Innehållsförteckning
-1. [Arkitektur](#arkitektur)
-2. [Mappstruktur](#mappstruktur)
-3. [Admin-panelen](#admin-panelen)
-4. [API-t (Flask)](#api-t-flask)
-5. [Deploy på Render](#deploy-på-render)
-6. [Köra lokalt](#köra-lokalt)
-7. [Miljövariabler](#miljövariabler)
-8. [Vanliga fel & felsökning](#vanliga-fel--felsökning)
-9. [Contributing](#contributing)
-
----
+> 1. **En** Flask-tjänst på Render (`admin_api_flask.py`) servar både statiska sidor och API.
+> 2. Innehåll som sparas via adminpanelen lagras i **Postgres** (`site_content`, `site_images` m.fl. tabeller) och överlever därför om-deploys. Filerna i repot fungerar som utgångsdata som DB-innehållet mergas ovanpå.
+> 3. Render deployar automatiskt vid push till `main` (blueprint i `render.yaml`).
 
 ## Arkitektur
+
 ```mermaid
 flowchart TD
-    A[Statiska filer\nHTML/CSS/JS/Images] -->|fetch| B[Admin-panel JS]
-    B -->|POST/GET| C(Flask-API)
-    C -->|skriver\nläser| D[boat_data.json\nmodels_meta.json\nbilder]
-    C -.->|push| E[GitHub repo]
+    A[Besökare] -->|GET sidor/bilder| C(Flask: admin_api_flask.py)
+    B[Admin-panel admin.html+admin.js] -->|POST/GET /api/*| C
+    C -->|läser/skriver| D[(Postgres)]
+    C -->|läser utgångsdata| E[JSON-filer + bilder i repot]
+```
 
-    subgraph Render
-      direction TB
-      A
-      C
-    end
-```
-1. **Static Site** (HTML/CSS/JS) laddas direkt av besökare.
-2. **Admin-panelen** (\`admin.html\` + \`admin.js\`) anropar Flask-API:t för att läsa & spara data.
-3. **Flask-API** skriver JSON-filer och uppladdade bilder till disk **och** committar/pushar dessa filer tillbaka till GitHub med en PAT-token.
-4. Nästa gång Render auto-deployar finns ändringarna redan i källkoden.
+- Publika sidor: statiska HTML-filer i repo-roten, servade extensionslöst (`/om-oss` → `om-oss.html`).
+- `/exempel/<slug>`, `/dynsatser/<slug>`, `/tillfalliga-produkter/<slug>`, `/search`, `/sitemap.xml` renderas server-side för SEO. Gamla URL:er från förra sajten 301:as via `LEGACY_EXAMPLE_REDIRECTS`.
+- Den statiska catch-all-routen har en allowlist (`PUBLIC_STATIC_EXTENSIONS`) – källkod, dotfiler och interna JSON-filer servas inte.
 
-## Mappstruktur
-```
-Henricssons/
-├── admin_api_flask.py      # Flask-API (Web Service)
-├── admin.html              # Admin-GUI
-├── admin.js                # JS-logik för admin
-├── *.html / *.js / *.css   # Publika sidor
-├── boat_data.json          # Genererad datafil (båtvarianter)
-├── henricssons_bilder/     # Alla produkt-/galleribilder
-└── requirements.txt        # Python-beroenden (API-t)
-```
-Viktigt att **henricssons_bilder/** och JSON-filerna ligger i repo:t – annars kan de inte pushas tillbaka.
+## Datalagring
+
+| Innehåll | Fil (utgångsdata) | Databas (vinner/mergas) |
+|---|---|---|
+| Båtdata | `boat_data.json` | `site_content['boat_data']` |
+| Exempel/galleri | `examples_meta.json`, `henricssons_bilder/models_meta.json` | `site_content['examples_meta'/'models_meta']` |
+| Sidtexter/banner | `page_texts.json` | `site_content['page_texts']` |
+| Adminuppladdade bilder | disk (försvinner vid deploy) | `site_images` (fallback vid servering) |
+| Formulärinskick + bilagor | – | `form_submissions`, `submission_attachments` |
+| Tillfälliga produkter & varumärken | – | `temp_products`, `boat_brands` (+ bildtabeller) |
 
 ## Admin-panelen
-• Öppna **/admin.html** på den publika siten.<br/>
-• Sidan laddar \`boat_data.json\` och \`models_meta.json\`.
-• För varje fält (text, select, checkbox) finns **autosave**: `change`/`blur` triggar en POST till API:t. Efter 1 s läses ny data in så att det som sparats syns direkt.
-• Bilder kan laddas upp via drag-and-drop eller filväljare ➔ skickas till `/api/upload_image`.
 
-## API-t (Flask)
-Fil: `admin_api_flask.py`
-
-| Route | Metod | Beskrivning |
-|-------|-------|-------------|
-| `/boat_data.json` | GET | Servar nuvarande datafil |
-| `/henricssons_bilder/<path>` | GET | Servar in-repo-bilder |
-| `/api/save_boatdata` | POST | Tar emot JSON-payload med båtdata & sparar |
-| `/api/save_models_meta` | POST | Tar emot metadata om modeller |
-| `/api/upload_image` | POST | Tar emot `multipart/form-data` med bilduppladdning |
-
-Alla routes har **CORS \*\*** (GET/POST/OPTIONS) så admin-sidan kan anropa dom var den än hostas.
-
-### GitHub auto-commit
-När någon sparar kör Flask-koden:
-1. Skriver filen lokalt (Render-disk är skrivbar under deployment).
-2. `git add ... && git commit -m "auto: update via admin" && git push` med hjälp av en **Personal Access Token** (miljövariabel `GITHUB_PAT`).
-
-> Tips: PAT behöver endast \`repo\` scope och bör skapas från en bot-/service-användare.
+- Öppna `/admin` på sajten → lösenordsinloggning (`ADMIN_PANEL_PASSWORD`), sessionscookie.
+- API-anrop kan även autentiseras med headern `X-Admin-Key: <ADMIN_API_KEY>`.
+- Formulärinskick hanteras under fliken Inskick; mailnotiser + kundbekräftelser går via Mailgun.
 
 ## Deploy på Render
-Vi har **två** tjänster kopplade till samma GitHub-repo:
 
-1. **Static Site**
-   - Build command: *(tom)*
-   - Publish directory: **root**
-   - Branch: `main`
-2. **Web Service** (API)
-   - Environment → Runtime: Python 3.11 (eller senast LTS)
-   - Start command: `gunicorn admin_api_flask:app`
-   - Build command: *(Render installerar automatiskt från requirements.txt)*
-   - Environment Variables: se nedan
-
-Se till att **Auto-Deploy** är aktiverat för bägge. Static Site kan vara *free plan*, medan Web Service kräver *Starter* för att hantera build-minuter; går att skala till 0 när den är idle.
+En web service + Postgres, definierat i `render.yaml`. Auto-deploy vid push till `main`. Hälsokontroll: `/healthz`.
 
 ## Köra lokalt
-1. Klona repo:t.
-2. Installera Python-beroenden:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Starta API-t:
-   ```bash
-   # utvecklingsläge
-   export FLASK_ENV=development  # Windows: set FLASK_ENV=development
-   python admin_api_flask.py
-   # eller
-   gunicorn admin_api_flask:app
-   ```
-   API:n lyssnar på http://localhost:5000.
-4. Serva statiska filer – enklast via VS Code Live Server eller:
-   ```bash
-   npx serve .
-   ```
-5. Öppna `http://localhost:3000/admin.html` (eller vart din statiska server kör) ➔ ändra ➔ se konsollen för POST-requests.
 
-> Lokalt använder `admin.js` automatiskt `http://localhost:5000` som `API_BASE` om `window.location.hostname` är `localhost`.
+```bash
+pip install -r requirements.txt
+python admin_api_flask.py   # lyssnar på http://localhost:25565
+```
+
+`.env` i repo-roten läses in automatiskt (utan att skriva över redan satta miljövariabler). Utan `DATABASE_URL` används lokal SQLite. Sätt tomma `MAILGUN_*` om du inte vill skicka riktiga mail vid test.
 
 ## Miljövariabler
-| Namn | Tjänst | Beskrivning |
-|------|--------|-------------|
-| `GITHUB_PAT` | Web Service | Personal Access Token för auto-commit/push |
-| `GITHUB_REPO` | Web Service | `<owner>/<repo>` tex `username/henricssons` |
-| `FLASK_ENV` | (valfritt) | `production` eller `development` |
 
-Sätt dessa i Rend­­ers **Environment**-flik för Web Service.
+| Namn | Beskrivning |
+|---|---|
+| `DATABASE_URL` | Postgres (sätts av Render), annars SQLite lokalt |
+| `ADMIN_PANEL_PASSWORD` | Lösenord för admin-inloggning |
+| `ADMIN_API_KEY` | Nyckel för API-anrop (`X-Admin-Key`) |
+| `MAILGUN_DOMAIN/API_KEY/FROM/TO` | Mailnotiser för formulär |
+| `PUBLIC_BASE_URL` | Kanonisk bas-URL (`https://www.henricssonsbatkapell.se`) |
+| `ALLOWED_ORIGINS` | CORS-origins |
+| `OPENAI_API_KEY` m.fl. | AI-assistent i admin (valfritt) |
+| `enable_chatbot` | `1` aktiverar publik chatt-widget (annars avstängd) |
 
 ## Vanliga fel & felsökning
+
 | Problem | Kontrollera |
-|---------|-------------|
-| `503`/`CORS` fel när admin laddar data | 1. Är API-t vaken? (free plan idlar) <br/>2. Via Render-dashboard ➔ Logs |
-| Ändringar sparas men försvinner vid ny deploy | Stämmer `GITHUB_PAT` & `GITHUB_REPO`? Push-en kan ha misslyckats |
-| Bilder visas inte | Kolla att URL:en innehåller **/henricssons_bilder/** exakt en gång |
-
-## Contributing
-1. Skapa branch, push & öppna PR.<br/>
-2. Kodformat: håll JS ES6, Python PEP8.<br/>
-3. Efter merge auto-deployar Render.
-
----
-© Henricssons Kapell & Marintextil. Detta repo är privat; dela ej PAT eller kunddata offentligt. 
+|---|---|
+| Admin-ändringar syns inte | Render-loggar; DB-anslutning (`Database connected.` vid start) |
+| Bilder 404:ar efter deploy | Uppladdade bilder ska servas ur `site_images` – kolla att uppladdningen gjordes efter att DB-fallbacken infördes |
+| Mail kommer inte fram | `POST /api/mailgun_test` med admin-nyckel; kolla Mailgun-loggar |
