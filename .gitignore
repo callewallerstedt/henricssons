@@ -40,3 +40,6 @@ __*.png
 __*.html
 legacy-live-pages-before-premium/
 _tmp_*
+
+# Claude Code local config
+.claude/

@@ -298,6 +298,16 @@ LEGACY_EXAMPLE_REDIRECTS = {
     "xxl-originalkapell-2015-2019": "/exempel/xxl",
     "z7-8": "/exempel/z7",
     "z8-9": "/exempel/z8",
+    "24-tour-originalkapell": "/bilder-och-exempel",
+    "510-dc-cruiser": "/bilder-och-exempel",
+    "54-br-cross-hamnkapell": "/bilder-och-exempel",
+    "570-cc-konsollhuv": "/bilder-och-exempel",
+    "628-duo": "/bilder-och-exempel",
+    "65-dc-originalkapell-2014-19": "/exempel/65-dc",
+    "79-dc-hamnkapell-utan-stotta": "/exempel/79-dc-originalkapell",
+    "magnum-original-hamnkapell-2011-2017": "/exempel/magnum-hamnkapell",
+    "r6-original-hamnkapell-2019-osv": "/bilder-och-exempel",
+    "suzumar": "/bilder-och-exempel",
 }
 
 DEFAULT_DATABASE_URL = f"sqlite:///{(BASE_DIR / 'henricssons.db').as_posix()}"
@@ -1350,6 +1360,10 @@ def list_canonical_examples() -> List[Dict[str, Any]]:
     for slug, record in build_example_registry().items():
         canonical_slug = str(record.get("canonical_slug", "") or "").strip()
         if not canonical_slug:
+            continue
+        # Slugs shadowed by a legacy redirect never resolve to a page of their
+        # own, so they must not appear in sitemaps, search or related links.
+        if canonical_slug in LEGACY_EXAMPLE_REDIRECTS:
             continue
         record_with_slug = dict(record)
         record_with_slug["canonical_slug"] = canonical_slug

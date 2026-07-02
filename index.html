@@ -243,10 +243,14 @@
     }
     .hb-nav-submenu a:hover,
     .hb-nav-submenu a.active { background: rgba(178, 138, 76, 0.08); }
-    @media (min-width: 901px) {
+    @media (min-width: 1121px) {
         .hb-nav-dropdown:hover .hb-nav-submenu,
         .hb-nav-dropdown:focus-within .hb-nav-submenu,
         .hb-nav-dropdown[open] .hb-nav-submenu { display: block; }
+    }
+    @media (max-width: 1320px) and (min-width: 1121px) {
+        .hb-nav-links { gap: clamp(0.9rem, 1.8vw, 1.55rem); }
+        .hb-nav-cta { padding-left: 1rem; padding-right: 1rem; }
     }
     .hb-nav-cta {
         background: var(--brass);
@@ -259,7 +263,7 @@
     .hb-burger { display: none; background: none; border: 0; cursor: pointer; padding: 0.5rem; }
     .hb-burger span { display:block; width:24px; height:2px; background:var(--ink); margin:5px 0; transition:.3s; }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1120px) {
         .hb-nav-links {
             position: absolute; top: 78px; left: 0; right: 0;
             background: var(--cream); flex-direction: column;
