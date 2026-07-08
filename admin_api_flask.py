@@ -600,6 +600,7 @@ class DynManufacturer(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False, default="")
     sort_order = Column(Integer, nullable=False, default=0)
+    image_url = Column(String, nullable=False, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -608,6 +609,7 @@ class DynManufacturer(Base):
             "id": self.id,
             "name": self.name or "",
             "sort_order": int(self.sort_order or 0),
+            "image_url": self.image_url or "",
         }
 
 
@@ -707,6 +709,27 @@ def _migrate_boat_brand_columns() -> None:
         print(f"Warning: boat_brands column migration failed: {exc}")
 
 
+def _migrate_dyn_manufacturer_columns() -> None:
+    if engine is None:
+        return
+    try:
+        insp = sa_inspect(engine)
+        if "dyn_manufacturers" not in insp.get_table_names():
+            return
+        existing = {col["name"] for col in insp.get_columns("dyn_manufacturers")}
+        additions = []
+        if "image_url" not in existing:
+            additions.append("ALTER TABLE dyn_manufacturers ADD COLUMN image_url VARCHAR")
+        if not additions:
+            return
+        with engine.begin() as conn:
+            for stmt in additions:
+                conn.execute(sa_text(stmt))
+        print(f"Migrated dyn_manufacturers: added {len(additions)} column(s).")
+    except Exception as exc:
+        print(f"Warning: dyn_manufacturers column migration failed: {exc}")
+
+
 def init_db() -> None:
     global engine, SessionLocal
     try:
@@ -718,6 +741,7 @@ def init_db() -> None:
         engine = create_engine(DATABASE_URL, **kwargs)
         Base.metadata.create_all(engine)
         _migrate_boat_brand_columns()
+        _migrate_dyn_manufacturer_columns()
         SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
         print("Database connected.")
     except Exception as exc:
@@ -5494,6 +5518,16 @@ def delete_temp_product_image(image_id: int):
 BOAT_BRAND_MAX_IMAGE_BYTES = 8 * 1024 * 1024
 BOAT_BRAND_MAX_IMAGES = 20
 BOAT_BRAND_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+DEFAULT_DYN_MANUFACTURER_LOGOS = {
+    "bella": "/assets/dynsatser/logos/bella.svg",
+    "buster": "/assets/dynsatser/logos/buster.svg",
+    "finnmaster": "/assets/dynsatser/logos/finnmaster.svg",
+    "flipper": "/assets/dynsatser/logos/flipper.svg",
+    "mv-marin": "/assets/dynsatser/logos/mv-marin.svg",
+    "mv-marine": "/assets/dynsatser/logos/mv-marin.svg",
+    "uttern": "/assets/dynsatser/logos/uttern.svg",
+    "yamarin": "/assets/dynsatser/logos/yamarin.svg",
+}
 
 
 def slugify_boat_brand(value: Any, fallback: str = "marke") -> str:
@@ -5501,6 +5535,11 @@ def slugify_boat_brand(value: Any, fallback: str = "marke") -> str:
     ascii_value = raw.encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_value.lower()).strip("-")
     return slug or fallback
+
+
+def default_dyn_manufacturer_logo(name: Any) -> str:
+    slug = slugify_boat_brand(name, fallback="")
+    return DEFAULT_DYN_MANUFACTURER_LOGOS.get(slug, "")
 
 
 def _fetch_boat_brands(include_images: bool = True) -> List[Dict[str, Any]]:
@@ -5580,7 +5619,7 @@ def _fetch_dyn_manufacturers() -> List[Dict[str, Any]]:
 
 
 def enrich_dyn_manufacturers() -> List[Dict[str, Any]]:
-    """Manufacturers with slug + a cover image derived from their entries."""
+    """Manufacturers with slug + logo/image used on the /dynsatser cards."""
     manufacturers = _fetch_dyn_manufacturers()
     entries = enrich_boat_brands(_fetch_boat_brands())
     entries_by_mfr: Dict[int, List[Dict[str, Any]]] = {}
@@ -5604,12 +5643,11 @@ def enrich_dyn_manufacturers() -> List[Dict[str, Any]]:
         mfr["href"] = f"/dynsatser#{slug}"
         mfr_entries = entries_by_mfr.get(int(mfr.get("id")), [])
         mfr["entry_count"] = len(mfr_entries)
-        cover = ""
-        for entry in mfr_entries:
-            if entry.get("primary_image_url"):
-                cover = entry["primary_image_url"]
-                break
-        mfr["primary_image_url"] = cover
+        configured_image = str(mfr.get("image_url", "") or "").strip()
+        default_logo = default_dyn_manufacturer_logo(mfr.get("name"))
+        mfr["primary_image_url"] = configured_image or default_logo or "/logo.png"
+        mfr["primary_image_is_logo"] = True
+        mfr["default_logo_url"] = default_logo
         result.append(mfr)
     return result
 
@@ -5633,11 +5671,12 @@ def create_dyn_manufacturer():
         mfr = DynManufacturer(
             name=str(payload.get("name", "") or "").strip()[:300],
             sort_order=int(payload.get("sort_order", next_order) or next_order),
+            image_url=str(payload.get("image_url", "") or "").strip()[:1000],
         )
         db.add(mfr)
         db.commit()
         db.refresh(mfr)
-        return jsonify(mfr.to_dict())
+        return jsonify(enrich_dyn_manufacturers([mfr.to_dict()])[0])
     except Exception as exc:
         db.rollback()
         return jsonify(error=str(exc)), 500
@@ -5665,9 +5704,11 @@ def update_dyn_manufacturer(manufacturer_id: int):
                 mfr.sort_order = int(payload.get("sort_order") or 0)
             except (TypeError, ValueError):
                 pass
+        if "image_url" in payload:
+            mfr.image_url = str(payload.get("image_url", "") or "").strip()[:1000]
         db.commit()
         db.refresh(mfr)
-        return jsonify(mfr.to_dict())
+        return jsonify(enrich_dyn_manufacturers([mfr.to_dict()])[0])
     except Exception as exc:
         db.rollback()
         return jsonify(error=str(exc)), 500

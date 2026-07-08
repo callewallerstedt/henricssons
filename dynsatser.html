@@ -67,13 +67,15 @@
                 margin-top: 0;
             }
         }
-        /* Logo fallback for empty images: contain + padding instead of cover-crop */
-        .hb-premium .hb-dyn-brand-media--logo { background: var(--cream-2); }
+        /* Manufacturer logos: contain + padding instead of cover-crop */
+        .hb-premium .hb-dyn-brand-media--logo { background: var(--cream-2); display: flex; align-items: center; justify-content: center; }
         .hb-premium .hb-dyn-brand-media--logo img {
             object-fit: contain;
-            padding: 18%;
-            opacity: 0.55;
+            padding: 14%;
+            opacity: 1;
+            transform: none;
         }
+        .hb-premium .hb-dyn-brand-card:hover .hb-dyn-brand-media--logo img { transform: none; }
         .hb-premium .hb-dyn-back {
             display: inline-flex;
             align-items: center;
@@ -254,9 +256,9 @@
         let manufacturers = [];
         let entriesByMaker = new Map();
 
-        function mediaHtml(url, alt) {
+        function mediaHtml(url, alt, isLogoMedia = false) {
             const src = imgSrc(url);
-            const isLogo = src === LOGO || src.endsWith('/logo.png');
+            const isLogo = isLogoMedia || src === LOGO || src.endsWith('/logo.png') || /\.svg(?:$|[?#])/i.test(src);
             return `<div class="hb-dyn-brand-media${isLogo ? ' hb-dyn-brand-media--logo' : ''}">
                 <img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" decoding="async">
             </div>`;
@@ -282,7 +284,7 @@
                 card.href = `#${m.slug}`;
                 card.addEventListener('click', (e) => { e.preventDefault(); openMaker(m.slug); });
                 card.innerHTML = `
-                    ${mediaHtml(m.primary_image_url, m.name)}
+                    ${mediaHtml(m.primary_image_url, m.name, true)}
                     <div class="hb-dyn-brand-body">
                         <span class="hb-dyn-brand-name">${esc(m.name)}</span>
                         <span class="hb-dyn-brand-cta">Se dynsatser${count ? ` (${count})` : ''} →</span>

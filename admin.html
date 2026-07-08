@@ -1372,11 +1372,17 @@
         /* Tillverkare management list */
         .tm-list { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
         .tm-row {
-            display: flex; align-items: center; gap: 0.6rem;
+            display: grid; grid-template-columns: auto auto minmax(160px, 1fr) auto auto auto auto; align-items: center; gap: 0.6rem;
             background: var(--surface); border: 1px solid var(--border);
             border-radius: 10px; padding: 0.6rem 0.75rem;
         }
         .tm-row .tm-drag { color: var(--text-muted); cursor: default; user-select: none; font-size: 0.9rem; }
+        .tm-logo {
+            width: 76px; height: 48px; border: 1px solid var(--border); border-radius: 8px;
+            background: var(--bg); display: flex; align-items: center; justify-content: center;
+            overflow: hidden; padding: 0.35rem;
+        }
+        .tm-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
         .tm-row input[type="text"] {
             flex: 1; padding: 0.5rem 0.7rem; border: 1px solid var(--border);
             border-radius: 8px; background: var(--bg); color: var(--text);
@@ -1392,6 +1398,23 @@
             font-size: 1.15rem; line-height: 1; padding: 0.2rem 0.4rem; border-radius: 6px;
         }
         .tm-row .tm-del:hover { background: rgba(220,38,38,0.1); }
+        .tm-image-actions { display: flex; gap: 0.35rem; align-items: center; }
+        .tm-upload,
+        .tm-reset-image {
+            border: 1px solid var(--border); background: var(--bg); color: var(--text);
+            border-radius: 7px; padding: 0.45rem 0.65rem; cursor: pointer;
+            font-size: 0.78rem; white-space: nowrap;
+        }
+        .tm-upload:hover,
+        .tm-reset-image:hover { border-color: var(--primary); color: var(--primary); }
+        .tm-reset-image[disabled] { opacity: 0.45; cursor: not-allowed; }
+        .tm-file { display: none; }
+        @media (max-width: 800px) {
+            .tm-row { grid-template-columns: auto 1fr auto; }
+            .tm-logo { width: 64px; height: 42px; }
+            .tm-image-actions, .tm-count, .tm-status { grid-column: 2 / -1; }
+            .tm-del { grid-column: 3; grid-row: 1; }
+        }
         .bb-card select.bb-manufacturer {
             width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--border);
             border-radius: 8px; background: var(--bg); color: var(--text);
@@ -2444,7 +2467,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260423b" defer></script>
+<script src="admin.js?v=20260708b" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle

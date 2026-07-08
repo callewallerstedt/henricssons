@@ -4247,6 +4247,13 @@ function renderDynManufacturers() {
     dynManufacturersCache.forEach(mfr => list.appendChild(buildManufacturerRow(mfr)));
 }
 
+function dynManufacturerImageSrc(mfr) {
+    const raw = (mfr && (mfr.image_url || mfr.primary_image_url || mfr.default_logo_url)) || '';
+    if (!raw) return `${API_BASE}/logo.png`;
+    if (/^(https?:)?\/\//i.test(raw) || raw.startsWith('data:')) return raw;
+    return `${API_BASE}${raw.startsWith('/') ? '' : '/'}${raw}`;
+}
+
 function buildManufacturerRow(mfr) {
     const row = document.createElement('div');
     row.className = 'tm-row';
@@ -4254,8 +4261,14 @@ function buildManufacturerRow(mfr) {
     const count = mfr.entry_count || 0;
     row.innerHTML = `
         <span class="tm-drag" title="Sorteringsordning">☰</span>
+        <div class="tm-logo"><img src="${escHtml(dynManufacturerImageSrc(mfr))}" alt="${escHtml(mfr.name || 'Tillverkare')}"></div>
         <input type="text" class="tm-name" value="${escHtml(mfr.name || '')}" placeholder="t.ex. Buster">
         <span class="tm-count">${count} dynsats${count === 1 ? '' : 'er'}</span>
+        <span class="tm-image-actions">
+            <button type="button" class="tm-upload">Byt bild</button>
+            <button type="button" class="tm-reset-image"${mfr.image_url ? '' : ' disabled'}>Standard</button>
+            <input type="file" class="tm-file" accept="image/jpeg,image/png,image/webp">
+        </span>
         <span class="tm-status"></span>
         <button type="button" class="tm-del" title="Ta bort tillverkare">🗑</button>
     `;
@@ -4267,31 +4280,91 @@ function buildManufacturerRow(mfr) {
         status.classList.remove('is-saved', 'is-error');
         tmSaveTimers.set(row, setTimeout(() => saveManufacturer(mfr, nameInput.value, status), 600));
     });
+    row.querySelector('.tm-upload').addEventListener('click', () => row.querySelector('.tm-file').click());
+    row.querySelector('.tm-file').addEventListener('change', event => uploadManufacturerImage(mfr, event.target.files && event.target.files[0], row));
+    row.querySelector('.tm-reset-image').addEventListener('click', () => resetManufacturerImage(mfr, row));
     row.querySelector('.tm-del').addEventListener('click', () => deleteManufacturer(mfr));
     return row;
 }
 
-async function saveManufacturer(mfr, name, status) {
+async function saveManufacturer(mfr, name, status, extra = {}) {
     try {
         const res = await adminFetch(`${API_BASE}/api/dyn_manufacturers/${mfr.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ name, ...extra })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const updated = await res.json();
-        mfr.name = updated.name;
+        Object.assign(mfr, updated);
         const cached = dynManufacturersCache.find(m => m.id === mfr.id);
-        if (cached) cached.name = updated.name;
+        if (cached) Object.assign(cached, updated);
         status.textContent = 'Sparat ✓';
         status.classList.add('is-saved');
         setTimeout(() => { status.textContent = ''; status.classList.remove('is-saved'); }, 2000);
         // Refresh entry dropdowns so the new name shows there too.
         refreshManufacturerDropdowns();
+        return updated;
     } catch (err) {
         status.textContent = 'Fel';
         status.classList.add('is-error');
     }
+}
+
+function updateManufacturerImagePreview(mfr, row) {
+    const img = row.querySelector('.tm-logo img');
+    if (img) {
+        img.src = dynManufacturerImageSrc(mfr);
+        img.alt = mfr.name || 'Tillverkare';
+    }
+    const resetBtn = row.querySelector('.tm-reset-image');
+    if (resetBtn) resetBtn.disabled = !mfr.image_url;
+}
+
+function readManufacturerImageFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error('Kunde inte lasa filen'));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function uploadManufacturerImage(mfr, file, row) {
+    if (!file) return;
+    const status = row.querySelector('.tm-status');
+    const input = row.querySelector('.tm-file');
+    try {
+        status.textContent = 'Laddar upp...';
+        status.classList.remove('is-saved', 'is-error');
+        const dataUrl = await readManufacturerImageFile(file);
+        const slug = slugifyStatusId(mfr.name || 'tillverkare') || `tillverkare-${mfr.id}`;
+        const res = await adminFetch(`${API_BASE}/api/upload_image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data: dataUrl,
+                rel_path: `dynsatser/tillverkare/${slug}-${Date.now()}`
+            })
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || !payload.success) throw new Error(payload.error || ('HTTP ' + res.status));
+        const savedPath = String(payload.saved_path || '').replace(/^henricssons_bilder[\\/]/, '').replace(/\\/g, '/');
+        await saveManufacturer(mfr, mfr.name || '', status, { image_url: `/henricssons_bilder/${savedPath}` });
+        updateManufacturerImagePreview(mfr, row);
+    } catch (err) {
+        status.textContent = 'Fel';
+        status.classList.add('is-error');
+        alert('Kunde inte spara tillverkarbild: ' + (err.message || err));
+    } finally {
+        if (input) input.value = '';
+    }
+}
+
+async function resetManufacturerImage(mfr, row) {
+    const status = row.querySelector('.tm-status');
+    await saveManufacturer(mfr, mfr.name || '', status, { image_url: '' });
+    updateManufacturerImagePreview(mfr, row);
 }
 
 async function deleteManufacturer(mfr) {
