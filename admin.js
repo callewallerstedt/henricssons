@@ -477,6 +477,13 @@ let currentEditingItem = null;
 let statusFoldersLoading = false;
 let statusConfigDraft = [];
 let statusBoardRecoveryTimer = null;
+const SUBMISSION_ROUTE_TYPES = [
+    { key: 'Kapellforfragan', label: 'Kapellf\u00f6rfr\u00e5gan' },
+    { key: 'Fenderforfragan', label: 'Fenderf\u00f6rfr\u00e5gan' },
+    { key: 'Dynsatsforfragan', label: 'Dynsatsf\u00f6rfr\u00e5gan' },
+    { key: 'Kontakt', label: 'Kontakt' }
+];
+
 function getAdvancedGreeting(language = 'sv') {
     return language === 'en'
         ? 'Hello! What do you need help with today?'
@@ -1186,7 +1193,7 @@ function switchTab(tab){
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
-        loadMailgunSettings();
+        loadStatusConfig().finally(() => loadMailgunSettings());
         loadCustomerConfirmationSettings();
     } else if(tab==='calendar'){
         $('#dashboard-section').removeClass('active');
@@ -1893,6 +1900,76 @@ function saveAiSettings() {
     });
 }
 
+function getSubmissionRouteStatusOptions(selectedStatusId) {
+    const selected = String(selectedStatusId || 'nya-inskick');
+    return getWorkflowStatuses().map(status => {
+        const id = String(status.id || '').trim();
+        if (!id) return '';
+        const label = String(status.name || id);
+        return `<option value="${escapeHtml(id)}"${id === selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+}
+
+function normalizeSubmissionRoutes(routes) {
+    const normalized = {};
+    SUBMISSION_ROUTE_TYPES.forEach(type => {
+        const raw = routes && typeof routes === 'object' ? (routes[type.key] || {}) : {};
+        normalized[type.key] = {
+            form_type: type.key,
+            label: type.label,
+            status_id: String(raw.status_id || 'nya-inskick'),
+            recipients: Array.isArray(raw.recipients) ? raw.recipients : [],
+            to: Array.isArray(raw.recipients) ? raw.recipients.join('\n') : String(raw.to || '')
+        };
+    });
+    return normalized;
+}
+
+function renderSubmissionRoutingSettings(routes) {
+    const root = $('#submission-routing-settings');
+    if (!root.length) return;
+    const normalized = normalizeSubmissionRoutes(routes);
+    root.empty();
+    SUBMISSION_ROUTE_TYPES.forEach(type => {
+        const route = normalized[type.key];
+        const row = $(`
+            <div class="submission-route-row" data-form-type="${escapeHtml(type.key)}" style="border:1px solid var(--border); border-radius:10px; padding:0.85rem; background:#f8fafc;">
+                <div style="display:grid; gap:0.7rem; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); align-items:start;">
+                    <div>
+                        <label style="margin-bottom:0.35rem;">Formul&auml;r</label>
+                        <div style="font-weight:700; color:var(--text-primary);">${escapeHtml(type.label)}</div>
+                    </div>
+                    <div>
+                        <label for="route-status-${escapeHtml(type.key)}">Mapp</label>
+                        <select id="route-status-${escapeHtml(type.key)}" class="submission-route-status" style="width:100%; padding:0.7rem; border:1px solid var(--border); border-radius:8px; background:#fff;">
+                            ${getSubmissionRouteStatusOptions(route.status_id)}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="route-recipients-${escapeHtml(type.key)}">Mottagare</label>
+                        <textarea id="route-recipients-${escapeHtml(type.key)}" class="submission-route-recipients" rows="2" placeholder="Tomt = global lista" style="width:100%; min-height:4.4rem;">${escapeHtml(route.to || '')}</textarea>
+                    </div>
+                </div>
+            </div>
+        `);
+        root.append(row);
+    });
+}
+
+function collectSubmissionRoutingSettings() {
+    const routes = {};
+    $('#submission-routing-settings .submission-route-row').each(function() {
+        const row = $(this);
+        const key = String(row.data('formType') || '');
+        if (!key) return;
+        routes[key] = {
+            status_id: String(row.find('.submission-route-status').val() || 'nya-inskick'),
+            to: String(row.find('.submission-route-recipients').val() || '').trim()
+        };
+    });
+    return routes;
+}
+
 function loadMailgunSettings() {
     return adminFetch(`${API_BASE}/api/mailgun_settings`)
         .then(r => {
@@ -1902,6 +1979,7 @@ function loadMailgunSettings() {
         .then(data => {
             const recipients = Array.isArray(data.recipients) ? data.recipients.join('\n') : String(data.to || '');
             $('#mailgun-to').val(recipients);
+            renderSubmissionRoutingSettings(data.submission_routes || {});
             $('#settings-edit-error').hide();
         })
         .catch(err => {
@@ -1934,10 +2012,11 @@ function loadCustomerConfirmationSettings() {
 
 function saveMailgunSettings() {
     const to = ($('#mailgun-to').val() || '').trim();
+    const submission_routes = collectSubmissionRoutingSettings();
     adminFetch(`${API_BASE}/api/mailgun_settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to })
+        body: JSON.stringify({ to, submission_routes })
     })
     .then(r => {
         if (!r.ok) {
@@ -1950,6 +2029,7 @@ function saveMailgunSettings() {
     .then(data => {
         const recipients = Array.isArray(data.recipients) ? data.recipients.join('\n') : to;
         $('#mailgun-to').val(recipients);
+        renderSubmissionRoutingSettings(data.submission_routes || submission_routes);
         $('#settings-edit-success').text('Mailgun-inställningar sparade.').show();
         $('#settings-edit-error').hide();
     })

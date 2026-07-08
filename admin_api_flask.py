@@ -2513,6 +2513,54 @@ def normalize_recipient_list(value: Any) -> List[str]:
     return recipients
 
 
+FORM_ROUTING_TYPES: List[Tuple[str, str]] = [
+    ("Kapellforfragan", "Kapellf\u00f6rfr\u00e5gan"),
+    ("Fenderforfragan", "Fenderf\u00f6rfr\u00e5gan"),
+    ("Dynsatsforfragan", "Dynsatsf\u00f6rfr\u00e5gan"),
+    ("Kontakt", "Kontakt"),
+]
+
+
+def default_submission_routes() -> Dict[str, Dict[str, Any]]:
+    return {
+        key: {
+            "form_type": key,
+            "label": label,
+            "status_id": "nya-inskick",
+            "recipients": [],
+            "to": "",
+        }
+        for key, label in FORM_ROUTING_TYPES
+    }
+
+
+def normalize_submission_routes(data: Any) -> Dict[str, Dict[str, Any]]:
+    valid_status_ids = get_valid_submission_status_ids()
+    raw_routes = data.get("submission_routes") if isinstance(data, dict) else None
+    if not isinstance(raw_routes, dict):
+        raw_routes = data.get("routes") if isinstance(data, dict) else None
+    if not isinstance(raw_routes, dict):
+        raw_routes = {}
+
+    routes = default_submission_routes()
+    for key, label in FORM_ROUTING_TYPES:
+        raw = raw_routes.get(key) or raw_routes.get(label) or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        status_id = str(raw.get("status_id") or raw.get("folder") or "nya-inskick").strip()
+        if status_id not in valid_status_ids:
+            status_id = "nya-inskick"
+        recipients = normalize_recipient_list(raw.get("to") or raw.get("recipients"))
+        routes[key] = {
+            "form_type": key,
+            "label": label,
+            "status_id": status_id,
+            "recipients": recipients,
+            "to": ", ".join(recipients),
+        }
+    return routes
+
+
 def load_mailgun_settings() -> Dict[str, Any]:
     data = get_site_content("mailgun_settings")
     recipients: List[str] = []
@@ -2520,9 +2568,11 @@ def load_mailgun_settings() -> Dict[str, Any]:
         recipients = normalize_recipient_list(data.get("to") or data.get("recipients"))
     if not recipients:
         recipients = normalize_recipient_list(MAILGUN_TO_RAW)
+    routes = normalize_submission_routes(data if isinstance(data, dict) else {})
     return {
         "to": ", ".join(recipients),
         "recipients": recipients,
+        "submission_routes": routes,
     }
 
 
@@ -2530,12 +2580,28 @@ def save_mailgun_settings(data: Dict[str, Any]) -> Dict[str, Any]:
     recipients = normalize_recipient_list(data.get("to") or data.get("recipients"))
     if not recipients:
         raise ValueError("Minst en giltig e-postadress krävs.")
+    routes = normalize_submission_routes(data)
     payload = {
         "to": ", ".join(recipients),
         "recipients": recipients,
+        "submission_routes": routes,
     }
     set_site_content("mailgun_settings", payload)
     return payload
+
+
+def get_submission_route_settings(form_type: str) -> Dict[str, Any]:
+    key = normalize_form_type(form_type)
+    defaults = default_submission_routes()
+    return load_mailgun_settings()["submission_routes"].get(key, defaults.get(key, defaults["Kontakt"]))
+
+
+def get_submission_notification_recipients(form_type: str) -> List[str]:
+    route = get_submission_route_settings(form_type)
+    route_recipients = route.get("recipients") if isinstance(route, dict) else []
+    if isinstance(route_recipients, list) and route_recipients:
+        return normalize_recipient_list(route_recipients)
+    return get_mailgun_recipients()
 
 
 DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE = (
@@ -3904,8 +3970,8 @@ def send_mailgun_submission_notification(
     submission: Dict[str, Any],
     attachments: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
-    recipients = get_mailgun_recipients()
     form_type = str(submission.get("form_type", "Kontakt"))
+    recipients = get_submission_notification_recipients(form_type)
     fields = submission.get("fields", {})
     if not isinstance(fields, dict):
         fields = {}
@@ -4060,6 +4126,10 @@ def process_form_submission(
     upload_files: Optional[List[Any]] = None,
 ) -> str:
     normalized_form_type = display_form_type(form_type)
+    route_settings = get_submission_route_settings(normalized_form_type)
+    initial_status = str(route_settings.get("status_id") or "nya-inskick").strip()
+    if initial_status not in get_valid_submission_status_ids():
+        initial_status = "nya-inskick"
     safe_fields = sanitize_fields(fields, submitted_via=submitted_via)
     form_summary = build_form_summary(normalized_form_type, safe_fields)
     category, title = generate_submission_metadata_fallback(normalized_form_type, safe_fields)
@@ -4073,7 +4143,7 @@ def process_form_submission(
         "form_summary": form_summary,
         "proposed_response": "",
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "status": "nya-inskick",
+        "status": initial_status,
         "read": False,
         "submitted_via": submitted_via,
     }
