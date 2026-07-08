@@ -68,6 +68,55 @@
         .hb-premium .hb-item:hover img.is-placeholder-image {
             transform: none;
         }
+        .hb-gallery-loading {
+            grid-column: 1 / -1;
+            min-height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+        .hb-gallery-spinner,
+        .hb-thumb-link::before {
+            width: 28px;
+            height: 28px;
+            border: 3px solid rgba(178, 138, 76, 0.24);
+            border-top-color: var(--brass);
+            border-radius: 50%;
+            animation: hb-spin 0.8s linear infinite;
+        }
+        .hb-thumb-link {
+            position: relative;
+        }
+        .hb-thumb-link::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            animation-name: hb-thumb-spin;
+            z-index: 1;
+        }
+        .hb-thumb-link.is-loaded::before,
+        .hb-thumb-link.is-placeholder-thumb::before {
+            display: none;
+        }
+        .hb-thumb-link img {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .hb-thumb-link.is-loaded img,
+        .hb-thumb-link.is-placeholder-thumb img {
+            opacity: 1;
+        }
+        @keyframes hb-spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes hb-thumb-spin {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
         .hb-premium #fullscreenModal .fullscreen-close { position: absolute; top: 20px; right: 30px; font-size: 32px; font-weight: 700; cursor: pointer; color: #fff; background: rgba(0,0,0,0.5); width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border: none; }
         @media (max-width: 768px) {
             .hb-premium #bildModal .slider { width: 100%; height: 320px; }
@@ -136,7 +185,9 @@
                 <button type="button" onclick="bilderexClearSearch()">Rensa</button>
             </form>
             <div class="hb-filters" id="bilderex-filters"></div>
-            <div class="hb-item-grid" id="bilderex-gallery"></div>
+            <div class="hb-item-grid" id="bilderex-gallery">
+                <div class="hb-gallery-loading"><span class="hb-gallery-spinner" aria-hidden="true"></span><span>Laddar exempel...</span></div>
+            </div>
         </div>
     </section>
 
@@ -251,8 +302,9 @@
         let bilderexFilteredItems = [];
         let bilderexRenderedCount = 0;
         let bilderexObserver = null;
-        const BILDEREX_INITIAL_BATCH = 48;
-        const BILDEREX_BATCH_SIZE = 48;
+        let bilderexPreloadLink = null;
+        const BILDEREX_INITIAL_BATCH = 36;
+        const BILDEREX_BATCH_SIZE = 36;
 
         const API_BASE = (() => {
             if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
@@ -302,6 +354,20 @@
             return `${API_BASE}/henricssons_bilder/${clean.replace(/^henricssons_bilder\//, '')}`;
         }
 
+        function buildImageVariantUrl(value, width = 520, quality = 72) {
+            const raw = normalizeImageUrl(value);
+            if (!raw || raw.startsWith('data:') || /(?:^|\/)logo\.png(?:$|[?#])/i.test(raw) || /\.svg(?:$|[?#])/i.test(raw)) return raw;
+            try {
+                const url = new URL(raw, API_BASE);
+                if (url.origin !== new URL(API_BASE).origin) return raw;
+                url.searchParams.set('w', String(width));
+                url.searchParams.set('q', String(quality));
+                return url.href;
+            } catch (_) {
+                return raw;
+            }
+        }
+
         function extractExampleSlug(source, fallbackSlug) {
             const raw = normalizeLegacyUrl(source);
             if (!raw) return String(fallbackSlug || '').trim();
@@ -317,7 +383,7 @@
         }
 
         function buildExamplePath(item) {
-            const slug = String(item && item.slug || '').trim();
+            const slug = String(item && (item.canonical_slug || item.slug) || '').trim();
             return slug ? `${API_BASE}/exempel/${encodeURIComponent(slug)}` : '/bilder-och-exempel';
         }
 
@@ -383,13 +449,14 @@
                     const map = catMap[item.category] || { label: '\u00d6vrigt', key: 'other' };
                     const imgs = (item.images && item.images.length ? item.images : []).map(normalizeImageUrl);
                     const finalImgs = imgs.length ? imgs : [`${API_BASE}/logo.png`];
-                    const detailSlug = extractExampleSlug(item.source, slug);
+                    const detailSlug = String(item.canonical_slug || '').trim() || extractExampleSlug(item.source, slug);
                     bilderexData.push({
                         namn: item.model,
                         tillverkare: item.manufacturer || '',
                         kategori: map.label,
                         kategoriKey: map.key,
                         slug: detailSlug,
+                        canonical_slug: detailSlug,
                         images: finalImgs,
                         variant: item.variant || '',
                         leverans: item.delivery || '',
@@ -444,12 +511,12 @@
             if (!bilderexModalItem || !els.mainImage) return;
             const images = (bilderexModalItem.images && bilderexModalItem.images.length) ? bilderexModalItem.images : ['logo.png'];
             bilderexModalIndex = ((bilderexModalIndex % images.length) + images.length) % images.length;
-            els.mainImage.src = images[bilderexModalIndex];
+            els.mainImage.src = buildImageVariantUrl(images[bilderexModalIndex], 1400, 82);
             els.mainImage.alt = [bilderexModalItem.tillverkare, bilderexModalItem.namn].filter(Boolean).join(' ') || 'Produktbild';
             els.thumbs.innerHTML = '';
             images.forEach((src, index) => {
                 const thumb = document.createElement('img');
-                thumb.src = src;
+                thumb.src = buildImageVariantUrl(src, 180, 68);
                 thumb.alt = `${els.mainImage.alt} ${index + 1}`;
                 thumb.loading = 'lazy';
                 thumb.decoding = 'async';
@@ -577,6 +644,7 @@
                 grid.innerHTML = '<div class="hb-no-results">Inga tr\u00e4ffar</div>';
                 return;
             }
+            bilderexPreloadFirstImage(items);
             bilderexFilteredItems = items;
             bilderexRenderedCount = 0;
             if (bilderexObserver) {
@@ -597,17 +665,18 @@
                 div.className = 'hb-item';
                 const thumb = (item.images && item.images.length) ? item.images[0] : 'logo.png';
                 const isPlaceholderThumb = /(?:^|\/)logo\.png(?:$|[?#])/i.test(String(thumb || ''));
-                const safeThumb = escapeHtml(thumb);
+                const thumbUrl = buildImageVariantUrl(thumb, 520, 72);
+                const safeThumb = escapeHtml(thumbUrl);
                 const safeNamn = escapeHtml(item.namn);
                 const safeTillverkare = escapeHtml(item.tillverkare);
                 const safeKategori = escapeHtml(item.kategori || '');
                 const examplePath = buildExamplePath(item);
                 const safeExamplePath = escapeHtml(examplePath);
-                const loading = i < 8 ? 'eager' : 'lazy';
-                const priority = i < 8 ? 'high' : 'low';
+                const loading = i === 0 ? 'eager' : 'lazy';
+                const priority = i === 0 ? 'high' : 'low';
                 div.innerHTML = `
-                    <a href="${safeExamplePath}"${isPlaceholderThumb ? ' class="is-placeholder-thumb"' : ''}>
-                        <img src="${safeThumb}" alt="${safeNamn}" class="${isPlaceholderThumb ? 'is-placeholder-image' : ''}" loading="${loading}" decoding="async" fetchpriority="${priority}" onerror="this.style.display='none'"/>
+                    <a href="${safeExamplePath}" class="hb-thumb-link${isPlaceholderThumb ? ' is-placeholder-thumb is-loaded' : ''}">
+                        <img src="${safeThumb}" alt="${safeNamn}" class="${isPlaceholderThumb ? 'is-placeholder-image' : ''}" loading="${loading}" decoding="async" fetchpriority="${priority}"/>
                     </a>
                     <div class="caption">
                         <div class="cat">${safeKategori}</div>
@@ -618,11 +687,38 @@
                         </div>
                     </div>
                 `;
+                const image = div.querySelector('img');
+                const imageLink = div.querySelector('.hb-thumb-link');
+                if (image && imageLink && !isPlaceholderThumb) {
+                    const markLoaded = () => imageLink.classList.add('is-loaded');
+                    image.addEventListener('load', markLoaded, { once: true });
+                    image.addEventListener('error', () => {
+                        image.style.display = 'none';
+                        markLoaded();
+                    }, { once: true });
+                    if (image.complete) markLoaded();
+                }
                 fragment.appendChild(div);
             }
             bilderexRenderedCount = end;
             grid.querySelector('[data-bilderex-sentinel]')?.remove();
             grid.appendChild(fragment);
+        }
+
+        function bilderexPreloadFirstImage(items) {
+            if (bilderexPreloadLink) {
+                bilderexPreloadLink.remove();
+                bilderexPreloadLink = null;
+            }
+            const first = items && items[0];
+            const src = first && first.images && first.images[0] ? buildImageVariantUrl(first.images[0], 520, 72) : '';
+            if (!src || /(?:^|\/)logo\.png(?:$|[?#])/i.test(src)) return;
+            bilderexPreloadLink = document.createElement('link');
+            bilderexPreloadLink.rel = 'preload';
+            bilderexPreloadLink.as = 'image';
+            bilderexPreloadLink.href = src;
+            bilderexPreloadLink.fetchPriority = 'high';
+            document.head.appendChild(bilderexPreloadLink);
         }
 
         function bilderexObserveGalleryEnd(grid) {

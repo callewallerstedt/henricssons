@@ -36,6 +36,7 @@ server-*.log
 local-server*.log
 *.err.log
 chrome-profile/
+.image_cache/
 __*.png
 __*.html
 legacy-live-pages-before-premium/

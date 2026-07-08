@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 app = Flask(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
+IMAGE_VARIANT_CACHE_DIR = BASE_DIR / ".image_cache"
 
 
 def load_local_env_file(path: Path) -> None:
@@ -937,6 +938,60 @@ def normalize_search_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", without_marks).strip()
 
 
+def slugify_example(value: Any, fallback: str = "exempel") -> str:
+    normalized = normalize_search_text(str(value or ""))
+    slug = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
+    fallback_slug = re.sub(r"[^a-z0-9]+", "-", normalize_search_text(fallback)).strip("-")
+    return slug or fallback_slug or "exempel"
+
+
+def legacy_redirect_target_slug(slug: str) -> str:
+    target = LEGACY_EXAMPLE_REDIRECTS.get(str(slug or "").strip(), "")
+    if not target.startswith("/exempel/"):
+        return ""
+    return target.strip("/").split("/", 1)[1].strip()
+
+
+def build_generated_example_slug(record: Dict[str, Any], fallback_slug: str = "") -> str:
+    seed = " ".join(
+        part for part in [
+            str(record.get("manufacturer", "") or "").strip(),
+            str(record.get("model", "") or "").strip(),
+        ]
+        if part
+    )
+    return slugify_example(seed or fallback_slug, fallback=fallback_slug or "exempel")
+
+
+def resolve_public_example_slug(
+    record: Dict[str, Any],
+    fallback_slug: str = "",
+    source_slug: str = "",
+    used_generated_slugs: Optional[set] = None,
+) -> str:
+    raw_slug = str(source_slug or fallback_slug or "").strip()
+    redirect_target = legacy_redirect_target_slug(raw_slug)
+    if redirect_target:
+        return redirect_target
+
+    if raw_slug and LEGACY_EXAMPLE_REDIRECTS.get(raw_slug) != "/bilder-och-exempel":
+        return raw_slug
+
+    generated = build_generated_example_slug(record, fallback_slug or raw_slug)
+    if LEGACY_EXAMPLE_REDIRECTS.get(generated) == "/bilder-och-exempel":
+        generated = f"{generated}-exempel"
+
+    if used_generated_slugs is not None:
+        base = generated
+        suffix = 2
+        while generated in used_generated_slugs:
+            generated = f"{base}-{suffix}"
+            suffix += 1
+        used_generated_slugs.add(generated)
+
+    return generated
+
+
 def example_matches_search(item: Dict[str, Any], query: str) -> bool:
     normalized_query = normalize_search_text(query)
     if not normalized_query:
@@ -1186,6 +1241,7 @@ def normalize_example_record(raw: Any, fallback_slug: str = "") -> Dict[str, Any
         "images": [normalize_public_reference(str(image or "").strip()) for image in images if str(image or "").strip()],
         "source": normalize_public_reference(str(raw.get("source", "") or "").strip()),
         "fallback_slug": fallback_slug.strip(),
+        "canonical_slug": str(raw.get("canonical_slug", "") or "").strip(),
     }
 
 
@@ -1253,11 +1309,21 @@ def image_path_to_site_url(image_path: str) -> str:
         return "/logo.png"
     if clean.startswith("http://") or clean.startswith("https://") or clean.startswith("data:"):
         return clean
+    if clean.startswith("/"):
+        return clean
     if clean.startswith("assets/"):
         return f"/{clean}"
     if clean.startswith("henricssons_bilder/"):
         return f"/{clean}"
     return f"/henricssons_bilder/{clean.lstrip('/')}"
+
+
+def image_variant_url(image_path: str, width: int = 900, quality: int = 76) -> str:
+    url = image_path_to_site_url(image_path)
+    if not url or url.startswith("data:") or url.endswith(".svg") or url.endswith("/logo.png"):
+        return url
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}w={int(width)}&q={int(quality)}"
 
 
 def merge_example_records(base_record: Dict[str, Any], override_record: Dict[str, Any]) -> Dict[str, Any]:
@@ -1364,6 +1430,7 @@ def build_example_registry() -> Dict[str, Dict[str, Any]]:
     registry: Dict[str, Dict[str, Any]] = {}
     authoritative_entries: Dict[str, Dict[str, Any]] = {}
     authoritative_aliases: Dict[str, str] = {}
+    used_generated_slugs: set = set()
 
     # Merge admin edits stored in the database with the in-repo file, same as
     # the /henricssons_bilder/models_meta.json route, so server-rendered
@@ -1377,13 +1444,21 @@ def build_example_registry() -> Dict[str, Dict[str, Any]]:
     if isinstance(models_meta, dict):
         for key, raw in models_meta.items():
             normalized = normalize_example_record(raw, fallback_slug=str(key))
-            canonical_slug = extract_example_slug(normalized.get("source", ""), str(key))
+            source_slug = extract_example_slug(normalized.get("source", ""), str(key))
+            canonical_slug = resolve_public_example_slug(
+                normalized,
+                fallback_slug=str(key),
+                source_slug=source_slug,
+                used_generated_slugs=used_generated_slugs,
+            )
             normalized["canonical_slug"] = canonical_slug
             if canonical_slug:
                 authoritative_entries[canonical_slug] = merge_example_records(authoritative_entries.get(canonical_slug, {}), normalized)
                 authoritative_aliases[canonical_slug] = canonical_slug
             if key and str(key) != canonical_slug:
                 authoritative_aliases[str(key)] = canonical_slug
+            if source_slug and source_slug != canonical_slug:
+                authoritative_aliases[source_slug] = canonical_slug
 
     identity_index: Dict[Tuple[str, str], List[str]] = defaultdict(list)
     for canonical_slug, record in authoritative_entries.items():
@@ -1400,7 +1475,8 @@ def build_example_registry() -> Dict[str, Dict[str, Any]]:
         for key, raw in examples_meta.items():
             fallback_slug = str(key).split("::", 1)[-1].strip()
             normalized = normalize_example_record(raw, fallback_slug=fallback_slug)
-            canonical_slug = extract_example_slug(normalized.get("source", ""), fallback_slug)
+            source_slug = extract_example_slug(normalized.get("source", ""), fallback_slug)
+            canonical_slug = resolve_public_example_slug(normalized, fallback_slug=fallback_slug, source_slug=source_slug)
             normalized["canonical_slug"] = canonical_slug
 
             matched_slug = find_authoritative_example_match(
@@ -5886,12 +5962,79 @@ def _sanitize_models_meta_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
+def _with_public_example_slugs(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return payload
+    used_generated_slugs: set = set()
+    for key, record in payload.items():
+        if not isinstance(record, dict):
+            continue
+        fallback_slug = str(record.get("fallback_slug") or key or "").strip()
+        source_slug = extract_example_slug(str(record.get("source", "") or ""), fallback_slug)
+        record["canonical_slug"] = resolve_public_example_slug(
+            record,
+            fallback_slug=fallback_slug,
+            source_slug=source_slug,
+            used_generated_slugs=used_generated_slugs,
+        )
+    return payload
+
+
+def _parse_image_variant_args() -> Tuple[int, int]:
+    try:
+        width = int(request.args.get("w", "0"))
+    except Exception:
+        width = 0
+    try:
+        quality = int(request.args.get("q", "72"))
+    except Exception:
+        quality = 72
+    width = max(0, min(width, 2200))
+    quality = max(45, min(quality, 88))
+    return width, quality
+
+
+def _send_image_variant_from_path(full_path: Path) -> Optional[Response]:
+    width, quality = _parse_image_variant_args()
+    suffix = full_path.suffix.lower()
+    if width <= 0 or suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+        return None
+    try:
+        from PIL import Image, ImageOps
+    except Exception:
+        return None
+
+    try:
+        stat = full_path.stat()
+        cache_key = hashlib.sha256(
+            f"{full_path}:{stat.st_mtime_ns}:{stat.st_size}:{width}:{quality}:webp".encode("utf-8")
+        ).hexdigest()
+        cache_path = IMAGE_VARIANT_CACHE_DIR / f"{cache_key}.webp"
+        if not cache_path.exists():
+            IMAGE_VARIANT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            with Image.open(full_path) as image:
+                image = ImageOps.exif_transpose(image)
+                if width and image.width > width:
+                    max_height = max(width * 4, width)
+                    image.thumbnail((width, max_height), Image.Resampling.LANCZOS)
+                if image.mode not in {"RGB", "RGBA"}:
+                    image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+                image.save(cache_path, "WEBP", quality=quality, method=6)
+        response = send_from_directory(str(cache_path.parent), cache_path.name, mimetype="image/webp")
+        response.headers["Cache-Control"] = "public, max-age=604800, stale-while-revalidate=2592000"
+        return response
+    except Exception as exc:
+        print(f"Image variant failed for {full_path}: {exc}")
+        return None
+
+
 @app.route("/henricssons_bilder/<path:filename>")
 def get_henricssons_files(filename: str):
     if filename == "models_meta.json":
         stored = get_site_content("models_meta")
         file_data = read_json_file(MODELS_META_FILE, {})
         normalized = merge_example_payload_dicts(stored if isinstance(stored, dict) else {}, file_data)
+        normalized = _with_public_example_slugs(normalized)
         normalized = _sanitize_models_meta_payload(normalized)
         return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
@@ -5899,6 +6042,9 @@ def get_henricssons_files(filename: str):
     if IMAGES_ROOT not in full_path.parents:
         return jsonify(error="Invalid path"), 400
     if full_path.exists() and full_path.is_file():
+        variant_response = _send_image_variant_from_path(full_path)
+        if variant_response:
+            return variant_response
         return send_from_directory(str(full_path.parent), full_path.name)
 
     # Admin-uploaded images live in the database; the disk copy is lost on
@@ -5924,6 +6070,7 @@ def get_examples_meta():
     stored = get_site_content("examples_meta")
     file_data = read_json_file(EXAMPLES_META_FILE, {})
     normalized = merge_example_payload_dicts(stored if isinstance(stored, dict) else {}, file_data)
+    normalized = _with_public_example_slugs(normalized)
     normalized = _sanitize_models_meta_payload(normalized)
     return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
@@ -6309,15 +6456,18 @@ def example_page(slug: str):
     full_title = " ".join(part for part in [manufacturer, model] if part).strip() or canonical_slug
     page_title = f"{full_title} - Henricssons Båtkapell"
     page_description = str(item.get("description", "") or "").strip() or GENERIC_EXAMPLE_DESCRIPTION
-    image_urls = [image_path_to_site_url(image) for image in item.get("images") or []]
+    raw_image_paths = item.get("images") or []
+    image_urls = [image_path_to_site_url(image) for image in raw_image_paths]
     if not image_urls:
         image_urls = ["/logo.png"]
+    main_image_url = image_variant_url(raw_image_paths[0], 1400, 82) if raw_image_paths else "/logo.png"
+    lightbox_image_url = image_variant_url(raw_image_paths[0], 1800, 84) if raw_image_paths else "/logo.png"
 
     has_multiple = len(image_urls) > 1
     gallery_images = "".join(
         f'<button type="button" class="seo-thumb{" is-active" if index == 0 else ""}" data-gallery-index="{index}" aria-label="Visa bild {index + 1}">'
-        f'<img src="{html.escape(image)}" alt="{html.escape(full_title)}" loading="lazy" decoding="async"/></button>'
-        for index, image in enumerate(image_urls[:8])
+        f'<img src="{html.escape(image_variant_url(image, 180, 68))}" alt="{html.escape(full_title)}" loading="lazy" decoding="async"/></button>'
+        for index, image in enumerate(raw_image_paths[:8])
     )
     nav_style = "" if has_multiple else ' style="display:none"'
     thumbs_style = "" if has_multiple else ' style="display:none"'
@@ -6327,7 +6477,7 @@ def example_page(slug: str):
         <div class="seo-gallery-stage">
             <button type="button" class="seo-gallery-nav seo-gallery-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
             <div class="seo-gallery-main">
-                <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="eager" decoding="async" fetchpriority="high"/>
+                <img id="seoGalleryMainImage" src="{html.escape(main_image_url)}" alt="{html.escape(full_title)}" loading="eager" decoding="async" fetchpriority="high"/>
                 <button type="button" class="seo-gallery-expand" aria-label="Öppna bilden större">Öppna större</button>
             </div>
             <button type="button" class="seo-gallery-nav seo-gallery-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
@@ -6339,7 +6489,7 @@ def example_page(slug: str):
             <button type="button" class="seo-lightbox-close" aria-label="Stäng">&times;</button>
             <button type="button" class="seo-lightbox-nav seo-lightbox-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
             <div class="seo-lightbox-stage">
-                <img id="seoLightboxImage" src="{html.escape(image_urls[0])}" alt="{html.escape(full_title)}" loading="lazy" decoding="async"/>
+                <img id="seoLightboxImage" src="{html.escape(lightbox_image_url)}" alt="{html.escape(full_title)}" loading="lazy" decoding="async"/>
             </div>
             <button type="button" class="seo-lightbox-nav seo-lightbox-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
             <div class="seo-lightbox-actions">
@@ -6401,7 +6551,7 @@ def example_page(slug: str):
         related_title = " ".join(
             part for part in [str(related_item.get("manufacturer", "")).strip(), str(related_item.get("model", "")).strip()] if part
         ).strip() or related_slug
-        related_image = image_path_to_site_url((related_item.get("images") or ["/logo.png"])[0])
+        related_image = image_variant_url((related_item.get("images") or ["/logo.png"])[0], 420, 72)
         related_cards.append(
             f"""
             <a class="seo-related-card" href="/exempel/{html.escape(related_slug)}">
@@ -7050,6 +7200,9 @@ def serve_static(filename: str):
 
     target = requested_file_path
     if BASE_DIR in target.parents and target.exists() and target.is_file():
+        variant_response = _send_image_variant_from_path(target)
+        if variant_response:
+            return variant_response
         return send_from_directory(str(target.parent), target.name)
 
     html_target = requested_html_path
