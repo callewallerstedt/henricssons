@@ -1358,6 +1358,46 @@
             display: flex; align-items: center; justify-content: center;
         }
         .bb-thumb .bb-thumb-del:hover { background: #dc2626; }
+        .bb-thumb .bb-thumb-cover {
+            position: absolute; top: 4px; left: 4px;
+            width: 26px; height: 26px; border-radius: 50%;
+            border: 0; background: rgba(17,24,39,0.82); color: #fff;
+            cursor: pointer; font-size: 15px; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .bb-thumb .bb-thumb-cover:hover { background: var(--primary); }
+        .bb-thumb.is-cover { outline: 3px solid var(--primary); outline-offset: -3px; }
+        .bb-thumb.is-cover .bb-thumb-cover { background: var(--primary); color: #fff; }
+        .bb-cover-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.3rem; }
+        /* Tillverkare management list */
+        .tm-list { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
+        .tm-row {
+            display: flex; align-items: center; gap: 0.6rem;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 0.6rem 0.75rem;
+        }
+        .tm-row .tm-drag { color: var(--text-muted); cursor: default; user-select: none; font-size: 0.9rem; }
+        .tm-row input[type="text"] {
+            flex: 1; padding: 0.5rem 0.7rem; border: 1px solid var(--border);
+            border-radius: 8px; background: var(--bg); color: var(--text);
+            font-size: 0.95rem; font-family: inherit; box-sizing: border-box;
+        }
+        .tm-row input[type="text"]:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(178,138,76,0.2); }
+        .tm-row .tm-count { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+        .tm-row .tm-status { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; min-width: 3.5rem; text-align: right; }
+        .tm-row .tm-status.is-saved { color: #16a34a; }
+        .tm-row .tm-status.is-error { color: #dc2626; }
+        .tm-row .tm-del {
+            border: 0; background: transparent; color: #dc2626; cursor: pointer;
+            font-size: 1.15rem; line-height: 1; padding: 0.2rem 0.4rem; border-radius: 6px;
+        }
+        .tm-row .tm-del:hover { background: rgba(220,38,38,0.1); }
+        .bb-card select.bb-manufacturer {
+            width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--border);
+            border-radius: 8px; background: var(--bg); color: var(--text);
+            font-size: 0.95rem; font-family: inherit; box-sizing: border-box;
+        }
+        .bb-card select.bb-manufacturer:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(178,138,76,0.2); }
         .bb-dropzone {
             border: 2px dashed var(--border);
             border-radius: 10px;
@@ -2271,14 +2311,28 @@
             <div id="dynsatser-section" style="display:none;">
                 <div class="card">
                     <h2 style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-                        <span>Dynsatser – båtmärken</span>
-                        <button class="btn" id="bb-add-btn">+ Nytt märke</button>
+                        <span>Tillverkare</span>
+                        <button class="btn" id="tm-add-btn">+ Ny tillverkare</button>
                     </h2>
                     <p style="color:var(--text-muted);margin-top:-0.5rem;font-size:0.92rem;">
-                        Hantera de båtmärken som visas på <strong>Dynsatser</strong>-sidan. Varje märke får en egen sida med bildgalleri och beskrivning.
+                        Tillverkarna (t.ex. Buster, Yamarin) visas som kort på <strong>Dynsatser</strong>-sidan. Klickar besökaren på en tillverkare visas alla dynsatser under den.
+                    </p>
+                    <div id="tm-empty-state" style="display:none;padding:1.2rem;text-align:center;color:var(--text-muted);border:1px dashed var(--border);border-radius:12px;margin-top:1rem;">
+                        Inga tillverkare ännu. Klicka på <strong>+ Ny tillverkare</strong>.
+                    </div>
+                    <div id="tm-list" class="tm-list"></div>
+                </div>
+
+                <div class="card">
+                    <h2 style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+                        <span>Dynsatser</span>
+                        <button class="btn" id="bb-add-btn">+ Ny dynsats</button>
+                    </h2>
+                    <p style="color:var(--text-muted);margin-top:-0.5rem;font-size:0.92rem;">
+                        Varje dynsats kopplas till en <strong>tillverkare</strong> och får ett eget bildgalleri. Välj vilken bild som ska vara omslag (visas först) med stjärnan på bilden.
                     </p>
                     <div id="bb-empty-state" style="display:none;padding:2rem;text-align:center;color:var(--text-muted);border:1px dashed var(--border);border-radius:12px;margin-top:1rem;">
-                        Inga märken ännu. Klicka på <strong>+ Nytt märke</strong> för att lägga till.
+                        Inga dynsatser ännu. Klicka på <strong>+ Ny dynsats</strong> för att lägga till.
                     </div>
                     <div id="bb-list" class="bb-list"></div>
                 </div>
@@ -2425,7 +2479,7 @@
         boats: { t: 'Tillverkare & modeller', s: 'Hantera båtdatabasen' },
         images: { t: 'Bilder & exempel', s: 'Galleri och kategorier' },
         tempproducts: { t: 'Tillfälliga produkter', s: 'Hantera produkter med bilder, pris och beskrivning' },
-        dynsatser: { t: 'Dynsatser', s: 'Hantera båtmärken med bilder och beskrivning på dynsatser-sidan' }
+        dynsatser: { t: 'Dynsatser', s: 'Hantera tillverkare och dynsatser med bilder på dynsatser-sidan' }
     };
     function syncTitle(primary) {
         const t = titles[primary];

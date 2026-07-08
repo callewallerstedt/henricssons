@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_from_directory, has_request_context
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON as SQLJSON, LargeBinary, String, Text, create_engine
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON as SQLJSON, LargeBinary, String, Text, create_engine, inspect as sa_inspect, text as sa_text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 app = Flask(__name__)
@@ -590,6 +590,26 @@ class TempProductImage(Base):
         }
 
 
+class DynManufacturer(Base):
+    """Tillverkare shown on the /dynsatser landing page. Each dynsats entry
+    (BoatBrand) is associated with one manufacturer via manufacturer_id."""
+
+    __tablename__ = "dyn_manufacturers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, default="")
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name or "",
+            "sort_order": int(self.sort_order or 0),
+        }
+
+
 class BoatBrand(Base):
     __tablename__ = "boat_brands"
 
@@ -597,6 +617,8 @@ class BoatBrand(Base):
     name = Column(String, nullable=False, default="")
     description = Column(Text, nullable=False, default="")
     sort_order = Column(Integer, nullable=False, default=0)
+    manufacturer_id = Column(Integer, ForeignKey("dyn_manufacturers.id", ondelete="SET NULL"), nullable=True, index=True)
+    cover_image_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -606,6 +628,8 @@ class BoatBrand(Base):
             "name": self.name or "",
             "description": self.description or "",
             "sort_order": int(self.sort_order or 0),
+            "manufacturer_id": self.manufacturer_id,
+            "cover_image_id": self.cover_image_id,
             "images": images or [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -656,6 +680,32 @@ engine = None
 SessionLocal = None
 
 
+def _migrate_boat_brand_columns() -> None:
+    """create_all() adds new tables but not new columns on existing tables.
+    Add manufacturer_id / cover_image_id to boat_brands if missing. Works on
+    both SQLite (local) and Postgres (prod)."""
+    if engine is None:
+        return
+    try:
+        insp = sa_inspect(engine)
+        if "boat_brands" not in insp.get_table_names():
+            return
+        existing = {col["name"] for col in insp.get_columns("boat_brands")}
+        additions = []
+        if "manufacturer_id" not in existing:
+            additions.append("ALTER TABLE boat_brands ADD COLUMN manufacturer_id INTEGER")
+        if "cover_image_id" not in existing:
+            additions.append("ALTER TABLE boat_brands ADD COLUMN cover_image_id INTEGER")
+        if not additions:
+            return
+        with engine.begin() as conn:
+            for stmt in additions:
+                conn.execute(sa_text(stmt))
+        print(f"Migrated boat_brands: added {len(additions)} column(s).")
+    except Exception as exc:
+        print(f"Warning: boat_brands column migration failed: {exc}")
+
+
 def init_db() -> None:
     global engine, SessionLocal
     try:
@@ -666,6 +716,7 @@ def init_db() -> None:
             kwargs["pool_pre_ping"] = True
         engine = create_engine(DATABASE_URL, **kwargs)
         Base.metadata.create_all(engine)
+        _migrate_boat_brand_columns()
         SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
         print("Database connected.")
     except Exception as exc:
@@ -5414,6 +5465,11 @@ def enrich_boat_brands(brands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         brand["slug"] = slug
         brand["href"] = f"/dynsatser/{slug}"
         images = brand.get("images") if isinstance(brand.get("images"), list) else []
+        cover_id = brand.get("cover_image_id")
+        if cover_id is not None:
+            cover = [img for img in images if img.get("id") == cover_id]
+            rest = [img for img in images if img.get("id") != cover_id]
+            images = cover + rest
         brand["images"] = images
         brand["primary_image_url"] = images[0]["url"] if images else ""
         enriched.append(brand)
@@ -5427,6 +5483,144 @@ def get_boat_brand_by_slug(slug: str) -> Tuple[Optional[Dict[str, Any]], List[Di
         if brand.get("slug") == clean_slug:
             return brand, brands
     return None, brands
+
+
+def _fetch_dyn_manufacturers() -> List[Dict[str, Any]]:
+    db = get_db()
+    if not db:
+        return []
+    try:
+        rows = (
+            db.query(DynManufacturer)
+            .order_by(DynManufacturer.sort_order.asc(), DynManufacturer.id.asc())
+            .all()
+        )
+        return [row.to_dict() for row in rows]
+    except Exception as exc:
+        print(f"_fetch_dyn_manufacturers failed: {exc}")
+        return []
+    finally:
+        db.close()
+
+
+def enrich_dyn_manufacturers() -> List[Dict[str, Any]]:
+    """Manufacturers with slug + a cover image derived from their entries."""
+    manufacturers = _fetch_dyn_manufacturers()
+    entries = enrich_boat_brands(_fetch_boat_brands())
+    entries_by_mfr: Dict[int, List[Dict[str, Any]]] = {}
+    for entry in entries:
+        mid = entry.get("manufacturer_id")
+        if mid is not None:
+            entries_by_mfr.setdefault(int(mid), []).append(entry)
+
+    used_slugs: set[str] = set()
+    result: List[Dict[str, Any]] = []
+    for item in manufacturers:
+        mfr = dict(item)
+        base_slug = slugify_boat_brand(mfr.get("name"), fallback=f"tillverkare-{mfr.get('id') or 'x'}")
+        slug = base_slug
+        suffix = 2
+        while slug in used_slugs:
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+        used_slugs.add(slug)
+        mfr["slug"] = slug
+        mfr["href"] = f"/dynsatser#{slug}"
+        mfr_entries = entries_by_mfr.get(int(mfr.get("id")), [])
+        mfr["entry_count"] = len(mfr_entries)
+        cover = ""
+        for entry in mfr_entries:
+            if entry.get("primary_image_url"):
+                cover = entry["primary_image_url"]
+                break
+        mfr["primary_image_url"] = cover
+        result.append(mfr)
+    return result
+
+
+@app.route("/api/dyn_manufacturers", methods=["GET"])
+def list_dyn_manufacturers():
+    return jsonify(enrich_dyn_manufacturers())
+
+
+@app.route("/api/dyn_manufacturers", methods=["POST"])
+@admin_required
+def create_dyn_manufacturer():
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        next_order = db.query(DynManufacturer).count() or 0
+        mfr = DynManufacturer(
+            name=str(payload.get("name", "") or "").strip()[:300],
+            sort_order=int(payload.get("sort_order", next_order) or next_order),
+        )
+        db.add(mfr)
+        db.commit()
+        db.refresh(mfr)
+        return jsonify(mfr.to_dict())
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/dyn_manufacturers/<int:manufacturer_id>", methods=["PUT"])
+@admin_required
+def update_dyn_manufacturer(manufacturer_id: int):
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        mfr = db.query(DynManufacturer).filter_by(id=manufacturer_id).first()
+        if not mfr:
+            return jsonify(error="Not found"), 404
+        if "name" in payload:
+            mfr.name = str(payload.get("name", "") or "").strip()[:300]
+        if "sort_order" in payload:
+            try:
+                mfr.sort_order = int(payload.get("sort_order") or 0)
+            except (TypeError, ValueError):
+                pass
+        db.commit()
+        db.refresh(mfr)
+        return jsonify(mfr.to_dict())
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/dyn_manufacturers/<int:manufacturer_id>", methods=["DELETE"])
+@admin_required
+def delete_dyn_manufacturer(manufacturer_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        mfr = db.query(DynManufacturer).filter_by(id=manufacturer_id).first()
+        if not mfr:
+            return jsonify(error="Not found"), 404
+        # Detach entries; they become unassigned rather than deleted.
+        db.query(BoatBrand).filter_by(manufacturer_id=manufacturer_id).update(
+            {"manufacturer_id": None}, synchronize_session=False
+        )
+        db.delete(mfr)
+        db.commit()
+        return jsonify(success=True)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
 
 
 @app.route("/api/boat_brands", methods=["GET"])
@@ -5445,10 +5639,16 @@ def create_boat_brand():
         return jsonify(error="Database unavailable"), 503
     try:
         next_order = db.query(BoatBrand).count() or 0
+        manufacturer_id = payload.get("manufacturer_id")
+        try:
+            manufacturer_id = int(manufacturer_id) if manufacturer_id not in (None, "", "null") else None
+        except (TypeError, ValueError):
+            manufacturer_id = None
         brand = BoatBrand(
             name=str(payload.get("name", "") or "").strip()[:300],
             description=str(payload.get("description", "") or "").strip()[:4000],
             sort_order=int(payload.get("sort_order", next_order) or next_order),
+            manufacturer_id=manufacturer_id,
         )
         db.add(brand)
         db.commit()
@@ -5483,6 +5683,24 @@ def update_boat_brand(brand_id: int):
                 brand.sort_order = int(payload.get("sort_order") or 0)
             except (TypeError, ValueError):
                 pass
+        if "manufacturer_id" in payload:
+            raw = payload.get("manufacturer_id")
+            try:
+                brand.manufacturer_id = int(raw) if raw not in (None, "", "null") else None
+            except (TypeError, ValueError):
+                brand.manufacturer_id = None
+        if "cover_image_id" in payload:
+            raw = payload.get("cover_image_id")
+            try:
+                cover_id = int(raw) if raw not in (None, "", "null") else None
+            except (TypeError, ValueError):
+                cover_id = None
+            # Only accept an image that actually belongs to this entry.
+            if cover_id is not None:
+                owns = db.query(BoatBrandImage).filter_by(id=cover_id, brand_id=brand.id).first()
+                if not owns:
+                    cover_id = None
+            brand.cover_image_id = cover_id
         db.commit()
         db.refresh(brand)
         return jsonify(brand.to_dict())
@@ -5595,6 +5813,10 @@ def delete_boat_brand_image(image_id: int):
         row = db.query(BoatBrandImage).filter_by(id=image_id).first()
         if not row:
             return jsonify(error="Not found"), 404
+        # If this image was an entry's cover, clear the reference.
+        db.query(BoatBrand).filter_by(cover_image_id=image_id).update(
+            {"cover_image_id": None}, synchronize_session=False
+        )
         db.delete(row)
         db.commit()
         return jsonify(success=True)
@@ -6541,9 +6763,9 @@ def boat_brand_page(slug: str):
             <aside class="seo-card">{meta_html}</aside>
         </section>
         <section class="seo-related">
-            <h2>Fler båtmärken</h2>
+            <h2>Fler dynsatser</h2>
             <div class="seo-related-grid">
-                {''.join(other_brands) if other_brands else '<div class="seo-card"><p style="margin:0;">Kontakta oss för information om fler märken.</p></div>'}
+                {''.join(other_brands) if other_brands else '<div class="seo-card"><p style="margin:0;">Kontakta oss för information om fler dynsatser.</p></div>'}
             </div>
         </section>
     </main>
@@ -6867,7 +7089,48 @@ def seed_boat_brands() -> None:
         db.close()
 
 
+def seed_dyn_manufacturers() -> None:
+    """One-time backfill: turn existing dynsats entries into tillverkare and
+    link them. Runs only while no manufacturers exist, so newly-added
+    unassigned entries never spawn stray manufacturers afterwards."""
+    db = get_db()
+    if not db:
+        return
+    try:
+        if db.query(DynManufacturer).count() > 0:
+            return
+        entries = db.query(BoatBrand).order_by(BoatBrand.sort_order.asc(), BoatBrand.id.asc()).all()
+        by_name: Dict[str, DynManufacturer] = {}
+        order = 0
+        for entry in entries:
+            name = (entry.name or "").strip()
+            if not name:
+                continue
+            key = name.lower()
+            mfr = by_name.get(key)
+            if mfr is None:
+                mfr = DynManufacturer(name=name, sort_order=order)
+                db.add(mfr)
+                db.flush()
+                by_name[key] = mfr
+                order += 1
+            if entry.manufacturer_id is None:
+                entry.manufacturer_id = mfr.id
+        db.commit()
+        if by_name:
+            print(f"Seeded {len(by_name)} dynsats manufacturer(s) from existing entries.")
+    except Exception as exc:
+        print(f"seed_dyn_manufacturers failed: {exc}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 seed_boat_brands()
+seed_dyn_manufacturers()
 
 
 if __name__ == "__main__":

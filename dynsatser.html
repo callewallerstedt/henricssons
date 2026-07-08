@@ -67,6 +67,30 @@
                 margin-top: 0;
             }
         }
+        /* Logo fallback for empty images: contain + padding instead of cover-crop */
+        .hb-premium .hb-dyn-brand-media--logo { background: var(--cream-2); }
+        .hb-premium .hb-dyn-brand-media--logo img {
+            object-fit: contain;
+            padding: 18%;
+            opacity: 0.55;
+        }
+        .hb-premium .hb-dyn-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: none;
+            border: none;
+            color: var(--brass);
+            font-family: var(--font-sans, inherit);
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            cursor: pointer;
+            padding: 0;
+            margin-bottom: 1rem;
+        }
+        .hb-premium .hb-dyn-back:hover { color: var(--brass-dark); }
     </style>
 </head>
 <body class="hb-premium">
@@ -101,12 +125,27 @@
 
     <section class="hb-section hb-section--tight hb-dyn-brands-section">
         <div class="wrap">
-            <span class="eyebrow">Vi levererar till</span><span class="rule"></span>
-            <h2 class="hb-dyn-brands-heading">Välj ditt båtmärke</h2>
-            <p class="hb-dyn-brands-lead">Klicka på ditt märke för att se bilder och läsa mer om vilka dynsatser vi kan erbjuda.</p>
-            <div id="dyn-brands-loading" class="hb-dyn-brands-status">Laddar märken...</div>
-            <div id="dyn-brands-error" class="hb-dyn-brands-status" style="display:none;">Kunde inte ladda märken.</div>
-            <div id="dyn-brands-grid" class="hb-dyn-brands-grid"></div>
+            <div id="dyn-brands-loading" class="hb-dyn-brands-status">Laddar tillverkare...</div>
+            <div id="dyn-brands-error" class="hb-dyn-brands-status" style="display:none;">Kunde inte ladda tillverkare.</div>
+
+            <!-- Manufacturers (tillverkare) view -->
+            <div id="dyn-makers-view">
+                <span class="eyebrow">Vi levererar till</span><span class="rule"></span>
+                <h2 class="hb-dyn-brands-heading">Välj tillverkare</h2>
+                <p class="hb-dyn-brands-lead">Klicka på tillverkaren för att se de dynsatser vi kan erbjuda.</p>
+                <div id="dyn-makers-grid" class="hb-dyn-brands-grid"></div>
+                <div id="dyn-makers-empty" class="hb-dyn-brands-status" style="display:none;">Inga tillverkare ännu.</div>
+            </div>
+
+            <!-- Entries view (shown after clicking a tillverkare) -->
+            <div id="dyn-entries-view" style="display:none;">
+                <button type="button" id="dyn-back-btn" class="hb-dyn-back">&#8249; Alla tillverkare</button>
+                <span class="eyebrow">Dynsatser</span><span class="rule"></span>
+                <h2 class="hb-dyn-brands-heading" id="dyn-entries-heading">Tillverkare</h2>
+                <p class="hb-dyn-brands-lead" id="dyn-entries-lead">Klicka på en dynsats för att se fler bilder.</p>
+                <div id="dyn-entries-grid" class="hb-dyn-brands-grid"></div>
+                <div id="dyn-entries-empty" class="hb-dyn-brands-status" style="display:none;">Inga dynsatser för den här tillverkaren ännu. Kontakta oss så hjälper vi dig.</div>
+            </div>
         </div>
     </section>
 
@@ -189,38 +228,127 @@
     (function () {
         const apiBase = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
             ? `${location.protocol}//${location.hostname}:25565` : '';
-        const grid = document.getElementById('dyn-brands-grid');
+        const LOGO = '/logo.png';
         const loading = document.getElementById('dyn-brands-loading');
         const error = document.getElementById('dyn-brands-error');
+        const makersView = document.getElementById('dyn-makers-view');
+        const makersGrid = document.getElementById('dyn-makers-grid');
+        const makersEmpty = document.getElementById('dyn-makers-empty');
+        const entriesView = document.getElementById('dyn-entries-view');
+        const entriesGrid = document.getElementById('dyn-entries-grid');
+        const entriesEmpty = document.getElementById('dyn-entries-empty');
+        const entriesHeading = document.getElementById('dyn-entries-heading');
+        const entriesLead = document.getElementById('dyn-entries-lead');
+        const backBtn = document.getElementById('dyn-back-btn');
 
-        fetch(`${apiBase}/api/boat_brands`)
-            .then(r => r.ok ? r.json() : Promise.reject(r.status))
-            .then(brands => {
-                loading.style.display = 'none';
-                if (!Array.isArray(brands) || brands.length === 0) return;
-                brands.forEach(brand => {
-                    const primary = (brand.images || [])[0];
-                    const card = document.createElement('a');
-                    card.className = 'hb-dyn-brand-card';
-                    card.href = brand.href || `/dynsatser/${brand.slug}`;
-                    card.innerHTML = `
-                        <div class="hb-dyn-brand-media">
-                            ${primary
-                                ? `<img src="${apiBase}${primary.url}" alt="${brand.name}" loading="lazy" decoding="async">`
-                                : `<div class="hb-dyn-brand-media-empty"></div>`}
-                        </div>
-                        <div class="hb-dyn-brand-body">
-                            <span class="hb-dyn-brand-name">${brand.name}</span>
-                            <span class="hb-dyn-brand-cta">Se dynsatser →</span>
-                        </div>
-                    `;
-                    grid.appendChild(card);
-                });
-            })
-            .catch(() => {
-                loading.style.display = 'none';
-                error.style.display = 'block';
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
+        // Resolve an image URL to something loadable from this origin.
+        const imgSrc = (url) => {
+            if (!url) return LOGO;
+            if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
+            return `${apiBase}${url.startsWith('/') ? '' : '/'}${url}`;
+        };
+
+        let manufacturers = [];
+        let entriesByMaker = new Map();
+
+        function mediaHtml(url, alt) {
+            const src = imgSrc(url);
+            const isLogo = src === LOGO || src.endsWith('/logo.png');
+            return `<div class="hb-dyn-brand-media${isLogo ? ' hb-dyn-brand-media--logo' : ''}">
+                <img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" decoding="async">
+            </div>`;
+        }
+
+        function showMakers() {
+            entriesView.style.display = 'none';
+            makersView.style.display = '';
+            if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+        }
+
+        function renderMakers() {
+            makersGrid.innerHTML = '';
+            if (!manufacturers.length) {
+                makersEmpty.style.display = 'block';
+                return;
+            }
+            makersEmpty.style.display = 'none';
+            manufacturers.forEach(m => {
+                const count = m.entry_count || (entriesByMaker.get(m.id) || []).length;
+                const card = document.createElement('a');
+                card.className = 'hb-dyn-brand-card';
+                card.href = `#${m.slug}`;
+                card.addEventListener('click', (e) => { e.preventDefault(); openMaker(m.slug); });
+                card.innerHTML = `
+                    ${mediaHtml(m.primary_image_url, m.name)}
+                    <div class="hb-dyn-brand-body">
+                        <span class="hb-dyn-brand-name">${esc(m.name)}</span>
+                        <span class="hb-dyn-brand-cta">Se dynsatser${count ? ` (${count})` : ''} →</span>
+                    </div>
+                `;
+                makersGrid.appendChild(card);
             });
+        }
+
+        function openMaker(slug) {
+            const maker = manufacturers.find(m => m.slug === slug);
+            if (!maker) { showMakers(); return; }
+            const entries = entriesByMaker.get(maker.id) || [];
+            entriesHeading.textContent = maker.name;
+            entriesLead.textContent = entries.length
+                ? 'Klicka på en dynsats för att se fler bilder.'
+                : '';
+            entriesGrid.innerHTML = '';
+            entriesEmpty.style.display = entries.length ? 'none' : 'block';
+            entries.forEach(entry => {
+                const cover = (entry.images || [])[0];
+                const card = document.createElement('a');
+                card.className = 'hb-dyn-brand-card';
+                card.href = entry.href || `/dynsatser/${entry.slug}`;
+                card.innerHTML = `
+                    ${mediaHtml(cover && cover.url, entry.name)}
+                    <div class="hb-dyn-brand-body">
+                        <span class="hb-dyn-brand-name">${esc(entry.name)}</span>
+                        <span class="hb-dyn-brand-cta">Se bilder →</span>
+                    </div>
+                `;
+                entriesGrid.appendChild(card);
+            });
+            makersView.style.display = 'none';
+            entriesView.style.display = '';
+            if (location.hash !== `#${slug}`) {
+                history.replaceState(null, '', `#${slug}`);
+            }
+            window.scrollTo({ top: entriesView.getBoundingClientRect().top + window.scrollY - 90, behavior: 'smooth' });
+        }
+
+        backBtn.addEventListener('click', showMakers);
+        window.addEventListener('hashchange', () => {
+            const slug = location.hash.replace(/^#/, '');
+            if (slug) openMaker(slug); else showMakers();
+        });
+
+        Promise.all([
+            fetch(`${apiBase}/api/dyn_manufacturers`).then(r => r.ok ? r.json() : Promise.reject(r.status)),
+            fetch(`${apiBase}/api/boat_brands`).then(r => r.ok ? r.json() : Promise.reject(r.status)),
+        ]).then(([makers, entries]) => {
+            loading.style.display = 'none';
+            manufacturers = Array.isArray(makers) ? makers : [];
+            entriesByMaker = new Map();
+            (Array.isArray(entries) ? entries : []).forEach(e => {
+                if (e.manufacturer_id == null) return;
+                if (!entriesByMaker.has(e.manufacturer_id)) entriesByMaker.set(e.manufacturer_id, []);
+                entriesByMaker.get(e.manufacturer_id).push(e);
+            });
+            renderMakers();
+            const slug = location.hash.replace(/^#/, '');
+            if (slug) openMaker(slug);
+        }).catch(() => {
+            loading.style.display = 'none';
+            error.style.display = 'block';
+        });
     })();
     </script>
     <script>

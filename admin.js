@@ -1254,7 +1254,7 @@ function switchTab(tab){
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
-        loadBoatBrands();
+        loadDynsatser();
     } else {
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').removeClass('active');
@@ -4211,7 +4211,140 @@ $(document).on('click', '#tp-add-btn', addTempProduct);
 
 // ============================== BOAT BRANDS (DYNSATSER) ==============================
 let boatBrandsCache = [];
+let dynManufacturersCache = [];
 const bbSaveTimers = new WeakMap();
+const tmSaveTimers = new WeakMap();
+
+async function loadDynsatser() {
+    await loadDynManufacturers();
+    await loadBoatBrands();
+}
+
+async function loadDynManufacturers() {
+    const list = document.getElementById('tm-list');
+    if (!list) return;
+    try {
+        const res = await adminFetch(`${API_BASE}/api/dyn_manufacturers`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        dynManufacturersCache = await res.json();
+    } catch (err) {
+        list.innerHTML = '<div style="padding:1rem;color:#dc2626;">Kunde inte ladda tillverkare. ' + escHtml(err.message || '') + '</div>';
+        return;
+    }
+    renderDynManufacturers();
+}
+
+function renderDynManufacturers() {
+    const list = document.getElementById('tm-list');
+    const empty = document.getElementById('tm-empty-state');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!Array.isArray(dynManufacturersCache) || dynManufacturersCache.length === 0) {
+        if (empty) empty.style.display = 'block';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+    dynManufacturersCache.forEach(mfr => list.appendChild(buildManufacturerRow(mfr)));
+}
+
+function buildManufacturerRow(mfr) {
+    const row = document.createElement('div');
+    row.className = 'tm-row';
+    row.dataset.manufacturerId = mfr.id;
+    const count = mfr.entry_count || 0;
+    row.innerHTML = `
+        <span class="tm-drag" title="Sorteringsordning">☰</span>
+        <input type="text" class="tm-name" value="${escHtml(mfr.name || '')}" placeholder="t.ex. Buster">
+        <span class="tm-count">${count} dynsats${count === 1 ? '' : 'er'}</span>
+        <span class="tm-status"></span>
+        <button type="button" class="tm-del" title="Ta bort tillverkare">🗑</button>
+    `;
+    const nameInput = row.querySelector('.tm-name');
+    const status = row.querySelector('.tm-status');
+    nameInput.addEventListener('input', () => {
+        clearTimeout(tmSaveTimers.get(row));
+        status.textContent = 'Sparar...';
+        status.classList.remove('is-saved', 'is-error');
+        tmSaveTimers.set(row, setTimeout(() => saveManufacturer(mfr, nameInput.value, status), 600));
+    });
+    row.querySelector('.tm-del').addEventListener('click', () => deleteManufacturer(mfr));
+    return row;
+}
+
+async function saveManufacturer(mfr, name, status) {
+    try {
+        const res = await adminFetch(`${API_BASE}/api/dyn_manufacturers/${mfr.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const updated = await res.json();
+        mfr.name = updated.name;
+        const cached = dynManufacturersCache.find(m => m.id === mfr.id);
+        if (cached) cached.name = updated.name;
+        status.textContent = 'Sparat ✓';
+        status.classList.add('is-saved');
+        setTimeout(() => { status.textContent = ''; status.classList.remove('is-saved'); }, 2000);
+        // Refresh entry dropdowns so the new name shows there too.
+        refreshManufacturerDropdowns();
+    } catch (err) {
+        status.textContent = 'Fel';
+        status.classList.add('is-error');
+    }
+}
+
+async function deleteManufacturer(mfr) {
+    if (!confirm(`Ta bort tillverkaren "${mfr.name || 'utan namn'}"? Dynsatser under den blir okopplade (raderas inte).`)) return;
+    try {
+        const res = await adminFetch(`${API_BASE}/api/dyn_manufacturers/${mfr.id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        dynManufacturersCache = dynManufacturersCache.filter(m => m.id !== mfr.id);
+        // Any entries pointing here are now unassigned locally.
+        boatBrandsCache.forEach(b => { if (b.manufacturer_id === mfr.id) b.manufacturer_id = null; });
+        renderDynManufacturers();
+        refreshManufacturerDropdowns();
+    } catch (err) {
+        alert('Kunde inte ta bort tillverkare: ' + (err.message || err));
+    }
+}
+
+async function addManufacturer() {
+    try {
+        const res = await adminFetch(`${API_BASE}/api/dyn_manufacturers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Ny tillverkare', sort_order: dynManufacturersCache.length })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const mfr = await res.json();
+        mfr.entry_count = 0;
+        dynManufacturersCache.push(mfr);
+        renderDynManufacturers();
+        refreshManufacturerDropdowns();
+        document.getElementById('tm-list').lastElementChild?.querySelector('.tm-name')?.select();
+    } catch (err) {
+        alert('Kunde inte skapa tillverkare: ' + (err.message || err));
+    }
+}
+
+function manufacturerOptionsHtml(selectedId) {
+    const opts = ['<option value="">— Välj tillverkare —</option>'];
+    dynManufacturersCache.forEach(m => {
+        const sel = String(m.id) === String(selectedId) ? ' selected' : '';
+        opts.push(`<option value="${m.id}"${sel}>${escHtml(m.name || 'utan namn')}</option>`);
+    });
+    return opts.join('');
+}
+
+function refreshManufacturerDropdowns() {
+    document.querySelectorAll('#bb-list .bb-manufacturer').forEach(sel => {
+        const current = sel.value;
+        sel.innerHTML = manufacturerOptionsHtml(current);
+    });
+}
+
+$(document).on('click', '#tm-add-btn', addManufacturer);
 
 async function loadBoatBrands() {
     const list = document.getElementById('bb-list');
@@ -4223,7 +4356,7 @@ async function loadBoatBrands() {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         boatBrandsCache = await res.json();
     } catch (err) {
-        list.innerHTML = '<div style="padding:1rem;color:#dc2626;">Kunde inte ladda märken. ' + escHtml(err.message || '') + '</div>';
+        list.innerHTML = '<div style="padding:1rem;color:#dc2626;">Kunde inte ladda dynsatser. ' + escHtml(err.message || '') + '</div>';
         return;
     }
     renderBoatBrands();
@@ -4250,8 +4383,12 @@ function buildBoatBrandCard(brand) {
     card.innerHTML = `
         <div class="bb-fields">
             <div>
-                <label>Namn (märke)</label>
-                <input type="text" class="bb-name" value="${escHtml(brand.name || '')}" placeholder="t.ex. Uttern">
+                <label>Namn (modell)</label>
+                <input type="text" class="bb-name" value="${escHtml(brand.name || '')}" placeholder="t.ex. Magnum">
+            </div>
+            <div>
+                <label>Tillverkare</label>
+                <select class="bb-manufacturer">${manufacturerOptionsHtml(brand.manufacturer_id)}</select>
             </div>
             <div class="bb-row-2col">
                 <div>
@@ -4264,17 +4401,18 @@ function buildBoatBrandCard(brand) {
             </div>
             <div>
                 <label>Beskrivning</label>
-                <textarea class="bb-description" placeholder="Beskriv tillgängliga dynsatser för detta märke...">${escHtml(brand.description || '')}</textarea>
+                <textarea class="bb-description" placeholder="Beskriv dynsatsen...">${escHtml(brand.description || '')}</textarea>
             </div>
             <div class="bb-actions">
                 <span class="bb-save-status"></span>
-                <button type="button" class="btn btn-danger bb-delete">Ta bort märke</button>
+                <button type="button" class="btn btn-danger bb-delete">Ta bort dynsats</button>
             </div>
         </div>
         <div class="bb-images">
             <div>
                 <label>Bilder (${(brand.images || []).length})</label>
                 <div class="bb-images-grid"></div>
+                <div class="bb-cover-hint"></div>
             </div>
             <label class="bb-dropzone" tabindex="0">
                 <div style="font-size:1.6rem;margin-bottom:.3rem;">📷</div>
@@ -4293,13 +4431,21 @@ function buildBoatBrandCard(brand) {
 function renderBoatBrandImages(card, brand) {
     const grid = card.querySelector('.bb-images-grid');
     grid.innerHTML = '';
-    (brand.images || []).forEach(img => {
+    const images = brand.images || [];
+    // Default cover is the first image if none explicitly chosen.
+    const effectiveCover = brand.cover_image_id != null ? brand.cover_image_id : (images[0] && images[0].id);
+    images.forEach(img => {
         const tile = document.createElement('div');
-        tile.className = 'bb-thumb';
+        tile.className = 'bb-thumb' + (img.id === effectiveCover ? ' is-cover' : '');
         tile.innerHTML = `
             <img src="${API_BASE}${img.url}" alt="${escHtml(img.filename || '')}">
+            <button type="button" class="bb-thumb-cover" title="${img.id === effectiveCover ? 'Omslagsbild' : 'Använd som omslag'}" data-image-id="${img.id}">${img.id === effectiveCover ? '★' : '☆'}</button>
             <button type="button" class="bb-thumb-del" title="Ta bort bild" data-image-id="${img.id}">×</button>
         `;
+        tile.querySelector('.bb-thumb-cover').addEventListener('click', (e) => {
+            e.preventDefault();
+            setBoatBrandCover(card, brand, img.id);
+        });
         tile.querySelector('.bb-thumb-del').addEventListener('click', async (e) => {
             e.preventDefault();
             if (!confirm('Ta bort den här bilden?')) return;
@@ -4307,6 +4453,7 @@ function renderBoatBrandImages(card, brand) {
                 const res = await adminFetch(`${API_BASE}/api/boat_brand_image/${img.id}`, { method: 'DELETE' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 brand.images = (brand.images || []).filter(i => i.id !== img.id);
+                if (brand.cover_image_id === img.id) brand.cover_image_id = null;
                 renderBoatBrandImages(card, brand);
                 card.querySelector('.bb-images label').textContent = `Bilder (${brand.images.length})`;
             } catch (err) {
@@ -4315,12 +4462,35 @@ function renderBoatBrandImages(card, brand) {
         });
         grid.appendChild(tile);
     });
+    const hint = card.querySelector('.bb-cover-hint');
+    if (hint) hint.textContent = images.length
+        ? 'Stjärnmarkerad bild visas först på sidan.'
+        : '';
+}
+
+async function setBoatBrandCover(card, brand, imageId) {
+    try {
+        const res = await adminFetch(`${API_BASE}/api/boat_brands/${brand.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cover_image_id: imageId })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const updated = await res.json();
+        brand.cover_image_id = updated.cover_image_id;
+        const cached = boatBrandsCache.find(b => b.id === brand.id);
+        if (cached) cached.cover_image_id = updated.cover_image_id;
+        renderBoatBrandImages(card, brand);
+    } catch (err) {
+        alert('Kunde inte sätta omslagsbild: ' + (err.message || err));
+    }
 }
 
 function bindBoatBrandCard(card, brand) {
     const nameInput = card.querySelector('.bb-name');
     const sortInput = card.querySelector('.bb-sort');
     const descInput = card.querySelector('.bb-description');
+    const mfrSelect = card.querySelector('.bb-manufacturer');
     const status = card.querySelector('.bb-save-status');
 
     function scheduleSave() {
@@ -4332,6 +4502,12 @@ function bindBoatBrandCard(card, brand) {
     }
 
     [nameInput, sortInput, descInput].forEach(el => el.addEventListener('input', scheduleSave));
+    // Manufacturer change saves immediately (also refresh tillverkare counts after).
+    mfrSelect.addEventListener('change', () => {
+        status.textContent = 'Sparar...';
+        status.classList.remove('is-saved', 'is-error');
+        saveBoatBrand(card, brand, status).then(() => loadDynManufacturers());
+    });
 
     card.querySelector('.bb-delete').addEventListener('click', async () => {
         if (!confirm(`Ta bort märket "${brand.name || 'utan namn'}"? Detta kan inte ångras.`)) return;
@@ -4382,17 +4558,25 @@ async function saveBoatBrand(card, brand, status) {
     const name = card.querySelector('.bb-name').value;
     const sort = parseInt(card.querySelector('.bb-sort').value, 10) || 0;
     const description = card.querySelector('.bb-description').value;
+    const mfrRaw = card.querySelector('.bb-manufacturer').value;
+    const manufacturer_id = mfrRaw ? parseInt(mfrRaw, 10) : null;
     try {
         const res = await adminFetch(`${API_BASE}/api/boat_brands/${brand.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, sort_order: sort, description })
+            body: JSON.stringify({ name, sort_order: sort, description, manufacturer_id })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const updated = await res.json();
         brand.name = updated.name;
         brand.description = updated.description;
         brand.sort_order = updated.sort_order;
+        brand.manufacturer_id = updated.manufacturer_id;
+        const cached = boatBrandsCache.find(b => b.id === brand.id);
+        if (cached) {
+            cached.name = updated.name;
+            cached.manufacturer_id = updated.manufacturer_id;
+        }
         status.textContent = 'Sparat ✓';
         status.classList.add('is-saved');
         setTimeout(() => { status.textContent = ''; status.classList.remove('is-saved'); }, 2000);
@@ -4407,7 +4591,7 @@ async function addBoatBrand() {
         const res = await adminFetch(`${API_BASE}/api/boat_brands`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'Nytt märke', description: '', sort_order: boatBrandsCache.length })
+            body: JSON.stringify({ name: 'Ny dynsats', description: '', sort_order: boatBrandsCache.length })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const brand = await res.json();
