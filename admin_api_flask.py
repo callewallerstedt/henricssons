@@ -6598,6 +6598,22 @@ def robots_txt():
 def sitemap_xml():
     urls = [absolute_public_url(path) for path in CORE_PUBLIC_PATHS]
     urls.extend(absolute_public_url(f"/exempel/{item['canonical_slug']}") for item in list_canonical_examples())
+    try:
+        urls.extend(
+            absolute_public_url(str(brand.get("href", "")))
+            for brand in enrich_boat_brands(_fetch_boat_brands(include_images=False))
+            if brand.get("href")
+        )
+    except Exception as exc:
+        print(f"sitemap: could not list dynsats pages: {exc}")
+    try:
+        urls.extend(
+            absolute_public_url(str(product.get("href", "")))
+            for product in get_public_temp_products()
+            if product.get("href")
+        )
+    except Exception as exc:
+        print(f"sitemap: could not list temp product pages: {exc}")
     xml_lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
