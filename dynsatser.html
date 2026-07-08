@@ -3,12 +3,23 @@
 <head>
     <meta charset="utf-8"/>
     <title>Dynsatser - Henricssons Båtkapell</title>
+    <meta name="description" content="Dynsatser och båtdynor från Henricssons Båtkapell för utvalda båtmodeller, tillverkade med slitstarka material och god passform."/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=optional" rel="stylesheet">
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
     <link rel="icon" href="logo.png">
+    <link rel="canonical" href="https://www.henricssonsbatkapell.se/dynsatser"/>
+    <meta property="og:title" content="Dynsatser - Henricssons Båtkapell"/>
+    <meta property="og:description" content="Dynsatser och båtdynor från Henricssons Båtkapell för utvalda båtmodeller, tillverkade med slitstarka material och god passform."/>
+    <meta property="og:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
+    <meta property="og:type" content="website"/>
+    <meta property="og:url" content="https://www.henricssonsbatkapell.se/dynsatser"/>
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="Dynsatser - Henricssons Båtkapell"/>
+    <meta name="twitter:description" content="Dynsatser och båtdynor från Henricssons Båtkapell för utvalda båtmodeller, tillverkade med slitstarka material och god passform."/>
+    <meta name="twitter:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
     <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
     <style>
         .hb-dyn-visual {
@@ -88,6 +99,17 @@
         </div>
     </section>
 
+    <section class="hb-section hb-section--tight hb-dyn-brands-section">
+        <div class="wrap">
+            <span class="eyebrow">Vi levererar till</span><span class="rule"></span>
+            <h2 class="hb-dyn-brands-heading">Välj ditt båtmärke</h2>
+            <p class="hb-dyn-brands-lead">Klicka på ditt märke för att se bilder och läsa mer om vilka dynsatser vi kan erbjuda.</p>
+            <div id="dyn-brands-loading" class="hb-dyn-brands-status">Laddar märken...</div>
+            <div id="dyn-brands-error" class="hb-dyn-brands-status" style="display:none;">Kunde inte ladda märken.</div>
+            <div id="dyn-brands-grid" class="hb-dyn-brands-grid"></div>
+        </div>
+    </section>
+
     <section class="hb-section">
         <div class="wrap hb-contact-grid">
             <aside class="hb-contact-info">
@@ -147,13 +169,14 @@
                 </div>
                 <div>
                     <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
+                    <div class="hb-footer-partners" aria-label="Partners">
+                        <img src="assets/optimized/partner-jens-sagen.webp" alt="Jens Sagen" loading="lazy" decoding="async"/>
+                        <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-varuste.webp" alt="VA Varuste" loading="lazy" decoding="async"/>
+                        <img src="assets/schultz.png" alt="Schultz Kalecher" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-hansenprotection.png" alt="Hansen Protection" loading="lazy" decoding="async"/>
+                    </div>
                 </div>
             </div>
             <div class="hb-footer-bottom">
@@ -162,9 +185,57 @@
             </div>
         </div>
     </footer>
+    <script>
+    (function () {
+        const apiBase = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+            ? `${location.protocol}//${location.hostname}:25565` : '';
+        const grid = document.getElementById('dyn-brands-grid');
+        const loading = document.getElementById('dyn-brands-loading');
+        const error = document.getElementById('dyn-brands-error');
+
+        fetch(`${apiBase}/api/boat_brands`)
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(brands => {
+                loading.style.display = 'none';
+                if (!Array.isArray(brands) || brands.length === 0) return;
+                brands.forEach(brand => {
+                    const primary = (brand.images || [])[0];
+                    const card = document.createElement('a');
+                    card.className = 'hb-dyn-brand-card';
+                    card.href = brand.href || `/dynsatser/${brand.slug}`;
+                    card.innerHTML = `
+                        <div class="hb-dyn-brand-media">
+                            ${primary
+                                ? `<img src="${apiBase}${primary.url}" alt="${brand.name}" loading="lazy" decoding="async">`
+                                : `<div class="hb-dyn-brand-media-empty"></div>`}
+                        </div>
+                        <div class="hb-dyn-brand-body">
+                            <span class="hb-dyn-brand-name">${brand.name}</span>
+                            <span class="hb-dyn-brand-cta">Se dynsatser →</span>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            })
+            .catch(() => {
+                loading.style.display = 'none';
+                error.style.display = 'block';
+            });
+    })();
+    </script>
+    <script>
+    (function () {
+        const manufacturer = new URLSearchParams(location.search).get('manufacturer');
+        if (manufacturer) {
+            const field = document.getElementById('dyn-maker');
+            if (field) field.value = manufacturer;
+        }
+    })();
+    </script>
     <script src="form_attachments.js?v=20260419d"></script>
     <script>
         const dynAttachmentWidget = window.HenricssonsAttachments ? window.HenricssonsAttachments.create('#dynAttachments', { label: 'Bifoga bilder (valfritt)', helper: 'Ladda upp här' }) : { getFiles: () => [], reset: () => {} };
+        const dynFormStartedAt = Date.now();
         document.getElementById('dynForm').addEventListener('submit', async function (e) {
             e.preventDefault();
             const form = e.currentTarget;
@@ -174,7 +245,8 @@
             btn.textContent = 'Skickar...';
             const fields = {};
             new FormData(form).forEach((value, key) => { fields[key.replace(/^\d+\.\s*/, '')] = value; });
-            const api = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? `${location.protocol}//${location.hostname}:25565` : 'https://henricssons-api.onrender.com';
+            fields.__form_started_at = String(dynFormStartedAt);
+            const api = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? `${location.protocol}//${location.hostname}:25565` : `${location.protocol}//${location.host}`;
             const payload = JSON.stringify({ form_type: form.dataset.subject || 'Dynsatsförfrågan', fields });
             try {
                 const files = dynAttachmentWidget.getFiles();
@@ -207,6 +279,6 @@
             });
         }
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
+    <script src="/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>

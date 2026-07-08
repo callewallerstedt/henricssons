@@ -2,13 +2,24 @@
 <html lang="sv">
 <head>
     <meta charset="utf-8"/>
-    <title>Fenderstrumpor - Henricssons Båtkapell</title>
+    <title>Tillbehör - Henricssons Båtkapell</title>
+    <meta name="description" content="En fenderstrumpa dämpar oljud och gnissel vid förtöjning. Skydda fendrarna med snygga fenderstrumpor med eller utan personlig logotyp."/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=optional" rel="stylesheet">
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
     <link rel="icon" href="logo.png">
+    <link rel="canonical" href="https://www.henricssonsbatkapell.se/tillbehor"/>
+    <meta property="og:title" content="Tillbehör - Henricssons Båtkapell"/>
+    <meta property="og:description" content="En fenderstrumpa dämpar oljud och gnissel vid förtöjning. Skydda fendrarna med snygga fenderstrumpor med eller utan personlig logotyp."/>
+    <meta property="og:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
+    <meta property="og:type" content="website"/>
+    <meta property="og:url" content="https://www.henricssonsbatkapell.se/tillbehor"/>
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="Tillbehör - Henricssons Båtkapell"/>
+    <meta name="twitter:description" content="En fenderstrumpa dämpar oljud och gnissel vid förtöjning. Skydda fendrarna med snygga fenderstrumpor med eller utan personlig logotyp."/>
+    <meta name="twitter:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
     <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
 </head>
 <body class="hb-premium">
@@ -41,17 +52,19 @@
     <section class="hb-section">
         <div class="wrap hb-contact-grid">
             <aside class="hb-contact-info">
-                <h2>Storlekar</h2>
-                <div class="row"><h3>Vanliga modeller</h3><p>F1 6x25, F2 8x27, F3 9x30, F4 9x41, F5 12x30 och F6 12x43.</p></div>
-                <div class="row"><h3>Logotyp</h3><p>Skicka gärna information om båtfabrikat eller egen logotyp i meddelandet.</p></div>
+                <h2>Inför offert</h2>
+                <div class="row"><h3>Logotyp</h3><p>Hos oss kan du beställa fenderstrumpor med eller utan logotyp. Vissa båtlogotyper finns redan i systemet och kan då ge lägre tillägg.</p></div>
+                <div class="row"><h3>Adress</h3><p>Fyll gärna i leveransadress i formuläret om du vill att vi ska räkna med frakt direkt i offerten.</p></div>
+                <div class="row"><h3>Storleksguide</h3><p><a href="https://cdn.prod.website-files.com/5e669fea091655b193e71a3b/5e7c6246ee55b0062a529478_LIROS-Fenderskyddstorleksguide.pdf" target="_blank" rel="noopener noreferrer">Läs mer om Liros fenderskydd och storleksguide</a></p></div>
             </aside>
             <form id="fenderForm" class="hb-form-card" data-subject="Fenderförfrågan">
                 <h2>Prisförfrågan</h2>
                 <p class="subtitle">Fyll i dina uppgifter så återkommer vi.</p>
                 <div class="hb-form-grid-2"><div class="hb-form-row"><label for="fs-name">Namn *</label><input id="fs-name" name="name" required></div><div class="hb-form-row"><label for="fs-phone">Telefon *</label><input id="fs-phone" name="phone" type="tel" required></div></div>
                 <div class="hb-form-grid-2"><div class="hb-form-row"><label for="fs-email">E-post *</label><input id="fs-email" name="email" type="email" required></div><div class="hb-form-row"><label for="fs-qty">Antal *</label><input id="fs-qty" name="quantity" required></div></div>
+                <div class="hb-form-row"><label for="fs-address">Adress</label><input id="fs-address" name="address"></div>
                 <div class="hb-form-row"><label for="fs-size">Storlek</label><select id="fs-size" name="size"><option value="">Välj storlek</option><option>F1 6x25</option><option>F2 8x27</option><option>F3 9x30</option><option>F4 9x41</option><option>F5 12x30</option><option>F6 12x43</option></select></div>
-                <div class="hb-form-row"><label for="fs-message">Meddelande</label><textarea id="fs-message" name="message"></textarea></div>
+                <div class="hb-form-row"><label for="fs-message">Meddelande</label><textarea id="fs-message" name="message" placeholder="Båtmärke, eventuell logotyp och annat vi ska ta hänsyn till"></textarea></div>
                 <div id="fenderAttachments"></div>
                 <button type="submit" class="hb-btn hb-btn-primary"><span>Skicka förfrågan</span></button>
                 <div class="hb-form-done">Tack! Din förfrågan har skickats.</div>
@@ -97,13 +110,14 @@
                 </div>
                 <div>
                     <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
+                    <div class="hb-footer-partners" aria-label="Partners">
+                        <img src="assets/optimized/partner-jens-sagen.webp" alt="Jens Sagen" loading="lazy" decoding="async"/>
+                        <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-varuste.webp" alt="VA Varuste" loading="lazy" decoding="async"/>
+                        <img src="assets/schultz.png" alt="Schultz Kalecher" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-hansenprotection.png" alt="Hansen Protection" loading="lazy" decoding="async"/>
+                    </div>
                 </div>
             </div>
             <div class="hb-footer-bottom">
@@ -125,7 +139,7 @@
             const fields = {};
             new FormData(form).forEach((value, key) => { fields[key.replace(/^\d+\.\s*/, '')] = value; });
             fields.__form_started_at = String(fenderFormStartedAt);
-            const api = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? `${location.protocol}//${location.hostname}:25565` : 'https://henricssons-api.onrender.com';
+            const api = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? `${location.protocol}//${location.hostname}:25565` : `${location.protocol}//${location.host}`;
             const payload = JSON.stringify({ form_type: form.dataset.subject || 'Fenderförfrågan', fields });
             try {
                 const files = fenderAttachmentWidget.getFiles();
@@ -157,6 +171,6 @@
             });
         }
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
+    <script src="/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>

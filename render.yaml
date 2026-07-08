@@ -24,6 +24,8 @@ services:
         sync: false
       - key: ADMIN_PANEL_PASSWORD
         sync: false
+      - key: PUBLIC_BASE_URL
+        value: https://www.henricssonsbatkapell.se
       - key: OPENAI_API_KEY
         sync: false
       - key: ADMIN_CHAT_MODEL
@@ -37,4 +39,4 @@ services:
       - key: enable_chatbot
         value: "0"
       - key: ALLOWED_ORIGINS
-        value: https://henricssonsbatkapell.se,https://www.henricssonsbatkapell.se,https://henricssons.se,https://www.henricssons.se
+        value: https://henricssonsbatkapell.se,https://www.henricssonsbatkapell.se,https://henricssonsbatkapell.onrender.com

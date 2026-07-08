@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=optional" rel="stylesheet">
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
     <link rel="icon" href="logo.png">
     <link rel="canonical" href="https://www.henricssonsbatkapell.se/tillfalliga-produkter"/>
@@ -39,6 +39,10 @@
     <section class="hb-section hb-section--tight">
         <div class="wrap">
             <div id="tp-loading" class="hb-tp-empty">Laddar produkter...</div>
+            <div id="tp-error" class="hb-tp-empty" style="display:none;">
+                <h2>Kunde inte ladda produkter just nu</h2>
+                <p>Försök igen om en liten stund, eller <a href="/kontakt">kontakta oss</a> direkt.</p>
+            </div>
             <div id="tp-empty" class="hb-tp-empty" style="display:none;">
                 <h2>Inga aktuella produkter just nu</h2>
                 <p>Titta gärna tillbaka senare, eller <a href="/kontakt">kontakta oss</a> direkt om du söker något specifikt.</p>
@@ -100,13 +104,14 @@
                 </div>
                 <div>
                     <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
+                    <div class="hb-footer-partners" aria-label="Partners">
+                        <img src="assets/optimized/partner-jens-sagen.webp" alt="Jens Sagen" loading="lazy" decoding="async"/>
+                        <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-varuste.webp" alt="VA Varuste" loading="lazy" decoding="async"/>
+                        <img src="assets/schultz.png" alt="Schultz Kalecher" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-hansenprotection.png" alt="Hansen Protection" loading="lazy" decoding="async"/>
+                    </div>
                 </div>
             </div>
             <div class="hb-footer-bottom">
@@ -119,9 +124,9 @@
     (function () {
         function resolveApiBase() {
             const sameOrigin = `${location.protocol}//${location.host}`;
-            const staticRenderHosts = new Set(['henricssons.onrender.com', 'henricssons-app.onrender.com']);
-            if (staticRenderHosts.has(location.hostname)) {
-                return 'https://henricssons-api.onrender.com';
+            const renderHosts = new Set(['henricssonsbatkapell.onrender.com']);
+            if (renderHosts.has(location.hostname)) {
+                return sameOrigin;
             }
             return sameOrigin;
         }
@@ -129,6 +134,7 @@
         const API_BASE = resolveApiBase();
         const grid = document.getElementById('tp-grid');
         const loading = document.getElementById('tp-loading');
+        const error = document.getElementById('tp-error');
         const empty = document.getElementById('tp-empty');
 
         function escHtml(value) {
@@ -171,6 +177,8 @@
 
         function renderProducts(products) {
             grid.innerHTML = '';
+            error.style.display = 'none';
+            empty.style.display = 'none';
             if (!products.length) {
                 empty.style.display = 'block';
                 return;
@@ -188,17 +196,22 @@
         }
 
         fetch(`${API_BASE}/api/temp_products`)
-            .then((response) => response.ok ? response.json() : [])
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`temp products request failed (${response.status})`);
+                }
+                return response.json();
+            })
             .then((products) => {
                 loading.style.display = 'none';
                 renderProducts(Array.isArray(products) ? products : []);
             })
             .catch(() => {
                 loading.style.display = 'none';
-                empty.style.display = 'block';
+                error.style.display = 'block';
             });
     })();
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
+    <script src="/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>

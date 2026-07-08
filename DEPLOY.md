@@ -16,7 +16,7 @@
    - `OPENAI_API_KEY`
 
 ## DNS/domain
-1. In Render service settings, add your custom domain (`henricssons.se` and `www.henricssons.se`).
+1. In Render service settings, add your custom domain (`henricssonsbatkapell.se` and optionally `www.henricssonsbatkapell.se`).
 2. Update DNS records to Render target.
 
 ## Verify after deploy

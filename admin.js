@@ -5,16 +5,18 @@ let manufacturers = typeof boatData !== 'undefined' ? boatData : {};
 let selectedManufacturerKey = null;
 let selectedModelIndex = null;
 let $grid1, $grid2;
+let analyticsRangeDays = 30;
+let customerConfirmationDefaultTemplate = '';
+let customerConfirmationPreviewFormType = 'Kontakt';
+let customerConfirmationPreviewTimer = null;
+let customerConfirmationPreviewRequestId = 0;
 
 // Lägg in omedelbart efter globala variabler
-const KNOWN_API_HOSTS = new Set(['henricssons-api.onrender.com']);
+const KNOWN_API_HOSTS = new Set(['henricssonsbatkapell.onrender.com']);
 const KNOWN_STATIC_HOSTS = new Set([
-    'henricssons.onrender.com',
-    'henricssons-app.onrender.com',
+    'henricssonsbatkapell.onrender.com',
     'henricssonsbatkapell.se',
-    'www.henricssonsbatkapell.se',
-    'henricssons.se',
-    'www.henricssons.se'
+    'www.henricssonsbatkapell.se'
 ]);
 
 let API_BASE;
@@ -33,7 +35,7 @@ function resolveApiBase() {
     }
 
     if (KNOWN_STATIC_HOSTS.has(location.hostname)) {
-        return 'https://henricssons-api.onrender.com';
+        return sameOrigin;
     }
 
     if ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') && location.port !== '25565') {
@@ -43,15 +45,25 @@ function resolveApiBase() {
     return sameOrigin;
 }
 API_BASE = resolveApiBase();
-console.log('API_BASE initialized to:', API_BASE, 'from location:', location.href);
-
-if (KNOWN_STATIC_HOSTS.has(location.hostname) && /^\/admin(?:\.html)?\/?$/i.test(location.pathname)) {
-    window.location.replace(new URL('/admin', API_BASE).toString());
-}
 
 let ADMIN_API_KEY = localStorage.getItem('adminApiKey') || '';
-const STATUS_FLOW = ['nya-inskick', 'vantar-pa-svar', 'i-produktion', 'redo-for-leverans'];
-const STATUS_BUCKETS = [...STATUS_FLOW, 'todo'];
+const DEFAULT_WORKFLOW_STATUSES = [
+    { id: 'nya-inskick', name: 'Nya inskick', fixed: true },
+    { id: 'vantar-pa-svar', name: 'Väntar på svar', fixed: false },
+    { id: 'i-produktion', name: 'I produktion', fixed: false },
+    { id: 'redo-for-leverans', name: 'Redo för leverans', fixed: false }
+];
+const TODO_STATUS = { id: 'todo', name: 'To-do', fixed: true };
+const ARCHIVE_STATUS = { id: 'arkiv', name: 'Arkiv', fixed: true };
+const STATUS_COLOR_PALETTE = ['#ff9800', '#2563eb', '#0f766e', '#7c3aed', '#db2777', '#ea580c', '#059669', '#0284c7', '#4f46e5', '#65a30d', '#b45309', '#dc2626'];
+const STATUS_SUMMARY_HINTS = [
+    'Obesvarade förfrågningar',
+    'Under uppföljning',
+    'Aktiva arbeten',
+    'Klara att skicka'
+];
+const STATUS_SUMMARY_CARD_CLASSES = ['', 'is-warning', 'is-info', 'is-success'];
+let workflowStatuses = DEFAULT_WORKFLOW_STATUSES.map(status => ({ ...status }));
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -67,6 +79,125 @@ function sanitizeHtml(html) {
         return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
     }
     return escapeHtml(html);
+}
+
+function cloneDefaultWorkflowStatuses() {
+    return DEFAULT_WORKFLOW_STATUSES.map(status => ({ ...status }));
+}
+
+function sanitizeStatusName(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+}
+
+function slugifyStatusId(value) {
+    const normalized = String(value || '')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 48);
+    return normalized;
+}
+
+function normalizeWorkflowStatuses(source) {
+    const defaults = cloneDefaultWorkflowStatuses();
+    const raw = Array.isArray(source)
+        ? source
+        : (source && Array.isArray(source.statuses) ? source.statuses : []);
+    if (!raw.length) return defaults;
+
+    const normalized = [{ ...defaults[0] }];
+    const seen = new Set(['nya-inskick']);
+
+    raw.forEach(entry => {
+        if (!entry || typeof entry !== 'object') return;
+        const rawId = String(entry.id || '').trim().toLowerCase();
+        if (rawId === 'nya-inskick') return;
+        const name = sanitizeStatusName(entry.name);
+        if (!name) return;
+        let id = /^[a-z0-9][a-z0-9-]{0,47}$/.test(rawId) && rawId !== TODO_STATUS.id && rawId !== ARCHIVE_STATUS.id ? rawId : '';
+        if (!id || seen.has(id)) {
+            const base = slugifyStatusId(name) || 'status';
+            id = base;
+            let suffix = 2;
+            while (!id || seen.has(id) || id === TODO_STATUS.id || id === ARCHIVE_STATUS.id || id === 'nya-inskick') {
+                id = `${base}-${suffix}`.slice(0, 48);
+                suffix += 1;
+            }
+        }
+        normalized.push({ id, name, fixed: false });
+        seen.add(id);
+    });
+
+    return normalized.length > 1 ? normalized : defaults;
+}
+
+function getWorkflowStatuses() {
+    return Array.isArray(workflowStatuses) && workflowStatuses.length
+        ? workflowStatuses
+        : cloneDefaultWorkflowStatuses();
+}
+
+function getWorkflowStatusIds() {
+    return getWorkflowStatuses().map(status => status.id);
+}
+
+function getStatusBuckets() {
+    return [...getWorkflowStatusIds(), TODO_STATUS.id, ARCHIVE_STATUS.id];
+}
+
+function isWorkflowStatus(statusId) {
+    return getWorkflowStatusIds().includes(statusId);
+}
+
+function getWorkflowStatusIndex(statusId) {
+    return getWorkflowStatuses().findIndex(status => status.id === statusId);
+}
+
+function createEmptyStatusItems() {
+    const next = {};
+    getStatusBuckets().forEach(statusId => {
+        next[statusId] = [];
+    });
+    return next;
+}
+
+function getStatusColor(statusId) {
+    if (statusId === TODO_STATUS.id) return '#0f766e';
+    if (statusId === ARCHIVE_STATUS.id) return '#64748b';
+    const index = getWorkflowStatusIndex(statusId);
+    if (index >= 0) return STATUS_COLOR_PALETTE[index % STATUS_COLOR_PALETTE.length];
+    return '#666';
+}
+
+function getStatusDisplayName(statusId) {
+    if (statusId === TODO_STATUS.id) return TODO_STATUS.name;
+    if (statusId === ARCHIVE_STATUS.id) return ARCHIVE_STATUS.name;
+    const match = getWorkflowStatuses().find(status => status.id === statusId);
+    return match ? match.name : statusId;
+}
+
+function ensureStatusBuckets(source) {
+    const next = createEmptyStatusItems();
+    if (!source || typeof source !== 'object') return next;
+
+    const knownBuckets = new Set(getStatusBuckets());
+    getStatusBuckets().forEach(statusId => {
+        const items = source[statusId];
+        next[statusId] = Array.isArray(items) ? items.filter(Boolean) : [];
+    });
+
+    Object.keys(source).forEach(statusId => {
+        if (knownBuckets.has(statusId)) return;
+        const items = Array.isArray(source[statusId]) ? source[statusId].filter(Boolean) : [];
+        items.forEach(item => {
+            const fallbackStatus = item && item.is_form_submission ? 'nya-inskick' : TODO_STATUS.id;
+            next[fallbackStatus].push(item);
+        });
+    });
+
+    return next;
 }
 
 const SUBMISSION_FIELD_LABELS = {
@@ -91,8 +222,8 @@ const SUBMISSION_FIELD_LABELS = {
     boat_model: 'Båtmodell',
     boat_year: 'Årsmodell',
     arsmodell: 'Årsmodell',
-    home_port: 'Hemmahamn',
-    hemmahamn: 'Hemmahamn',
+    home_port: 'Hemmahamn + Ort',
+    hemmahamn: 'Hemmahamn + Ort',
     old_canopy: 'Tillverkare av befintligt kapell',
     tillverkare_av_befintligt_kapell: 'Tillverkare av befintligt kapell',
     wants_cover: 'Önskar kapell',
@@ -173,6 +304,7 @@ async function adminFetch(url, options = {}) {
 }
 
 let attachmentImageObserver = null;
+let activeAttachmentLightboxUrl = null;
 
 function loadAttachmentPreviewImage(img, loadingEl, url, immediate = false) {
     const startLoad = () => {
@@ -209,6 +341,39 @@ function loadAttachmentPreviewImage(img, loadingEl, url, immediate = false) {
     img.data('loadingEl', loadingEl);
     img.data('attachmentUrl', url);
     attachmentImageObserver.observe(img[0]);
+}
+
+function closeAttachmentLightbox() {
+    const lightbox = $('#attachment-lightbox');
+    const image = $('#attachment-lightbox-image');
+    lightbox.removeClass('active').attr('aria-hidden', 'true');
+    image.attr('src', '').attr('alt', '');
+    $('#attachment-lightbox-caption').text('');
+    if (activeAttachmentLightboxUrl) {
+        URL.revokeObjectURL(activeAttachmentLightboxUrl);
+        activeAttachmentLightboxUrl = null;
+    }
+    $('body').css('overflow', '');
+}
+
+async function openAttachmentLightbox(url, filename) {
+    try {
+        const res = await adminFetch(url);
+        const blob = res.ok ? await res.blob() : null;
+        if (!blob) throw new Error('empty attachment blob');
+        const objectUrl = URL.createObjectURL(blob);
+        if (activeAttachmentLightboxUrl) {
+            URL.revokeObjectURL(activeAttachmentLightboxUrl);
+        }
+        activeAttachmentLightboxUrl = objectUrl;
+        $('#attachment-lightbox-image').attr('src', objectUrl).attr('alt', filename || 'Bilaga');
+        $('#attachment-lightbox-caption').text(filename || '');
+        $('#attachment-lightbox').addClass('active').attr('aria-hidden', 'false');
+        $('body').css('overflow', 'hidden');
+    } catch (err) {
+        console.warn('Kunde inte öppna bilaga', err);
+        showStatusMessage('Kunde inte öppna bilden');
+    }
 }
 
 async function updateSubmissionStatusOnServer(item, status, readFlag) {
@@ -277,9 +442,10 @@ function removeSubmissionFromAllStatuses(formId) {
 }
 
 function getNextStatus(status) {
-    const idx = STATUS_FLOW.indexOf(status);
-    if (idx < 0 || idx === STATUS_FLOW.length - 1) return null;
-    return STATUS_FLOW[idx + 1];
+    const workflowIds = getWorkflowStatusIds();
+    const idx = workflowIds.indexOf(status);
+    if (idx < 0 || idx === workflowIds.length - 1) return null;
+    return workflowIds[idx + 1];
 }
 
 // ----------------------------- Tab & Extras logic -----------------------------
@@ -303,18 +469,14 @@ let fullCalendarLoadingPromise = null;
 
 // Dashboard variables
 let calendar = null;
-let statusItems = {
-    'nya-inskick': [],
-    'vantar-pa-svar': [],
-    'i-produktion': [],
-    'redo-for-leverans': [],
-    'todo': []
-};
+let statusItems = createEmptyStatusItems();
 let nyaInskickSortOrder = 'newest'; // 'newest' or 'oldest'
-let currentFormFilter = 'all'; // 'all', 'Kapellförfrågan', 'Fenderförfrågan', 'Kontakt'
+let currentFormFilter = 'all'; // 'all', 'Kapellförfrågan', 'Fenderförfrågan', 'Dynsatsförfrågan', 'Kontakt'
 let chatbotPrompt = 'Du är en hjälpsam assistent för Henricssons Båtkapell. Du hjälper till med frågor om båtkapell, beställningar och allmän service.';
 let currentEditingItem = null;
 let statusFoldersLoading = false;
+let statusConfigDraft = [];
+let statusBoardRecoveryTimer = null;
 function getAdvancedGreeting(language = 'sv') {
     return language === 'en'
         ? 'Hello! What do you need help with today?'
@@ -350,7 +512,7 @@ const ADVANCED_SUMMARY_FIELD_LABELS = {
         manufacturer: 'Tillverkare',
         model: 'Modell',
         boat_year: 'Arsmodell',
-        home_port: 'Hemmahamn',
+        home_port: 'Hemmahamn + Ort',
         old_canopy: 'Tillverkare av befintligt kapell',
         message: 'Meddelande',
         quantity: 'Antal',
@@ -365,7 +527,7 @@ const ADVANCED_SUMMARY_FIELD_LABELS = {
         manufacturer: 'Manufacturer',
         model: 'Model',
         boat_year: 'Year model',
-        home_port: 'Home port',
+        home_port: 'Home port + City',
         old_canopy: 'Current canopy manufacturer',
         message: 'Message',
         quantity: 'Quantity',
@@ -421,20 +583,16 @@ function fetchManufacturers() {
 }
 
 function fetchExtras() {
-    console.log('fetchExtras() called');
     // Ladda allt direkt från models_meta.json och mappa till extrasData-strukturen
     const url = `${API_BASE}/henricssons_bilder/models_meta.json?v=${Date.now()}`;
-    console.log('Fetching extras from:', url);
     return fetch(url)
         .then(r => {
-            console.log('Fetch response status:', r.status);
             if (!r.ok) {
                 throw new Error('HTTP error! status: ' + r.status);
             }
             return r.json();
         })
         .then(meta => {
-            console.log('Fetched meta data, entries:', Object.keys(meta).length);
             // Initiera tomma listor per kategori
             extrasData = {
                 all: [],
@@ -481,7 +639,6 @@ function fetchExtras() {
                 extrasData.special,
                 extrasData.sunbrella
             );
-            console.log('Extras data processed successfully. Total items:', extrasData.all.length);
             extrasLoaded = true;
         })
         .catch(err => {
@@ -547,6 +704,11 @@ function ensureFullCalendarLoaded() {
 function buildGrids() {
     const grid1 = $('.grid1');
     const grid2 = $('.grid2');
+    if ($grid1 && typeof $grid1.isotope === 'function') {
+        try {
+            $grid1.isotope('destroy');
+        } catch (_) {}
+    }
     grid1.empty();
     grid2.empty();
     // Sort manufacturers by display name for grid1
@@ -569,7 +731,7 @@ function buildGrids() {
             grid2.append(item);
         });
     }
-    $grid1 = grid1.isotope({ itemSelector: '.grid1-item', layoutMode: 'fitRows', filter: '*' });
+    $grid1 = grid1;
     // Ingen Isotope på grid2 - vi behåller vanlig flex-layout så redigeringsrutan inte överlappas
     bindGridEvents();
 }
@@ -587,6 +749,17 @@ function buildModels() {
         grid2.append(item);
     });
     bindGridEvents(); // bind click on new model buttons
+}
+
+function refreshManufacturerListLayout(showEditor = false) {
+    $('.quicksearch').val('');
+    buildGrids();
+    if (!showEditor) $('.grid2').empty();
+    if (showEditor) {
+        showEditSection();
+        return;
+    }
+    $('#edit-section').removeClass('editing').html('<h2>Redigering</h2><p>Välj en tillverkare för att börja.</p>').hide();
 }
 
 function bindGridEvents() {
@@ -657,14 +830,10 @@ function showManufacturerEdit() {
 
     $('#delete-manu-btn').on('click', function(){
         if(!confirm('Ta bort denna tillverkare?')) return;
-        const keyToDelete = selectedManufacturerKey;
         deleteManufacturer(selectedManufacturerKey, ()=>{
             selectedManufacturerKey=null;
             selectedModelIndex=null;
-            // Ta bort tillverkaren från UI utan att bygga om
-            $(`.grid1-item[data-key="${keyToDelete}"]`).remove();
-            $('.grid2').empty();
-            $('#edit-section').removeClass('editing').html('<h2>Redigering</h2><p>Välj en tillverkare för att börja.</p>').hide();
+            refreshManufacturerListLayout(false);
         });
     });
 
@@ -684,7 +853,7 @@ function showModelEdit() {
     const modelName = getModelName(modelObj);
     const safeModelName = escapeHtml(modelName || '');
     ensureModelObject(selectedModelIndex);
-    
+
     $('#edit-section').html(`
         <h2>Redigera modell</h2>
         <label>Modellnamn</label>
@@ -694,7 +863,7 @@ function showModelEdit() {
         <button class="btn btn-secondary" id="cancel-model-btn">Avbryt</button>
         <div id="edit-msg"></div>
     `);
-    
+
     // Reset unsaved indicator and bind change
     setUnsaved('edit', false);
     $('#edit-model-name').on('input', ()=> setUnsaved('edit', true));
@@ -709,7 +878,7 @@ function showModelEdit() {
             buildModels();
         });
     });
-    
+
     $('#delete-model-btn').on('click', function() {
         if (!confirm('Ta bort denna modell?')) return;
         manu.models.splice(selectedModelIndex, 1);
@@ -718,10 +887,10 @@ function showModelEdit() {
             setUnsaved('edit', false);
             selectedModelIndex = null;
             buildModels();
-            showEditSection();
+            refreshManufacturerListLayout(true);
         });
     });
-    
+
     $('#cancel-model-btn').on('click', function() {
         selectedModelIndex = null;
         $('.grid2-item').removeClass('selected-m');
@@ -820,11 +989,145 @@ function bindImageDelete() {
     });
 }
 
+function formatAnalyticsNumber(value) {
+    return new Intl.NumberFormat('sv-SE').format(Number(value || 0));
+}
+
+function parseSubmissionDateValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const normalized = /(?:Z|[+-]\d{2}:\d{2})$/.test(raw) ? raw : `${raw}Z`;
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatSubmissionDateTime(value) {
+    const date = parseSubmissionDateValue(value);
+    if (!date) return '';
+    return new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Stockholm',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
+}
+
+function formatSubmissionDateOnly(value) {
+    const date = parseSubmissionDateValue(value);
+    if (!date) return '';
+    return new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Stockholm',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(date);
+}
+
+function formatSubmissionDateShortLabel(value) {
+    const date = parseSubmissionDateValue(value);
+    if (!date) return '';
+    return new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Stockholm',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
+}
+
+function renderAnalyticsBarList(targetSelector, items, labelKey, emptyLabel) {
+    const target = $(targetSelector);
+    target.empty();
+    if (!Array.isArray(items) || !items.length) {
+        target.html(`<div class="analytics-empty">${emptyLabel}</div>`);
+        return;
+    }
+    const maxCount = Math.max(...items.map(item => Number(item.count || 0)), 1);
+    items.forEach(item => {
+        const label = escapeHtml(item[labelKey] || '-');
+        const count = Number(item.count || 0);
+        const width = Math.max(6, Math.round((count / maxCount) * 100));
+        target.append(`
+            <div class="analytics-bar-item">
+                <div class="analytics-bar-top">
+                    <strong title="${label}">${label}</strong>
+                    <span>${formatAnalyticsNumber(count)}</span>
+                </div>
+                <div class="analytics-bar-track">
+                    <div class="analytics-bar-fill" style="width:${width}%;"></div>
+                </div>
+            </div>
+        `);
+    });
+}
+
+function renderAnalyticsChart(days) {
+    const target = $('#analytics-daily-chart');
+    target.empty();
+    if (!Array.isArray(days) || !days.length) {
+        target.html('<div class="analytics-empty">Ingen data ännu.</div>');
+        return;
+    }
+    const maxViews = Math.max(...days.map(day => Number(day.pageviews || 0)), 1);
+    const maxSearches = Math.max(...days.map(day => Number(day.searches || 0)), 1);
+    days.forEach(day => {
+        const pageviews = Number(day.pageviews || 0);
+        const searches = Number(day.searches || 0);
+        const dateLabel = String(day.date || '').slice(5);
+        const pageHeight = Math.max(pageviews ? 8 : 2, Math.round((pageviews / maxViews) * 120));
+        const searchHeight = Math.max(searches ? 8 : 2, Math.round((searches / maxSearches) * 70));
+        const tooltip = escapeHtml(
+            `${String(day.date || '')}\n${formatAnalyticsNumber(pageviews)} sidvisningar\n${formatAnalyticsNumber(searches)} sökningar`
+        ).replace(/\n/g, '&#10;');
+        target.append(`
+            <div class="analytics-chart-col" tabindex="0" data-tooltip="${tooltip}">
+                <div class="analytics-chart-bars">
+                    <div class="analytics-chart-bar" style="height:${pageHeight}px;"></div>
+                    <div class="analytics-chart-bar is-search" style="height:${searchHeight}px;"></div>
+                </div>
+                <div class="analytics-chart-label">${escapeHtml(dateLabel)}</div>
+            </div>
+        `);
+    });
+}
+
+async function loadAnalyticsSummary(days = analyticsRangeDays) {
+    analyticsRangeDays = Number(days || 30);
+    $('.analytics-range-btn').removeClass('active');
+    $(`.analytics-range-btn[data-days="${analyticsRangeDays}"]`).addClass('active');
+    $('#analytics-daily-chart').html('<div class="analytics-empty">Laddar...</div>');
+    $('#analytics-top-pages').empty();
+    $('#analytics-top-searches').empty();
+    $('#analytics-top-referrers').empty();
+    try {
+        const res = await adminFetch(`${API_BASE}/api/analytics/summary?days=${encodeURIComponent(analyticsRangeDays)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        $('#analytics-total-pageviews').text(formatAnalyticsNumber(data?.totals?.pageviews));
+        $('#analytics-total-searches').text(formatAnalyticsNumber(data?.totals?.searches));
+        renderAnalyticsChart(data?.daily || []);
+        renderAnalyticsBarList('#analytics-top-pages', data?.top_pages || [], 'path', 'Inga sidvisningar ännu.');
+        renderAnalyticsBarList('#analytics-top-searches', data?.top_searches || [], 'query', 'Inga sökningar ännu.');
+        renderAnalyticsBarList('#analytics-top-referrers', data?.top_referrers || [], 'host', 'Inga externa trafikkällor ännu.');
+    } catch (err) {
+        console.error('Kunde inte ladda analytics', err);
+        $('#analytics-total-pageviews').text('0');
+        $('#analytics-total-searches').text('0');
+        $('#analytics-daily-chart').html('<div class="analytics-empty">Kunde inte ladda statistik.</div>');
+        $('#analytics-top-pages').html('<div class="analytics-empty">Kunde inte ladda statistik.</div>');
+        $('#analytics-top-searches').html('<div class="analytics-empty">Kunde inte ladda statistik.</div>');
+        $('#analytics-top-referrers').html('<div class="analytics-empty">Kunde inte ladda statistik.</div>');
+    }
+}
+
 function switchTab(tab){
     activeTab = tab;
     $('.tab-btn').removeClass('active');
     $(`.tab-btn[data-tab="${tab}"]`).addClass('active');
     $('#settings-section').removeClass('active');
+    $('#analytics-section').removeClass('active');
 
     if(tab==='dashboard'){
         $('#dashboard-section').addClass('active');
@@ -834,6 +1137,7 @@ function switchTab(tab){
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('#tempproducts-section').hide();
+        $('#dynsatser-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
@@ -846,6 +1150,7 @@ function switchTab(tab){
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('#tempproducts-section').hide();
+        $('#dynsatser-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
@@ -862,6 +1167,7 @@ function switchTab(tab){
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('#tempproducts-section').hide();
+        $('#dynsatser-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
@@ -876,10 +1182,12 @@ function switchTab(tab){
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('#tempproducts-section').hide();
+        $('#dynsatser-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
         loadMailgunSettings();
+        loadCustomerConfirmationSettings();
     } else if(tab==='calendar'){
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').addClass('active');
@@ -888,10 +1196,25 @@ function switchTab(tab){
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('#tempproducts-section').hide();
+        $('#dynsatser-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
         initCalendar();
+    } else if(tab==='analytics'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('#tempproducts-section').hide();
+        $('#dynsatser-section').hide();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        $('#analytics-section').addClass('active');
+        loadAnalyticsSummary(analyticsRangeDays);
     } else if(tab==='boats'){
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').removeClass('active');
@@ -904,9 +1227,6 @@ function switchTab(tab){
         // Dölj sekundära flikar när vi är i tillverkar-läget
         $('#admin-tabs').hide();
         // Tvinga om-layout av Isotope om den redan initierats för att fixa fastnad animation
-        if($grid1 && typeof $grid1.isotope === 'function') {
-            $grid1.isotope('layout');
-        }
         $('#extras-search').hide();
         editExtrasCat = null; // nollställ
     } else if(tab==='tempproducts'){
@@ -917,10 +1237,24 @@ function switchTab(tab){
         $('#boats-section').hide();
         $('#extras-section').hide();
         $('#tempproducts-section').show();
+        $('#dynsatser-section').hide();
         $('.quicksearch').hide();
         $('#admin-tabs').hide();
         $('#extras-search').hide();
         loadTempProducts();
+    } else if(tab==='dynsatser'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('#tempproducts-section').hide();
+        $('#dynsatser-section').show();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        loadBoatBrands();
     } else {
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').removeClass('active');
@@ -929,6 +1263,7 @@ function switchTab(tab){
         $('#boats-section').hide();
         $('#extras-section').show();
         $('#tempproducts-section').hide();
+        $('#dynsatser-section').hide();
         $('.quicksearch').hide();
         // Visa sekundära flikar under "Bilder & exempel"
         $('#admin-tabs').css('display', 'flex');
@@ -1009,7 +1344,7 @@ function showExtrasEdit() {
         $('#extras-edit-section').html('<h2>Redigera bild/exempel</h2><p>Välj en post för att redigera</p>');
         return;
     }
-    
+
     const catKey = activeExtrasKey === 'all' ? editExtrasCat : activeExtrasKey;
     const obj = extrasData[catKey][selectedExtraIndex];
     const safeName = escapeHtml(obj.name||'');
@@ -1022,7 +1357,7 @@ function showExtrasEdit() {
         <h2>Redigera post</h2>
         <label>Namn</label>
         <input type="text" id="extra-name" value="${safeName}" />
-        <div style="display:flex;flex-direction:column;gap:0rem;"> 
+        <div style="display:flex;flex-direction:column;gap:0rem;">
             <span style="color:#0a2342;font-weight:bold;">Publicerad</span>
             <label class="switch" style="align-self:flex-start;"><input type="checkbox" id="extra-published" ${obj.published!==false?'checked':''}><span class="slider"></span></label>
         </div>
@@ -1238,7 +1573,11 @@ function bindSetThumbnail(){
 // Dashboard Functions
 function initDashboard() {
     initChatbot();
-    loadStatusItems();
+    loadStatusConfig().finally(() => {
+        renderStatusBoardLayout();
+        loadStatusItems();
+        scheduleStatusBoardRecovery(true);
+    });
     // Load sort order and update button
     const savedSort = localStorage.getItem('nyaInskickSortOrder');
     if (savedSort) {
@@ -1247,16 +1586,55 @@ function initDashboard() {
     updateSortButton();
     loadChatbotPrompt();
     initFormFilters();
+    initStatusConfigModal();
+    scheduleStatusBoardRecovery(false);
+}
+
+function scheduleStatusBoardRecovery(fullReload = false) {
+    clearTimeout(statusBoardRecoveryTimer);
+    statusBoardRecoveryTimer = setTimeout(() => {
+        const workflowRoot = $('#status-folders-workflow');
+        if (!workflowRoot.length) return;
+
+        const hasColumns = workflowRoot.children('.status-folder').length > 0;
+        const hasSummaryCards = $('#status-summary-row .stat-card').length > 0;
+        if (hasColumns && hasSummaryCards) return;
+
+        loadStatusConfig()
+            .catch(() => {})
+            .finally(() => {
+                renderStatusBoardLayout();
+                if (fullReload) {
+                    loadStatusItems();
+                } else {
+                    renderStatusFolders();
+                }
+            });
+    }, 450);
+}
+
+async function loadStatusConfig() {
+    try {
+        const res = await adminFetch(`${API_BASE}/api/status_config`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        workflowStatuses = normalizeWorkflowStatuses(data);
+    } catch (err) {
+        console.error('Kunde inte ladda statuskonfiguration', err);
+        workflowStatuses = cloneDefaultWorkflowStatuses();
+    }
+    statusItems = ensureStatusBuckets(statusItems);
+    updateStatusSummaryCards();
 }
 
 async function initCalendar() {
     const calendarEl = document.getElementById('calendar');
     if (!calendarEl) return;
-    
+
     if (calendar) {
         calendar.destroy();
     }
-    
+
     try {
         calendarEl.innerHTML = '<div class="folder-loading-state"><span class="folder-loading-spinner" aria-hidden="true"></span><span>Laddar kalender...</span></div>';
         await ensureFullCalendarLoaded();
@@ -1282,8 +1660,8 @@ async function initCalendar() {
 
 function getCalendarEvents() {
     const events = [];
-    Object.keys(statusItems).forEach(status => {
-        statusItems[status].forEach(item => {
+    getStatusBuckets().forEach(status => {
+        (statusItems[status] || []).forEach(item => {
             if (item.date) {
                 events.push({
                     title: item.title,
@@ -1295,17 +1673,6 @@ function getCalendarEvents() {
         });
     });
     return events;
-}
-
-function getStatusColor(status) {
-    const colors = {
-        'nya-inskick': '#ff9800',
-        'vantar-pa-svar': '#2196f3',
-        'i-produktion': '#9c27b0',
-        'redo-for-leverans': '#4caf50',
-        'todo': '#0f766e'
-    };
-    return colors[status] || '#666';
 }
 
 function initFormFilters() {
@@ -1336,20 +1703,17 @@ function sendChatMessage() {
     const input = $('#chatbot-input');
     const message = input.val().trim();
     if (!message) return;
-    
+
     // Add user message
     addChatMessage('user', message);
     input.val('');
-    
+
     // Show loading
     const loadingId = 'loading-' + Date.now();
     addChatMessage('assistant', 'Skriver...', loadingId);
-    
-    // Debug: log API_BASE
-    console.log('API_BASE:', API_BASE);
+
     const chatUrl = `${API_BASE}/api/chat`;
-    console.log('Chat URL:', chatUrl);
-    
+
     // Call OpenAI API
     adminFetch(chatUrl, {
         method: 'POST',
@@ -1362,7 +1726,6 @@ function sendChatMessage() {
         })
     })
     .then(response => {
-        console.log('Response status:', response.status);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1387,7 +1750,7 @@ function addChatMessage(role, text, id) {
     const messagesDiv = $('#chatbot-messages');
     const messageDiv = $('<div>').addClass('chat-message ' + role).attr('id', id || '');
     const textDiv = $('<div>').addClass('message-text');
-    
+
     // For assistant messages, render markdown/HTML. For user messages, escape HTML for security
     if (role === 'assistant' && typeof marked !== 'undefined') {
         // Use marked.js to render markdown to HTML
@@ -1401,7 +1764,7 @@ function addChatMessage(role, text, id) {
         // User messages: escape HTML for security
         textDiv.text(text);
     }
-    
+
     const timeDiv = $('<div>').addClass('message-time').text(new Date().toLocaleTimeString('sv-SE'));
     messageDiv.append(textDiv).append(timeDiv);
     messagesDiv.append(messageDiv);
@@ -1411,35 +1774,35 @@ function addChatMessage(role, text, id) {
 // Simple markdown to HTML converter (fallback if marked.js not available)
 function simpleMarkdownToHtml(text) {
     if (!text) return '';
-    
+
     let html = escapeHtml(text);
-    
+
     // Convert **bold** to <strong>bold</strong>
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    
+
     // Convert *italic* to <em>italic</em>
     html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    
+
     // Convert line breaks to <br>
     html = html.replace(/\n/g, '<br>');
-    
+
     // Convert code blocks
     html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
     html = html.replace(/`(.+?)`/g, '<code>$1</code>');
-    
+
     // Convert links [text](url) to <a href="url">text</a>
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    
+
     // Convert lists
     html = html.replace(/^\- (.+)$/gm, '<li>$1</li>');
     html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
-    
+
     // Wrap consecutive <li> in <ul>
     html = html.replace(/(<li>.*<\/li>)/gs, function(match) {
         if (match.includes('<ul>')) return match;
         return '<ul>' + match + '</ul>';
     });
-    
+
     return html;
 }
 
@@ -1455,6 +1818,16 @@ function bindAdvancedSettings() {
 function bindSettings() {
     $('#save-mailgun-settings-btn').off('click').on('click', saveMailgunSettings);
     $('#reload-mailgun-settings-btn').off('click').on('click', loadMailgunSettings);
+    $('#save-customer-confirmation-btn').off('click').on('click', saveCustomerConfirmationSettings);
+    $('#reload-customer-confirmation-btn').off('click').on('click', loadCustomerConfirmationSettings);
+    $('#reset-customer-confirmation-btn').off('click').on('click', resetCustomerConfirmationTemplate);
+    $('#customer-confirmation-template').off('input.customerConfirmation').on('input.customerConfirmation', scheduleCustomerConfirmationPreview);
+    $(document)
+        .off('click.customerConfirmationPreview', '.customer-confirmation-preview-type')
+        .on('click.customerConfirmationPreview', '.customer-confirmation-preview-type', function() {
+            setCustomerConfirmationPreviewType($(this).data('formType'));
+        });
+    setCustomerConfirmationPreviewType(customerConfirmationPreviewFormType);
 }
 
 function loadAiSettings() {
@@ -1538,6 +1911,27 @@ function loadMailgunSettings() {
         });
 }
 
+function loadCustomerConfirmationSettings() {
+    return adminFetch(`${API_BASE}/api/customer_confirmation_settings`)
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(data => {
+            const bodyTemplate = String((data && data.body_template) || '');
+            customerConfirmationDefaultTemplate = String((data && data.default_body_template) || '');
+            $('#customer-confirmation-template').val(bodyTemplate);
+            $('#customer-confirmation-default-template').val(customerConfirmationDefaultTemplate);
+            $('#settings-edit-error').hide();
+            return refreshCustomerConfirmationPreview();
+        })
+        .catch(err => {
+            console.error('Kunde inte ladda kundmejl', err);
+            $('#settings-edit-error').text('Kunde inte ladda kundmejl: ' + err.message).show();
+            $('#settings-edit-success').hide();
+        });
+}
+
 function saveMailgunSettings() {
     const to = ($('#mailgun-to').val() || '').trim();
     adminFetch(`${API_BASE}/api/mailgun_settings`, {
@@ -1563,6 +1957,97 @@ function saveMailgunSettings() {
         console.error('Kunde inte spara Mailgun-inställningar', err);
         $('#settings-edit-error').text('Kunde inte spara Mailgun-inställningar: ' + err.message).show();
         $('#settings-edit-success').hide();
+    });
+}
+
+function saveCustomerConfirmationSettings() {
+    const bodyTemplate = ($('#customer-confirmation-template').val() || '').trim();
+    adminFetch(`${API_BASE}/api/customer_confirmation_settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body_template: bodyTemplate })
+    })
+    .then(r => {
+        if (!r.ok) {
+            return r.json().catch(() => ({})).then(data => {
+                throw new Error(data.error || ('HTTP ' + r.status));
+            });
+        }
+        return r.json();
+    })
+    .then(data => {
+        customerConfirmationDefaultTemplate = String(data.default_body_template || customerConfirmationDefaultTemplate || '');
+        $('#customer-confirmation-template').val(String(data.body_template || bodyTemplate));
+        $('#customer-confirmation-default-template').val(customerConfirmationDefaultTemplate);
+        $('#settings-edit-success').text('Kundmejlet sparades.').show();
+        $('#settings-edit-error').hide();
+        return refreshCustomerConfirmationPreview();
+    })
+    .catch(err => {
+        console.error('Kunde inte spara kundmejl', err);
+        $('#settings-edit-error').text('Kunde inte spara kundmejl: ' + err.message).show();
+        $('#settings-edit-success').hide();
+    });
+}
+
+function resetCustomerConfirmationTemplate() {
+    $('#customer-confirmation-template').val(customerConfirmationDefaultTemplate || '');
+    refreshCustomerConfirmationPreview();
+}
+
+function setCustomerConfirmationPreviewType(formType) {
+    customerConfirmationPreviewFormType = String(formType || 'Kontakt');
+    $('.customer-confirmation-preview-type').each(function() {
+        const isActive = String($(this).data('formType')) === customerConfirmationPreviewFormType;
+        $(this).toggleClass('btn', isActive);
+        $(this).toggleClass('btn-secondary', !isActive);
+    });
+    refreshCustomerConfirmationPreview();
+}
+
+function scheduleCustomerConfirmationPreview() {
+    clearTimeout(customerConfirmationPreviewTimer);
+    customerConfirmationPreviewTimer = setTimeout(() => {
+        refreshCustomerConfirmationPreview();
+    }, 180);
+}
+
+function refreshCustomerConfirmationPreview() {
+    const frame = $('#customer-confirmation-preview-frame');
+    if (!frame.length) return Promise.resolve();
+
+    const requestId = ++customerConfirmationPreviewRequestId;
+    const bodyTemplate = ($('#customer-confirmation-template').val() || '').trim();
+    $('#customer-confirmation-preview-meta').text('Laddar...');
+
+    return adminFetch(`${API_BASE}/api/customer_confirmation_preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            form_type: customerConfirmationPreviewFormType,
+            body_template: bodyTemplate
+        })
+    })
+    .then(r => {
+        if (!r.ok) {
+            return r.json().catch(() => ({})).then(data => {
+                throw new Error(data.error || ('HTTP ' + r.status));
+            });
+        }
+        return r.json();
+    })
+    .then(data => {
+        if (requestId !== customerConfirmationPreviewRequestId) return;
+        const iframe = frame.get(0);
+        if (iframe) iframe.srcdoc = String(data.html_body || '');
+        $('#customer-confirmation-preview-meta').text(`${String(data.form_label || '')} - ${String(data.subject || '')}`);
+    })
+    .catch(err => {
+        if (requestId !== customerConfirmationPreviewRequestId) return;
+        console.error('Kunde inte generera forhandsvisning', err);
+        const iframe = frame.get(0);
+        if (iframe) iframe.srcdoc = '';
+        $('#customer-confirmation-preview-meta').text('Forhandsvisningen kunde inte laddas.');
     });
 }
 
@@ -1812,7 +2297,7 @@ function loadStatusItems() {
     STATUS_BUCKETS.forEach(status => {
         localNonFormByStatus[status] = localNonFormByStatus[status].filter(item => !(item && item.is_form_submission));
     });
-    
+
     // Load form submissions from API
     adminFetch(`${API_BASE}/api/get_form_submissions`)
         .then(r => {
@@ -1869,11 +2354,11 @@ function sortNyaInskick() {
     if (savedSort) {
         nyaInskickSortOrder = savedSort;
     }
-    
+
     statusItems['nya-inskick'].sort((a, b) => {
-        const dateA = new Date(a.date || a.timestamp || 0);
-        const dateB = new Date(b.date || b.timestamp || 0);
-        
+        const dateA = parseSubmissionDateValue(a.date || a.timestamp) || new Date(0);
+        const dateB = parseSubmissionDateValue(b.date || b.timestamp) || new Date(0);
+
         if (nyaInskickSortOrder === 'oldest') {
             return dateA - dateB; // Oldest first
         } else {
@@ -2030,14 +2515,9 @@ function renderStatusFolders() {
 
                     // Add date and time for form submissions
                     if (item.date || item.timestamp) {
-                        const date = new Date(item.date || item.timestamp);
+                        const date = parseSubmissionDateValue(item.date || item.timestamp);
                         if (!isNaN(date.getTime())) {
-                            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                            const month = months[date.getMonth()];
-                            const day = date.getDate();
-                            const hours = String(date.getHours()).padStart(2, '0');
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            const dateTimeDiv = $('<div>').addClass('folder-item-content').text(`${month} ${day} ${hours}:${minutes}`);
+                            const dateTimeDiv = $('<div>').addClass('folder-item-content').text(formatSubmissionDateShortLabel(item.date || item.timestamp));
                             itemDiv.append(dateTimeDiv);
                         }
                     }
@@ -2075,7 +2555,7 @@ function renderStatusFolders() {
                         itemDiv.append(desc);
                     }
                     if (item.date) {
-                        itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + new Date(item.date).toLocaleDateString('sv-SE')));
+                        itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + formatSubmissionDateOnly(item.date)));
                     }
                 }
 
@@ -2100,6 +2580,586 @@ function renderStatusFolders() {
     });
     // Update sort button after rendering
     updateSortButton();
+}
+
+function updateStatusSummaryCards() {
+    const row = $('#status-summary-row');
+    if (!row.length) return;
+    row.empty();
+
+    getWorkflowStatuses().slice(0, 4).forEach((status, index) => {
+        const card = $('<div>').addClass('stat-card');
+        if (STATUS_SUMMARY_CARD_CLASSES[index]) {
+            card.addClass(STATUS_SUMMARY_CARD_CLASSES[index]);
+        }
+        card.append(
+            $('<div>').addClass('stat-label').text(status.name),
+            $('<div>').addClass('stat-value').attr('id', `stat-${status.id}`).text('0'),
+            $('<div>').addClass('stat-hint').text(STATUS_SUMMARY_HINTS[index] || 'Överblick')
+        );
+        row.append(card);
+    });
+}
+
+function updateStatusSummaryCounts() {
+    getWorkflowStatuses().slice(0, 4).forEach(status => {
+        const target = document.getElementById(`stat-${status.id}`);
+        if (!target) return;
+        target.textContent = String((statusItems[status.id] || []).length);
+    });
+}
+
+function renderStatusBoardLayout() {
+    const workflowRoot = $('#status-folders-workflow');
+    if (!workflowRoot.length) return;
+
+    workflowRoot.empty();
+    getWorkflowStatuses().forEach(status => {
+        const card = $('<div>')
+            .addClass('status-folder')
+            .attr('data-status', status.id)
+            .css('--status-accent', getStatusColor(status.id));
+
+        const header = $('<div>').addClass('status-folder-top');
+        const titleWrap = $('<div>').addClass('status-folder-title-wrap');
+        titleWrap.append($('<h3>').text(status.name));
+        if (status.id === 'nya-inskick') {
+            titleWrap.append(
+                $('<button>')
+                    .attr('type', 'button')
+                    .attr('id', 'nya-inskick-sort-btn')
+                    .addClass('btn-ghost status-sort-btn')
+                    .text('Nyaste först')
+                    .on('click', toggleNyaInskickSort)
+            );
+        }
+        header.append(titleWrap);
+        card.append(header);
+        card.append($('<div>').addClass('folder-items').attr('id', `folder-${status.id}`));
+        card.append($('<button>').addClass('add-item-btn').attr('type', 'button').attr('data-status', status.id).text('+ Lägg till'));
+        workflowRoot.append(card);
+    });
+
+    $('#status-folder-todo').css('--status-accent', getStatusColor(TODO_STATUS.id));
+    updateSortButton();
+}
+
+function openStatusConfigModal() {
+    statusConfigDraft = getWorkflowStatuses().map(status => ({
+        clientId: status.id,
+        id: status.id,
+        name: status.name,
+        fixed: status.id === 'nya-inskick'
+    }));
+    renderStatusConfigDraftList();
+    $('#status-config-modal').addClass('active');
+}
+
+function closeStatusConfigModal() {
+    $('#status-config-modal').removeClass('active');
+}
+
+function getStatusItemCount(statusId) {
+    return Array.isArray(statusItems[statusId]) ? statusItems[statusId].length : 0;
+}
+
+function moveStatusDraftItem(clientId, direction) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index <= 0) return;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex <= 0 || targetIndex >= statusConfigDraft.length) return;
+    const [item] = statusConfigDraft.splice(index, 1);
+    statusConfigDraft.splice(targetIndex, 0, item);
+    renderStatusConfigDraftList();
+}
+
+function moveStatusDraftClientId(clientId, targetIndex) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index <= 0) return;
+    const status = statusConfigDraft[index];
+    if (!status || status.fixed) return;
+    const boundedIndex = Math.max(1, Math.min(targetIndex, statusConfigDraft.length - 1));
+    if (boundedIndex === index) return;
+    const [item] = statusConfigDraft.splice(index, 1);
+    statusConfigDraft.splice(boundedIndex, 0, item);
+    renderStatusConfigDraftList();
+}
+
+function removeStatusDraftItem(clientId) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index < 0) return;
+    const status = statusConfigDraft[index];
+    if (status.fixed) return;
+
+    const itemCount = status.id ? getStatusItemCount(status.id) : 0;
+    if (itemCount > 0) {
+        showStatusMessage('Mappen måste vara tom innan du kan ta bort den');
+        return;
+    }
+
+    statusConfigDraft.splice(index, 1);
+    renderStatusConfigDraftList();
+}
+
+function renderStatusConfigDraftList() {
+    const list = $('#status-config-list');
+    if (!list.length) return;
+    list.empty();
+    list.off('dragover.statusConfigList drop.statusConfigList');
+
+    statusConfigDraft.forEach((status, index) => {
+        const row = $('<div>').addClass('status-config-row');
+        if (status.fixed) row.addClass('is-fixed');
+
+        const input = $('<input>')
+            .attr('type', 'text')
+            .addClass('status-config-input')
+            .val(status.name)
+            .prop('disabled', status.fixed)
+            .attr('placeholder', 'Namn på status');
+        input.on('input', function() {
+            status.name = sanitizeStatusName($(this).val());
+        });
+
+        const actions = $('<div>').addClass('status-config-row-actions');
+        actions.append(
+            $('<button>')
+                .attr('type', 'button')
+                .addClass('btn-ghost status-config-move-btn')
+                .text('↑')
+                .prop('disabled', status.fixed || index <= 1)
+                .on('click', function() { moveStatusDraftItem(status.clientId, 'up'); }),
+            $('<button>')
+                .attr('type', 'button')
+                .addClass('btn-ghost status-config-move-btn')
+                .text('↓')
+                .prop('disabled', status.fixed || index >= statusConfigDraft.length - 1)
+                .on('click', function() { moveStatusDraftItem(status.clientId, 'down'); })
+        );
+
+        row.append(input, actions);
+        list.append(row);
+    });
+}
+
+function renderStatusConfigDraftList() {
+    const list = $('#status-config-list');
+    if (!list.length) return;
+    list.empty();
+
+    statusConfigDraft.forEach((status, index) => {
+        const row = $('<div>').addClass('status-config-row');
+        if (status.fixed) row.addClass('is-fixed');
+
+        const input = $('<input>')
+            .attr('type', 'text')
+            .addClass('status-config-input')
+            .val(status.name)
+            .prop('disabled', status.fixed)
+            .attr('placeholder', 'Namn på status');
+        input.on('input', function() {
+            status.name = sanitizeStatusName($(this).val());
+        });
+
+        const actions = $('<div>').addClass('status-config-row-actions');
+        actions.append(
+            $('<button>')
+                .attr('type', 'button')
+                .addClass('btn-ghost status-config-move-btn')
+                .text('↑')
+                .prop('disabled', status.fixed || index <= 1)
+                .on('click', function() { moveStatusDraftItem(status.clientId, 'up'); }),
+            $('<button>')
+                .attr('type', 'button')
+                .addClass('btn-ghost status-config-move-btn')
+                .text('↓')
+                .prop('disabled', status.fixed || index >= statusConfigDraft.length - 1)
+                .on('click', function() { moveStatusDraftItem(status.clientId, 'down'); }),
+            $('<button>')
+                .attr('type', 'button')
+                .addClass('btn-ghost status-config-delete-btn')
+                .text('×')
+                .prop('disabled', status.fixed)
+                .on('click', function() { removeStatusDraftItem(status.clientId); })
+        );
+
+        const itemCount = status.id ? getStatusItemCount(status.id) : 0;
+        const meta = $('<div>').addClass('status-config-meta');
+        meta.text(status.fixed ? 'Fast mapp' : (itemCount > 0 ? `${itemCount} objekt i mappen` : 'Tom mapp'));
+
+        row.append(input, actions, meta);
+        list.append(row);
+    });
+}
+
+async function saveStatusConfigFromModal() {
+    const payload = {
+        statuses: statusConfigDraft.map(status => ({
+            id: status.fixed ? status.id : status.id,
+            name: status.fixed ? getStatusDisplayName(status.id) : sanitizeStatusName(status.name)
+        }))
+    };
+
+    const customStatuses = payload.statuses.filter(status => status.id !== 'nya-inskick');
+    if (!customStatuses.every(status => status.name)) {
+        showStatusMessage('Alla statusar måste ha namn.');
+        return;
+    }
+
+    const saveBtn = $('#status-config-save-btn');
+    const originalText = saveBtn.text();
+    saveBtn.prop('disabled', true).text('Sparar...');
+
+    try {
+        const res = await adminFetch(`${API_BASE}/api/status_config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        workflowStatuses = normalizeWorkflowStatuses(data);
+        statusItems = ensureStatusBuckets(statusItems);
+        renderStatusBoardLayout();
+        renderStatusFolders();
+        updateStatusSummaryCards();
+        saveStatusItems();
+        closeStatusConfigModal();
+        showStatusMessage('Statusmappar sparade');
+    } catch (err) {
+        console.error('Kunde inte spara statuskonfiguration', err);
+        showStatusMessage('Kunde inte spara statusmapparna');
+    } finally {
+        saveBtn.prop('disabled', false).text(originalText);
+    }
+}
+
+function initStatusConfigModal() {
+    $('#status-config-open-btn').off('click').on('click', openStatusConfigModal);
+    $('#status-config-close-btn, #status-config-cancel-btn').off('click').on('click', closeStatusConfigModal);
+    $('#status-config-add-btn').off('click').on('click', function() {
+        statusConfigDraft.push({
+            clientId: `draft-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+            id: '',
+            name: '',
+            fixed: false
+        });
+        renderStatusConfigDraftList();
+    });
+    $('#status-config-save-btn').off('click').on('click', saveStatusConfigFromModal);
+    $('#status-config-modal')
+        .off('mousedown.statusConfig mouseup.statusConfig click.statusConfig')
+        .on('mousedown.statusConfig', function(e) {
+            this.dataset.backdropPressStarted = $(e.target).is('#status-config-modal') ? 'true' : 'false';
+        })
+        .on('mouseup.statusConfig', function(e) {
+            const startedOnBackdrop = this.dataset.backdropPressStarted === 'true';
+            this.dataset.backdropPressStarted = 'false';
+            if (startedOnBackdrop && $(e.target).is('#status-config-modal')) {
+                closeStatusConfigModal();
+            }
+        })
+        .on('click.statusConfig', function(e) {
+            if ($(e.target).is('#status-config-modal')) {
+                e.preventDefault();
+            }
+        });
+}
+
+async function loadStatusConfig() {
+    try {
+        const res = await adminFetch(`${API_BASE}/api/status_config`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        workflowStatuses = normalizeWorkflowStatuses(data);
+    } catch (err) {
+        console.error('Kunde inte ladda statuskonfiguration', err);
+        workflowStatuses = cloneDefaultWorkflowStatuses();
+    }
+    statusItems = ensureStatusBuckets(statusItems);
+    updateStatusSummaryCards();
+    renderStatusBoardLayout();
+}
+
+function loadStatusItems() {
+    statusFoldersLoading = true;
+    renderStatusFolders();
+
+    const normalizeStatus = (value) => isWorkflowStatus(value) ? value : 'nya-inskick';
+
+    try {
+        const saved = localStorage.getItem('statusItems');
+        if (saved) {
+            statusItems = ensureStatusBuckets(JSON.parse(saved));
+        }
+    } catch(e) {
+        console.error('Kunde inte ladda status items', e);
+        statusItems = ensureStatusBuckets(statusItems);
+    }
+
+    const localNonFormByStatus = ensureStatusBuckets(statusItems);
+    getStatusBuckets().forEach(status => {
+        localNonFormByStatus[status] = (localNonFormByStatus[status] || []).filter(item => !(item && item.is_form_submission));
+    });
+
+    adminFetch(`${API_BASE}/api/get_form_submissions`)
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(submissions => {
+            const formItemsByStatus = ensureStatusBuckets({});
+            if (Array.isArray(submissions)) {
+                submissions.forEach(submission => {
+                    const status = normalizeStatus(submission.status);
+                    formItemsByStatus[status].push({
+                        form_id: submission.id,
+                        title: submission.title,
+                        description: submission.form_summary,
+                        date: submission.timestamp,
+                        timestamp: submission.timestamp,
+                        category: submission.category,
+                        form_type: submission.form_type,
+                        fields: submission.fields,
+                        proposed_response: submission.proposed_response,
+                        notes: submission.notes || '',
+                        read: Boolean(submission.read),
+                        submitted_via: submission.submitted_via || 'web_form',
+                        attachments: Array.isArray(submission.attachments) ? submission.attachments : [],
+                        is_form_submission: true
+                    });
+                });
+            }
+
+            statusItems = ensureStatusBuckets({});
+            getStatusBuckets().forEach(status => {
+                statusItems[status] = [...(formItemsByStatus[status] || []), ...(localNonFormByStatus[status] || [])];
+            });
+
+            sortNyaInskick();
+            saveStatusItems();
+            statusFoldersLoading = false;
+            renderStatusFolders();
+        })
+        .catch(err => {
+            console.error('Kunde inte ladda form submissions', err);
+            statusItems = ensureStatusBuckets(statusItems);
+            statusFoldersLoading = false;
+            renderStatusFolders();
+        });
+}
+
+function sortNyaInskick() {
+    const savedSort = localStorage.getItem('nyaInskickSortOrder');
+    if (savedSort) {
+        nyaInskickSortOrder = savedSort;
+    }
+
+    (statusItems['nya-inskick'] || []).sort((a, b) => {
+        const dateA = parseSubmissionDateValue(a.date || a.timestamp) || new Date(0);
+        const dateB = parseSubmissionDateValue(b.date || b.timestamp) || new Date(0);
+
+        if (nyaInskickSortOrder === 'oldest') {
+            return dateA - dateB;
+        } else {
+            return dateB - dateA;
+        }
+    });
+}
+
+function toggleNyaInskickSort() {
+    nyaInskickSortOrder = nyaInskickSortOrder === 'newest' ? 'oldest' : 'newest';
+    localStorage.setItem('nyaInskickSortOrder', nyaInskickSortOrder);
+    sortNyaInskick();
+    renderStatusFolders();
+    updateSortButton();
+}
+
+function updateSortButton() {
+    const btn = $('#nya-inskick-sort-btn');
+    if (btn.length) {
+        btn.text(nyaInskickSortOrder === 'newest' ? 'Nyaste först' : 'Äldsta först');
+    }
+}
+
+function saveStatusItems() {
+    try {
+        localStorage.setItem('statusItems', JSON.stringify(statusItems));
+        if (calendar) {
+            calendar.removeAllEvents();
+            const events = getCalendarEvents();
+            events.forEach(event => {
+                calendar.addEvent(event);
+            });
+        }
+        updateStatusSummaryCounts();
+    } catch(e) {
+        console.error('Kunde inte spara status items', e);
+    }
+}
+
+function renderStatusFolders() {
+    renderStatusBoardLayout();
+
+    getStatusBuckets().forEach(status => {
+        const folderDiv = $(`#folder-${status}`);
+        if (!folderDiv.length) return;
+        folderDiv.empty();
+        folderDiv.attr('data-status', status).addClass('droppable-folder');
+
+        if (statusFoldersLoading) {
+            const loadingDiv = $('<div>').addClass('folder-loading-state').attr('aria-live', 'polite');
+            loadingDiv.append(
+                $('<span>').addClass('folder-loading-spinner').attr('aria-hidden', 'true'),
+                $('<span>').text('Laddar...')
+            );
+            folderDiv.append(loadingDiv);
+            folderDiv.off('dragover dragleave drop').on('dragover', handleDragOver).on('dragleave', handleDragLeave).on('drop', handleDrop);
+            return;
+        }
+
+        let itemsToShow = statusItems[status] || [];
+        if (currentFormFilter !== 'all') {
+            itemsToShow = itemsToShow.filter(item => {
+                if (item.is_form_submission) {
+                    return item.form_type === currentFormFilter;
+                }
+                return true;
+            });
+        }
+
+        if (itemsToShow.length === 0) {
+            const emptyDiv = $('<div>').addClass('folder-item folder-item-empty').css({
+                'text-align': 'center',
+                'color': '#666',
+                'font-style': 'italic',
+                'padding': '2rem 1rem'
+            });
+
+            const statusName = getStatusDisplayName(status).toLowerCase();
+            if (currentFormFilter === 'all') {
+                emptyDiv.text(`Inga ${statusName} att visa`);
+            } else {
+                emptyDiv.text(`Inga ${currentFormFilter.toLowerCase()} i ${statusName}`);
+            }
+            folderDiv.append(emptyDiv);
+        } else {
+            itemsToShow.forEach(item => {
+                const index = (statusItems[status] || []).indexOf(item);
+
+                const itemDiv = $('<div>')
+                    .addClass('folder-item')
+                    .attr({
+                        'data-index': index,
+                        'data-status': status,
+                        'draggable': 'true'
+                    });
+
+                if (item.is_form_submission) {
+                    itemDiv.addClass('form-submission-item');
+                }
+                const header = $('<div>').addClass('folder-item-header');
+                const titleDiv = $('<div>').addClass('folder-item-title');
+
+                if (item.is_form_submission && item.fields) {
+                    const personName = getSubmissionField(item.fields, 'name', 'namn') || 'Okänd';
+                    const formType = item.form_type || 'Formulär';
+                    const manufacturer = getSubmissionField(item.fields, 'manufacturer', 'tillverkare');
+                    const model = getSubmissionField(item.fields, 'model', 'modell');
+
+                    titleDiv.append($('<div>').addClass('person-name').text(personName));
+                    titleDiv.append($('<div>').addClass('form-type-line').text(formType));
+                    if (item.submitted_via === 'ai_chatbot') {
+                        titleDiv.append($('<div>').addClass('ai-source-badge').text('AI'));
+                    }
+
+                    if (formType === 'Kontakt') {
+                        const subject = getSubmissionField(item.fields, 'subject', 'ämne', 'amne');
+                        if (subject) {
+                            titleDiv.append($('<div>').addClass('contact-subject').text(subject));
+                        }
+                    }
+
+                    if (manufacturer || model) {
+                        const boatInfo = [manufacturer, model].filter(Boolean).join(' ');
+                        if (boatInfo) {
+                            titleDiv.append($('<div>').addClass('boat-model-line').text(boatInfo));
+                        }
+                    }
+
+                    if (Array.isArray(item.attachments) && item.attachments.length > 0) {
+                        titleDiv.append(
+                            $('<div>').addClass('attachment-badge').css({
+                                fontSize: '0.78rem',
+                                color: '#8b6f18',
+                                marginTop: '0.2rem',
+                                fontWeight: '600'
+                            }).text(`Bilagor: ${item.attachments.length}`)
+                        );
+                    }
+
+                    if (item.date || item.timestamp) {
+                        const date = parseSubmissionDateValue(item.date || item.timestamp);
+                        if (!isNaN(date.getTime())) {
+                            const dateTimeDiv = $('<div>').addClass('folder-item-content').text(formatSubmissionDateShortLabel(item.date || item.timestamp));
+                            itemDiv.append(dateTimeDiv);
+                        }
+                    }
+                } else {
+                    titleDiv.append($('<div>').addClass('person-name').text(item.title || 'Ingen titel'));
+                }
+
+                header.append(titleDiv);
+                header.append($('<button>').addClass('folder-item-delete').attr('type', 'button').text('×').on('click', async function(e) {
+                    e.stopPropagation();
+                    if (!confirm('Ta bort detta objekt?')) return;
+                    if (item.is_form_submission && item.form_id) {
+                        const deleted = await deleteSubmissionOnServer(item);
+                        if (!deleted) {
+                            alert('Kunde inte ta bort från servern.');
+                            return;
+                        }
+                        removeSubmissionFromAllStatuses(item.form_id);
+                    } else {
+                        (statusItems[status] || []).splice(index, 1);
+                    }
+                    saveStatusItems();
+                    renderStatusFolders();
+                }));
+                itemDiv.append(header);
+
+                if (!item.is_form_submission) {
+                    if (item.description) {
+                        const desc = $('<div>').addClass('folder-item-content');
+                        const shortDesc = item.description.length > 150 ? item.description.substring(0, 150) + '...' : item.description;
+                        desc.text(shortDesc);
+                        itemDiv.append(desc);
+                    }
+                    if (item.date) {
+                        itemDiv.append($('<div>').addClass('folder-item-content').text('Datum: ' + formatSubmissionDateOnly(item.date)));
+                    }
+                }
+
+                itemDiv.on('click', function() {
+                    if (item.is_form_submission) {
+                        viewFormSubmission(status, index);
+                    } else {
+                        editStatusItem(status, index);
+                    }
+                });
+
+                itemDiv.on('dragstart', handleDragStart);
+                itemDiv.on('dragend', handleDragEnd);
+
+                folderDiv.append(itemDiv);
+            });
+        }
+
+        folderDiv.off('dragover dragleave drop').on('dragover', handleDragOver).on('dragleave', handleDragLeave).on('drop', handleDrop);
+    });
+
+    updateSortButton();
+    updateStatusSummaryCounts();
 }
 
 // Drag and drop functionality
@@ -2143,7 +3203,7 @@ function handleDragLeave(e) {
     $(this).removeClass('drag-over');
 }
 
-function handleDrop(e) {
+async function handleDrop(e) {
     e.preventDefault();
     $(this).removeClass('drag-over');
 
@@ -2157,9 +3217,17 @@ function handleDrop(e) {
     // Get the item being dragged
     const item = statusItems[draggedFromStatus][draggedItemIndex];
     if (!item) return;
-    if (item.is_form_submission && !STATUS_FLOW.includes(targetStatus)) {
+    if (item.is_form_submission && !isWorkflowStatus(targetStatus)) {
         showStatusMessage('Formulärärenden kan inte flyttas till To-do');
         return;
+    }
+
+    if (item && item.is_form_submission) {
+        const updated = await updateSubmissionStatusOnServer(item, targetStatus, item.read === true);
+        if (!updated) {
+            showStatusMessage('Kunde inte spara statusändringen');
+            return;
+        }
     }
 
     // Remove from source status
@@ -2170,9 +3238,6 @@ function handleDrop(e) {
         statusItems[targetStatus] = [];
     }
     statusItems[targetStatus].push(item);
-    if (item && item.is_form_submission) {
-        updateSubmissionStatusOnServer(item, targetStatus, item.read === true);
-    }
 
     // Save and re-render
     saveStatusItems();
@@ -2193,6 +3258,58 @@ function getStatusDisplayName(status) {
     return names[status] || status;
 }
 
+
+function getStatusDisplayName(status) {
+    if (status === TODO_STATUS.id) return TODO_STATUS.name;
+    const match = getWorkflowStatuses().find(item => item.id === status);
+    return match ? match.name : status;
+}
+
+async function handleDrop(e) {
+    e.preventDefault();
+    $(this).removeClass('drag-over');
+
+    const targetStatus = $(this).attr('data-status');
+    if (targetStatus === draggedFromStatus) {
+        return;
+    }
+
+    const item = statusItems[draggedFromStatus]?.[draggedItemIndex];
+    if (!item) return;
+    if (item.is_form_submission && !isWorkflowStatus(targetStatus)) {
+        showStatusMessage('Formulärärenden kan inte flyttas till To-do');
+        return;
+    }
+
+    const originalFromStatus = draggedFromStatus;
+    const originalIndex = draggedItemIndex;
+    statusItems[originalFromStatus].splice(originalIndex, 1);
+    if (!statusItems[targetStatus]) {
+        statusItems[targetStatus] = [];
+    }
+    statusItems[targetStatus].push(item);
+    saveStatusItems();
+    renderStatusFolders();
+    showStatusMessage(`Objekt flyttat till "${getStatusDisplayName(targetStatus)}"`);
+
+    if (!item.is_form_submission) {
+        return;
+    }
+
+    const updated = await updateSubmissionStatusOnServer(item, targetStatus, item.read === true);
+    if (updated) {
+        return;
+    }
+
+    statusItems[targetStatus] = (statusItems[targetStatus] || []).filter(candidate => candidate !== item);
+    if (!statusItems[originalFromStatus]) {
+        statusItems[originalFromStatus] = [];
+    }
+    statusItems[originalFromStatus].splice(Math.min(originalIndex, statusItems[originalFromStatus].length), 0, item);
+    saveStatusItems();
+    renderStatusFolders();
+    showStatusMessage('Kunde inte spara statusändringen');
+}
 
 function showStatusMessage(message) {
     // Create a temporary status message
@@ -2224,12 +3341,15 @@ async function viewFormSubmission(status, index) {
     if (!item || !item.is_form_submission) return;
 
     item.attachments = await refreshSubmissionAttachments(item);
-    
+
     // Mark as read
     item.read = true;
     saveStatusItems();
-    updateSubmissionStatusOnServer(item, status, true);
-    
+    const updated = await updateSubmissionStatusOnServer(item, status, true);
+    if (!updated) {
+        showStatusMessage('Kunde inte spara läst-status');
+    }
+
     // Create or update form submission modal
     let modal = $('#form-submission-modal');
     if (modal.length === 0) {
@@ -2261,7 +3381,7 @@ async function viewFormSubmission(status, index) {
             }
         });
     }
-    
+
     // Populate modal
     const modalTitle = item.title || 'Formulärinlägg';
     $('#form-modal-title').text(item.submitted_via === 'ai_chatbot' ? `${modalTitle} [AI]` : modalTitle);
@@ -2277,7 +3397,7 @@ async function viewFormSubmission(status, index) {
 
     // Just show date/time in small text at the top
     if (item.date) {
-        formSection.append($('<div>').addClass('submission-date').text(`Inskickad: ${new Date(item.date).toLocaleString('sv-SE')}`));
+        formSection.append($('<div>').addClass('submission-date').text(`Inskickad: ${formatSubmissionDateTime(item.date)}`));
     }
 
     // Form fields - the main content
@@ -2334,13 +3454,8 @@ async function viewFormSubmission(status, index) {
                     cursor: 'pointer',
                     background: '#e2e8f0'
                 });
-                loadAttachmentPreviewImage(img, loading, url);
-                img.on('click', () => {
-                    const src = img.attr('src');
-                    if (!src) return;
-                    const w = window.open('', '_blank');
-                    if (w) w.document.write(`<img src="${src}" style="max-width:100vw;max-height:100vh;"/>`);
-                });
+                loadAttachmentPreviewImage(img, loading, url, true);
+                img.on('click', () => openAttachmentLightbox(url, att.filename));
                 tile.append(loading);
                 tile.append(img);
             } else {
@@ -2473,13 +3588,26 @@ function renderAiResponsePanel(responseColumn, item, status, index, modal) {
     const nextStatus = getNextStatus(status);
     if (nextStatus) {
         actionButtons.append($('<button>').addClass('btn btn-secondary').css('margin-left', '0.5rem').text(`Flytta till ${getStatusDisplayName(nextStatus)}`).on('click', async function() {
+            const previousRead = Boolean(item.read);
             statusItems[status].splice(index, 1);
             if (!statusItems[nextStatus]) statusItems[nextStatus] = [];
             statusItems[nextStatus].push(item);
             item.read = true;
             saveStatusItems();
             renderStatusFolders();
-            await updateSubmissionStatusOnServer(item, nextStatus, true);
+            showStatusMessage(`Objekt flyttat till "${getStatusDisplayName(nextStatus)}"`);
+
+            const updated = await updateSubmissionStatusOnServer(item, nextStatus, true);
+            if (!updated) {
+                statusItems[nextStatus] = (statusItems[nextStatus] || []).filter(candidate => candidate !== item);
+                if (!statusItems[status]) statusItems[status] = [];
+                statusItems[status].splice(Math.min(index, statusItems[status].length), 0, item);
+                item.read = previousRead;
+                saveStatusItems();
+                renderStatusFolders();
+                showStatusMessage('Kunde inte spara statusändringen');
+                return;
+            }
             modal.removeClass('active');
         }));
     }
@@ -2510,18 +3638,18 @@ function saveStatusItem() {
     const title = $('#item-title').val().trim();
     const description = $('#item-description').val().trim();
     const date = $('#item-date').val();
-    
+
     if (!title) {
         alert('Titel krävs');
         return;
     }
-    
+
     const item = {
         title,
         description,
         date: date || null
     };
-    
+
     if (currentEditingItem.index >= 0) {
         statusItems[currentEditingItem.status][currentEditingItem.index] = item;
     } else {
@@ -2530,7 +3658,7 @@ function saveStatusItem() {
         }
         statusItems[currentEditingItem.status].push(item);
     }
-    
+
     saveStatusItems();
     renderStatusFolders();
     $('#item-modal').removeClass('active');
@@ -2538,6 +3666,16 @@ function saveStatusItem() {
 }
 
 $(document).ready(function() {
+    $('#attachment-lightbox-close').on('click', closeAttachmentLightbox);
+    $('#attachment-lightbox').on('click', function(e) {
+        if (e.target === this) closeAttachmentLightbox();
+    });
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape' && $('#attachment-lightbox').hasClass('active')) {
+            closeAttachmentLightbox();
+        }
+    });
+
     // Primära flikar
     $(document).on('click', '.primary-tab-btn', function(){
         $('.primary-tab-btn').removeClass('active');
@@ -2553,10 +3691,14 @@ $(document).ready(function() {
             switchTab('settings');
         } else if(prim==='calendar'){
             switchTab('calendar');
+        } else if(prim==='analytics'){
+            switchTab('analytics');
         } else if(prim==='boats'){
             switchTab('boats');
         } else if(prim==='tempproducts'){
             switchTab('tempproducts');
+        } else if(prim==='dynsatser'){
+            switchTab('dynsatser');
         } else {
             // Byt till "Visa alla" som standard
             const firstCat = activeExtrasKey || 'all';
@@ -2576,7 +3718,10 @@ $(document).ready(function() {
     $(document).on('click', '.tab-btn', function(){
         switchTab($(this).data('tab'));
     });
-    
+    $(document).on('click', '.analytics-range-btn', function(){
+        loadAnalyticsSummary(Number($(this).data('days') || 30));
+    });
+
     // Plus-knappar
     $('#add-manufacturer-btn').on('click', function() {
         const newKey = 'new_' + Date.now();
@@ -2586,21 +3731,14 @@ $(document).ready(function() {
         };
 
         // Spara direkt så filen uppdateras utan extra steg
+        // Spara direkt så filen uppdateras utan extra steg
         pushFullDataset(() => {
             selectedManufacturerKey = newKey;
             selectedModelIndex = null;
-            // Lägg till i UI utan att bygga om hela griden
-            const item = $(`<div class="grid1-item selected-t" data-key="${newKey}">Ny tillverkare</div>`);
-            $('.grid1-item').removeClass('selected-t');
-            // Lägg till i Isotope-griden och layouta om direkt så höjden blir korrekt
-            $grid1.append(item);
-            $grid1.isotope('appended', item).isotope('layout');
-            $('.grid2').empty();
-            bindGridEvents(); // Bind events på nya elementet
-            showEditSection();
+            refreshManufacturerListLayout(true);
         });
     });
-    
+
     $('#add-model-btn').on('click', function() {
         if (!selectedManufacturerKey) {
             alert('Välj först en tillverkare att lägga till en modell under.');
@@ -2617,15 +3755,13 @@ $(document).ready(function() {
             showEditSection();
         });
     });
-    
+
     // Sökfunktion
     var $quicksearch = $('.quicksearch').keyup(debounce(function() {
         const query = $quicksearch.val().toLowerCase().trim();
-        $grid1.isotope({
-            filter: function() {
-                if (!query) return true;
-                return $(this).text().toLowerCase().indexOf(query) !== -1;
-            }
+        $('.grid1-item').each(function() {
+            const match = !query || $(this).text().toLowerCase().indexOf(query) !== -1;
+            $(this).toggle(match);
         });
         // Nollställ val vid sökning
         selectedManufacturerKey = null;
@@ -2668,7 +3804,7 @@ $(document).ready(function() {
 // Markdown parser for preview (same as index.html)
 function parseMarkdownForPreview(md) {
     if (!md || typeof md !== 'string') return '';
-    
+
     // Try to use marked.js if available
     if (typeof marked !== 'undefined' && marked.parse) {
         try {
@@ -2681,30 +3817,30 @@ function parseMarkdownForPreview(md) {
             console.warn('marked.js parse error, using fallback:', e);
         }
     }
-    
+
     // Fallback parser - handle markdown syntax
     let html = md;
-    
+
     // Process headings first (must be at start of line, before other processing)
     // Handle headings with or without space after #
     html = html.replace(/^###\s*(.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^##\s*(.+)$/gm, '<h2>$1</h2>');
     html = html.replace(/^#\s*(.+)$/gm, '<h1>$1</h1>');
-    
+
     // Bold and italic
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    
+
     // Process line by line to handle paragraphs
     // Single newlines = line breaks, double newlines = new paragraph
     const lines = html.split('\n');
     const result = [];
     let currentParagraph = [];
-    
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmed = line.trim();
-        
+
         if (!trimmed) {
             // Empty line - close current paragraph if any (creates new paragraph)
             if (currentParagraph.length > 0) {
@@ -2723,12 +3859,12 @@ function parseMarkdownForPreview(md) {
             currentParagraph.push(trimmed);
         }
     }
-    
+
     // Close any remaining paragraph
     if (currentParagraph.length > 0) {
         result.push('<p>' + currentParagraph.join('<br>') + '</p>');
     }
-    
+
     return result.join('');
 }
 
@@ -2736,12 +3872,12 @@ function parseMarkdownForPreview(md) {
 function updateAnnouncementPreview() {
     const text = $('#announcement-text').val() || '';
     const previewEl = $('#announcement-preview');
-    
+
     if (!text.trim()) {
         previewEl.html('<div class="announcement-preview-empty">Förhandsvisning visas här när du skriver...</div>');
         return;
     }
-    
+
     const html = parseMarkdownForPreview(text);
     previewEl.html(`
         <div class="announcement-preview-topbar"></div>
@@ -2787,19 +3923,19 @@ function loadAnnouncementText() {
 
 function saveAnnouncementText() {
     const text = $('#announcement-text').val().trim();
-    
+
     if (!text) {
         $('#announcement-edit-error').text('Text måste fyllas i.').show();
         $('#announcement-edit-success').hide();
         return;
     }
-    
+
     const data = {
         announcement: {
             text: text
         }
     };
-    
+
     adminFetch(`${API_BASE}/api/page_texts`, {
         method: 'POST',
         headers: {
@@ -3072,3 +4208,1277 @@ async function addTempProduct() {
 }
 
 $(document).on('click', '#tp-add-btn', addTempProduct);
+
+// ============================== BOAT BRANDS (DYNSATSER) ==============================
+let boatBrandsCache = [];
+const bbSaveTimers = new WeakMap();
+
+async function loadBoatBrands() {
+    const list = document.getElementById('bb-list');
+    const empty = document.getElementById('bb-empty-state');
+    if (!list) return;
+    list.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Laddar...</div>';
+    try {
+        const res = await adminFetch(`${API_BASE}/api/boat_brands`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        boatBrandsCache = await res.json();
+    } catch (err) {
+        list.innerHTML = '<div style="padding:1rem;color:#dc2626;">Kunde inte ladda märken. ' + escHtml(err.message || '') + '</div>';
+        return;
+    }
+    renderBoatBrands();
+}
+
+function renderBoatBrands() {
+    const list = document.getElementById('bb-list');
+    const empty = document.getElementById('bb-empty-state');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!Array.isArray(boatBrandsCache) || boatBrandsCache.length === 0) {
+        if (empty) empty.style.display = 'block';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+    boatBrandsCache.forEach(brand => list.appendChild(buildBoatBrandCard(brand)));
+}
+
+function buildBoatBrandCard(brand) {
+    const card = document.createElement('div');
+    card.className = 'bb-card';
+    card.dataset.brandId = brand.id;
+    const slug = brand.slug || '';
+    card.innerHTML = `
+        <div class="bb-fields">
+            <div>
+                <label>Namn (märke)</label>
+                <input type="text" class="bb-name" value="${escHtml(brand.name || '')}" placeholder="t.ex. Uttern">
+            </div>
+            <div class="bb-row-2col">
+                <div>
+                    <label>Sorteringsordning</label>
+                    <input type="text" class="bb-sort" value="${escHtml(String(brand.sort_order || 0))}" placeholder="0">
+                </div>
+                <div style="display:flex;align-items:flex-end;">
+                    ${slug ? `<a href="/dynsatser/${escHtml(slug)}" target="_blank" style="font-size:0.82rem;color:var(--primary);text-decoration:none;white-space:nowrap;">↗ Se sida</a>` : ''}
+                </div>
+            </div>
+            <div>
+                <label>Beskrivning</label>
+                <textarea class="bb-description" placeholder="Beskriv tillgängliga dynsatser för detta märke...">${escHtml(brand.description || '')}</textarea>
+            </div>
+            <div class="bb-actions">
+                <span class="bb-save-status"></span>
+                <button type="button" class="btn btn-danger bb-delete">Ta bort märke</button>
+            </div>
+        </div>
+        <div class="bb-images">
+            <div>
+                <label>Bilder (${(brand.images || []).length})</label>
+                <div class="bb-images-grid"></div>
+            </div>
+            <label class="bb-dropzone" tabindex="0">
+                <div style="font-size:1.6rem;margin-bottom:.3rem;">📷</div>
+                <div style="font-size:.92rem;">Klicka eller dra och släpp bilder</div>
+                <div style="font-size:.78rem;opacity:.7;margin-top:.2rem;">JPG, PNG, WEBP, GIF · max 8 MB/bild</div>
+                <input type="file" class="bb-file-input" multiple accept="image/*">
+            </label>
+            <div class="bb-upload-status"></div>
+        </div>
+    `;
+    renderBoatBrandImages(card, brand);
+    bindBoatBrandCard(card, brand);
+    return card;
+}
+
+function renderBoatBrandImages(card, brand) {
+    const grid = card.querySelector('.bb-images-grid');
+    grid.innerHTML = '';
+    (brand.images || []).forEach(img => {
+        const tile = document.createElement('div');
+        tile.className = 'bb-thumb';
+        tile.innerHTML = `
+            <img src="${API_BASE}${img.url}" alt="${escHtml(img.filename || '')}">
+            <button type="button" class="bb-thumb-del" title="Ta bort bild" data-image-id="${img.id}">×</button>
+        `;
+        tile.querySelector('.bb-thumb-del').addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (!confirm('Ta bort den här bilden?')) return;
+            try {
+                const res = await adminFetch(`${API_BASE}/api/boat_brand_image/${img.id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                brand.images = (brand.images || []).filter(i => i.id !== img.id);
+                renderBoatBrandImages(card, brand);
+                card.querySelector('.bb-images label').textContent = `Bilder (${brand.images.length})`;
+            } catch (err) {
+                alert('Kunde inte ta bort bild: ' + (err.message || err));
+            }
+        });
+        grid.appendChild(tile);
+    });
+}
+
+function bindBoatBrandCard(card, brand) {
+    const nameInput = card.querySelector('.bb-name');
+    const sortInput = card.querySelector('.bb-sort');
+    const descInput = card.querySelector('.bb-description');
+    const status = card.querySelector('.bb-save-status');
+
+    function scheduleSave() {
+        clearTimeout(bbSaveTimers.get(card));
+        status.textContent = 'Sparar...';
+        status.classList.remove('is-saved', 'is-error');
+        const t = setTimeout(() => saveBoatBrand(card, brand, status), 600);
+        bbSaveTimers.set(card, t);
+    }
+
+    [nameInput, sortInput, descInput].forEach(el => el.addEventListener('input', scheduleSave));
+
+    card.querySelector('.bb-delete').addEventListener('click', async () => {
+        if (!confirm(`Ta bort märket "${brand.name || 'utan namn'}"? Detta kan inte ångras.`)) return;
+        try {
+            const res = await adminFetch(`${API_BASE}/api/boat_brands/${brand.id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            boatBrandsCache = boatBrandsCache.filter(b => b.id !== brand.id);
+            renderBoatBrands();
+        } catch (err) {
+            alert('Kunde inte ta bort märke: ' + (err.message || err));
+        }
+    });
+
+    const dropzone = card.querySelector('.bb-dropzone');
+    const fileInput = card.querySelector('.bb-file-input');
+    const uploadStatus = card.querySelector('.bb-upload-status');
+
+    async function uploadFiles(files) {
+        if (!files || !files.length) return;
+        const fd = new FormData();
+        Array.from(files).forEach(f => fd.append('images', f, f.name));
+        uploadStatus.textContent = `Laddar upp ${files.length} bild${files.length === 1 ? '' : 'er'}...`;
+        try {
+            const res = await adminFetch(`${API_BASE}/api/boat_brands/${brand.id}/images`, { method: 'POST', body: fd });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            brand.images = [...(brand.images || []), ...(data.images || [])];
+            renderBoatBrandImages(card, brand);
+            card.querySelector('.bb-images label').textContent = `Bilder (${brand.images.length})`;
+            uploadStatus.textContent = `${(data.images || []).length} bild${(data.images || []).length === 1 ? '' : 'er'} uppladdade.`;
+            setTimeout(() => { uploadStatus.textContent = ''; }, 3000);
+        } catch (err) {
+            uploadStatus.textContent = 'Fel vid uppladdning: ' + (err.message || err);
+        }
+    }
+
+    fileInput.addEventListener('change', () => { uploadFiles(fileInput.files); fileInput.value = ''; });
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('is-drag'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('is-drag'));
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('is-drag');
+        uploadFiles(e.dataTransfer.files);
+    });
+}
+
+async function saveBoatBrand(card, brand, status) {
+    const name = card.querySelector('.bb-name').value;
+    const sort = parseInt(card.querySelector('.bb-sort').value, 10) || 0;
+    const description = card.querySelector('.bb-description').value;
+    try {
+        const res = await adminFetch(`${API_BASE}/api/boat_brands/${brand.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, sort_order: sort, description })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const updated = await res.json();
+        brand.name = updated.name;
+        brand.description = updated.description;
+        brand.sort_order = updated.sort_order;
+        status.textContent = 'Sparat ✓';
+        status.classList.add('is-saved');
+        setTimeout(() => { status.textContent = ''; status.classList.remove('is-saved'); }, 2000);
+    } catch (err) {
+        status.textContent = 'Fel: ' + (err.message || err);
+        status.classList.add('is-error');
+    }
+}
+
+async function addBoatBrand() {
+    try {
+        const res = await adminFetch(`${API_BASE}/api/boat_brands`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Nytt märke', description: '', sort_order: boatBrandsCache.length })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const brand = await res.json();
+        boatBrandsCache.push(brand);
+        renderBoatBrands();
+        document.getElementById('bb-list').lastElementChild?.querySelector('.bb-name')?.focus();
+    } catch (err) {
+        alert('Kunde inte skapa märke: ' + (err.message || err));
+    }
+}
+
+$(document).on('click', '#bb-add-btn', addBoatBrand);
+
+function updateStatusSummaryCards() {
+    const row = $('#status-summary-row');
+    if (!row.length) return;
+    row.empty();
+
+    getWorkflowStatuses().slice(0, 4).forEach((status, index) => {
+        const card = $('<div>').addClass('stat-card');
+        if (STATUS_SUMMARY_CARD_CLASSES[index]) {
+            card.addClass(STATUS_SUMMARY_CARD_CLASSES[index]);
+        }
+        card.append(
+            $('<div>').addClass('stat-label').text(status.name),
+            $('<div>').addClass('stat-value').attr('id', `stat-${status.id}`).text('0'),
+            $('<div>').addClass('stat-hint').text(STATUS_SUMMARY_HINTS[index] || 'Överblick')
+        );
+        row.append(card);
+    });
+}
+
+function updateStatusSummaryCounts() {
+    getWorkflowStatuses().slice(0, 4).forEach(status => {
+        const target = document.getElementById(`stat-${status.id}`);
+        if (!target) return;
+        target.textContent = String((statusItems[status.id] || []).length);
+    });
+}
+
+function renderStatusBoardLayout() {
+    const workflowRoot = $('#status-folders-workflow');
+    if (!workflowRoot.length) return;
+
+    workflowRoot.empty();
+    getWorkflowStatuses().forEach(status => {
+        const card = $('<div>')
+            .addClass('status-folder')
+            .attr('data-status', status.id)
+            .css('--status-accent', getStatusColor(status.id));
+
+        const header = $('<div>').addClass('status-folder-top');
+        const titleWrap = $('<div>').addClass('status-folder-title-wrap');
+        titleWrap.append($('<h3>').text(status.name));
+
+        if (status.id === 'nya-inskick') {
+            titleWrap.append(
+                $('<button>')
+                    .attr('type', 'button')
+                    .attr('id', 'nya-inskick-sort-btn')
+                    .addClass('btn-ghost status-sort-btn')
+                    .text('Nyaste först')
+                    .on('click', toggleNyaInskickSort)
+            );
+        }
+
+        header.append(titleWrap);
+        card.append(header);
+        card.append($('<div>').addClass('folder-items').attr('id', `folder-${status.id}`));
+        card.append($('<button>').addClass('add-item-btn').attr('type', 'button').attr('data-status', status.id).text('+ Lägg till'));
+        workflowRoot.append(card);
+    });
+
+    $('#status-folder-todo').css('--status-accent', getStatusColor(TODO_STATUS.id));
+    updateSortButton();
+}
+
+function getStatusItemCount(statusId) {
+    return Array.isArray(statusItems[statusId]) ? statusItems[statusId].length : 0;
+}
+
+function openStatusConfigModal() {
+    statusConfigDraft = getWorkflowStatuses().map(status => ({
+        clientId: status.id,
+        id: status.id,
+        name: status.name,
+        fixed: status.id === 'nya-inskick'
+    }));
+    renderStatusConfigDraftList();
+    $('#status-config-modal').addClass('active');
+}
+
+function closeStatusConfigModal() {
+    $('#status-config-modal').removeClass('active');
+}
+
+function moveStatusDraftItem(clientId, direction) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index <= 0) return;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex <= 0 || targetIndex >= statusConfigDraft.length) return;
+    const [item] = statusConfigDraft.splice(index, 1);
+    statusConfigDraft.splice(targetIndex, 0, item);
+    renderStatusConfigDraftList();
+}
+
+function removeStatusDraftItem(clientId) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index < 0) return;
+    const status = statusConfigDraft[index];
+    if (status.fixed) return;
+    if (status.id && getStatusItemCount(status.id) > 0) {
+        showStatusMessage('Mappen måste vara tom innan du kan ta bort den');
+        return;
+    }
+    statusConfigDraft.splice(index, 1);
+    renderStatusConfigDraftList();
+}
+
+function renderStatusConfigDraftList() {
+    const list = $('#status-config-list');
+    if (!list.length) return;
+    list.empty();
+
+    statusConfigDraft.forEach((status, index) => {
+        const row = $('<div>').addClass('status-config-row');
+        if (status.fixed) row.addClass('is-fixed');
+
+        const input = $('<input>')
+            .attr('type', 'text')
+            .addClass('status-config-input')
+            .val(status.name)
+            .prop('disabled', status.fixed)
+            .attr('placeholder', 'Namn på status');
+        input.on('input', function() {
+            status.name = sanitizeStatusName($(this).val());
+        });
+
+        const actions = $('<div>').addClass('status-config-row-actions');
+        actions.append(
+            $('<button>')
+                .attr('type', 'button')
+                .addClass('btn-ghost status-config-move-btn')
+                .text('↑')
+                .prop('disabled', status.fixed || index <= 1)
+                .on('click', function() { moveStatusDraftItem(status.clientId, 'up'); }),
+            $('<button>')
+                .attr('type', 'button')
+                .addClass('btn-ghost status-config-move-btn')
+                .text('↓')
+                .prop('disabled', status.fixed || index >= statusConfigDraft.length - 1)
+                .on('click', function() { moveStatusDraftItem(status.clientId, 'down'); }),
+            $('<button>')
+                .attr('type', 'button')
+                .addClass('btn-ghost status-config-delete-btn')
+                .text('×')
+                .prop('disabled', status.fixed)
+                .on('click', function() { removeStatusDraftItem(status.clientId); })
+        );
+
+        const itemCount = status.id ? getStatusItemCount(status.id) : 0;
+        const meta = $('<div>').addClass('status-config-meta');
+        meta.text(status.fixed ? 'Fast mapp' : (itemCount > 0 ? `${itemCount} objekt i mappen` : 'Tom mapp'));
+
+        row.append(input, actions, meta);
+        list.append(row);
+    });
+}
+
+async function saveStatusConfigFromModal() {
+    const payload = {
+        statuses: statusConfigDraft.map(status => ({
+            id: status.fixed ? status.id : status.id,
+            name: status.fixed ? getStatusDisplayName(status.id) : sanitizeStatusName(status.name)
+        }))
+    };
+
+    const customStatuses = payload.statuses.filter(status => status.id !== 'nya-inskick');
+    if (!customStatuses.every(status => status.name)) {
+        showStatusMessage('Alla statusar måste ha namn.');
+        return;
+    }
+
+    const saveBtn = $('#status-config-save-btn');
+    const originalText = saveBtn.text();
+    saveBtn.prop('disabled', true).text('Sparar...');
+
+    try {
+        const res = await adminFetch(`${API_BASE}/api/status_config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        workflowStatuses = normalizeWorkflowStatuses(data);
+        statusItems = ensureStatusBuckets(statusItems);
+        renderStatusBoardLayout();
+        renderStatusFolders();
+        updateStatusSummaryCards();
+        saveStatusItems();
+        closeStatusConfigModal();
+        showStatusMessage('Statusmappar sparade');
+    } catch (err) {
+        console.error('Kunde inte spara statuskonfiguration', err);
+        showStatusMessage('Kunde inte spara statusmapparna');
+    } finally {
+        saveBtn.prop('disabled', false).text(originalText);
+    }
+}
+
+function initStatusConfigModal() {
+    $('#status-config-open-btn').off('click').on('click', openStatusConfigModal);
+    $('#status-config-close-btn, #status-config-cancel-btn').off('click').on('click', closeStatusConfigModal);
+    $('#status-config-add-btn').off('click').on('click', function() {
+        statusConfigDraft.push({
+            clientId: `draft-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+            id: '',
+            name: '',
+            fixed: false
+        });
+        renderStatusConfigDraftList();
+    });
+    $('#status-config-save-btn').off('click').on('click', saveStatusConfigFromModal);
+    $('#status-config-modal')
+        .off('mousedown.statusConfig mouseup.statusConfig click.statusConfig')
+        .on('mousedown.statusConfig', function(e) {
+            this.dataset.backdropPressStarted = $(e.target).is('#status-config-modal') ? 'true' : 'false';
+        })
+        .on('mouseup.statusConfig', function(e) {
+            const startedOnBackdrop = this.dataset.backdropPressStarted === 'true';
+            this.dataset.backdropPressStarted = 'false';
+            if (startedOnBackdrop && $(e.target).is('#status-config-modal')) {
+                closeStatusConfigModal();
+            }
+        })
+        .on('click.statusConfig', function(e) {
+            if ($(e.target).is('#status-config-modal')) {
+                e.preventDefault();
+            }
+        });
+}
+
+async function loadStatusConfig() {
+    try {
+        const res = await adminFetch(`${API_BASE}/api/status_config`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        workflowStatuses = normalizeWorkflowStatuses(data);
+    } catch (err) {
+        console.error('Kunde inte ladda statuskonfiguration', err);
+        workflowStatuses = cloneDefaultWorkflowStatuses();
+    }
+    statusItems = ensureStatusBuckets(statusItems);
+    updateStatusSummaryCards();
+    renderStatusBoardLayout();
+}
+
+function sortNyaInskick() {
+    const savedSort = localStorage.getItem('nyaInskickSortOrder');
+    if (savedSort) {
+        nyaInskickSortOrder = savedSort;
+    }
+    (statusItems['nya-inskick'] || []).sort((a, b) => {
+        const dateA = parseSubmissionDateValue(a.date || a.timestamp) || new Date(0);
+        const dateB = parseSubmissionDateValue(b.date || b.timestamp) || new Date(0);
+        return nyaInskickSortOrder === 'oldest' ? dateA - dateB : dateB - dateA;
+    });
+}
+
+function toggleNyaInskickSort() {
+    nyaInskickSortOrder = nyaInskickSortOrder === 'newest' ? 'oldest' : 'newest';
+    localStorage.setItem('nyaInskickSortOrder', nyaInskickSortOrder);
+    sortNyaInskick();
+    renderStatusFolders();
+    updateSortButton();
+}
+
+function updateSortButton() {
+    const btn = $('#nya-inskick-sort-btn');
+    if (btn.length) {
+        btn.text(nyaInskickSortOrder === 'newest' ? 'Nyaste först' : 'Äldsta först');
+    }
+}
+
+function saveStatusItems() {
+    try {
+        localStorage.setItem('statusItems', JSON.stringify(statusItems));
+        if (calendar) {
+            calendar.removeAllEvents();
+            const events = getCalendarEvents();
+            events.forEach(event => {
+                calendar.addEvent(event);
+            });
+        }
+        updateStatusSummaryCounts();
+    } catch (e) {
+        console.error('Kunde inte spara status items', e);
+    }
+}
+
+function loadStatusItems() {
+    statusFoldersLoading = true;
+    renderStatusFolders();
+
+    const normalizeStatus = (value) => isWorkflowStatus(value) ? value : 'nya-inskick';
+
+    try {
+        const saved = localStorage.getItem('statusItems');
+        if (saved) {
+            statusItems = ensureStatusBuckets(JSON.parse(saved));
+        }
+    } catch (e) {
+        console.error('Kunde inte ladda status items', e);
+        statusItems = ensureStatusBuckets(statusItems);
+    }
+
+    const localNonFormByStatus = ensureStatusBuckets(statusItems);
+    getStatusBuckets().forEach(statusId => {
+        localNonFormByStatus[statusId] = (localNonFormByStatus[statusId] || []).filter(item => !(item && item.is_form_submission));
+    });
+
+    adminFetch(`${API_BASE}/api/get_form_submissions`)
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(submissions => {
+            const formItemsByStatus = ensureStatusBuckets({});
+            if (Array.isArray(submissions)) {
+                submissions.forEach(submission => {
+                    const statusId = normalizeStatus(submission.status);
+                    formItemsByStatus[statusId].push({
+                        form_id: submission.id,
+                        title: submission.title,
+                        description: submission.form_summary,
+                        date: submission.timestamp,
+                        timestamp: submission.timestamp,
+                        category: submission.category,
+                        form_type: submission.form_type,
+                        fields: submission.fields,
+                        proposed_response: submission.proposed_response,
+                        notes: submission.notes || '',
+                        read: Boolean(submission.read),
+                        submitted_via: submission.submitted_via || 'web_form',
+                        attachments: Array.isArray(submission.attachments) ? submission.attachments : [],
+                        is_form_submission: true
+                    });
+                });
+            }
+
+            statusItems = ensureStatusBuckets({});
+            getStatusBuckets().forEach(statusId => {
+                statusItems[statusId] = [...(formItemsByStatus[statusId] || []), ...(localNonFormByStatus[statusId] || [])];
+            });
+
+            sortNyaInskick();
+            saveStatusItems();
+            statusFoldersLoading = false;
+            renderStatusFolders();
+        })
+        .catch(err => {
+            console.error('Kunde inte ladda form submissions', err);
+            statusItems = ensureStatusBuckets(statusItems);
+            statusFoldersLoading = false;
+            renderStatusFolders();
+        });
+}
+
+function renderStatusFolders() {
+    renderStatusBoardLayout();
+
+    getStatusBuckets().forEach(statusId => {
+        const folderDiv = $(`#folder-${statusId}`);
+        if (!folderDiv.length) return;
+        folderDiv.empty();
+        folderDiv.attr('data-status', statusId).addClass('droppable-folder');
+
+        if (statusFoldersLoading) {
+            const loadingDiv = $('<div>').addClass('folder-loading-state').attr('aria-live', 'polite');
+            loadingDiv.append(
+                $('<span>').addClass('folder-loading-spinner').attr('aria-hidden', 'true'),
+                $('<span>').text('Laddar...')
+            );
+            folderDiv.append(loadingDiv);
+            folderDiv.off('dragover dragleave drop').on('dragover', handleDragOver).on('dragleave', handleDragLeave).on('drop', handleDrop);
+            return;
+        }
+
+        let itemsToShow = statusItems[statusId] || [];
+        if (currentFormFilter !== 'all') {
+            itemsToShow = itemsToShow.filter(item => {
+                if (item.is_form_submission) {
+                    return item.form_type === currentFormFilter;
+                }
+                return true;
+            });
+        }
+
+        if (itemsToShow.length === 0) {
+            const emptyDiv = $('<div>').addClass('folder-item folder-item-empty').css({
+                textAlign: 'center',
+                color: '#666',
+                fontStyle: 'italic',
+                padding: '2rem 1rem'
+            });
+            const statusName = getStatusDisplayName(statusId).toLowerCase();
+            emptyDiv.text(currentFormFilter === 'all'
+                ? `Inga ${statusName} att visa`
+                : `Inga ${currentFormFilter.toLowerCase()} i ${statusName}`);
+            folderDiv.append(emptyDiv);
+        } else {
+            itemsToShow.forEach(item => {
+                const index = (statusItems[statusId] || []).indexOf(item);
+
+                const itemDiv = $('<div>')
+                    .addClass('folder-item')
+                    .attr({
+                        'data-index': index,
+                        'data-status': statusId,
+                        draggable: 'true'
+                    });
+
+                if (item.is_form_submission) {
+                    itemDiv.addClass('form-submission-item');
+                }
+
+                const header = $('<div>').addClass('folder-item-header');
+                const titleDiv = $('<div>').addClass('folder-item-title');
+
+                if (item.is_form_submission && item.fields) {
+                    const personName = getSubmissionField(item.fields, 'name', 'namn') || 'Okänd';
+                    const formType = item.form_type || 'Formulär';
+                    const manufacturer = getSubmissionField(item.fields, 'manufacturer', 'tillverkare');
+                    const model = getSubmissionField(item.fields, 'model', 'modell');
+
+                    titleDiv.append($('<div>').addClass('person-name').text(personName));
+                    titleDiv.append($('<div>').addClass('form-type-line').text(formType));
+                    if (item.submitted_via === 'ai_chatbot') {
+                        titleDiv.append($('<div>').addClass('ai-source-badge').text('AI'));
+                    }
+                    if (formType === 'Kontakt') {
+                        const subject = getSubmissionField(item.fields, 'subject', 'ämne', 'amne');
+                        if (subject) {
+                            titleDiv.append($('<div>').addClass('contact-subject').text(subject));
+                        }
+                    }
+                    if (manufacturer || model) {
+                        const boatInfo = [manufacturer, model].filter(Boolean).join(' ');
+                        if (boatInfo) {
+                            titleDiv.append($('<div>').addClass('boat-model-line').text(boatInfo));
+                        }
+                    }
+                    if (Array.isArray(item.attachments) && item.attachments.length > 0) {
+                        titleDiv.append(
+                            $('<div>').addClass('attachment-badge').css({
+                                fontSize: '0.78rem',
+                                color: '#8b6f18',
+                                marginTop: '0.2rem',
+                                fontWeight: '600'
+                            }).text(`Bilagor: ${item.attachments.length}`)
+                        );
+                    }
+                    if (item.date || item.timestamp) {
+                        const date = parseSubmissionDateValue(item.date || item.timestamp);
+                        if (date) {
+                            itemDiv.append($('<div>').addClass('folder-item-content').text(formatSubmissionDateShortLabel(item.date || item.timestamp)));
+                        }
+                    }
+                } else {
+                    titleDiv.append($('<div>').addClass('person-name').text(item.title || 'Ingen titel'));
+                }
+
+                header.append(titleDiv);
+                header.append($('<button>').addClass('folder-item-delete').attr('type', 'button').text('×').on('click', async function(e) {
+                    e.stopPropagation();
+                    if (!confirm('Ta bort detta objekt?')) return;
+                    if (item.is_form_submission && item.form_id) {
+                        const deleted = await deleteSubmissionOnServer(item);
+                        if (!deleted) {
+                            alert('Kunde inte ta bort från servern.');
+                            return;
+                        }
+                        removeSubmissionFromAllStatuses(item.form_id);
+                    } else {
+                        (statusItems[statusId] || []).splice(index, 1);
+                    }
+                    saveStatusItems();
+                    renderStatusFolders();
+                }));
+                itemDiv.append(header);
+
+                if (!item.is_form_submission) {
+                    if (item.description) {
+                        const desc = $('<div>').addClass('folder-item-content');
+                        const shortDesc = item.description.length > 150 ? `${item.description.substring(0, 150)}...` : item.description;
+                        desc.text(shortDesc);
+                        itemDiv.append(desc);
+                    }
+                    if (item.date) {
+                        itemDiv.append($('<div>').addClass('folder-item-content').text(`Datum: ${formatSubmissionDateOnly(item.date)}`));
+                    }
+                }
+
+                itemDiv.on('click', function() {
+                    if (item.is_form_submission) {
+                        viewFormSubmission(statusId, index);
+                    } else {
+                        editStatusItem(statusId, index);
+                    }
+                });
+
+                itemDiv.on('dragstart', handleDragStart);
+                itemDiv.on('dragend', handleDragEnd);
+                folderDiv.append(itemDiv);
+            });
+        }
+
+        folderDiv.off('dragover dragleave drop').on('dragover', handleDragOver).on('dragleave', handleDragLeave).on('drop', handleDrop);
+    });
+
+    updateSortButton();
+    updateStatusSummaryCounts();
+}
+
+function getStatusDisplayName(statusId) {
+    if (statusId === TODO_STATUS.id) return TODO_STATUS.name;
+    const match = getWorkflowStatuses().find(item => item.id === statusId);
+    return match ? match.name : statusId;
+}
+
+async function handleDrop(e) {
+    e.preventDefault();
+    $(this).removeClass('drag-over');
+
+    const targetStatus = $(this).attr('data-status');
+    if (targetStatus === draggedFromStatus) {
+        return;
+    }
+
+    const item = statusItems[draggedFromStatus]?.[draggedItemIndex];
+    if (!item) return;
+    if (item.is_form_submission && !isWorkflowStatus(targetStatus)) {
+        showStatusMessage('Formulärärenden kan inte flyttas till To-do');
+        return;
+    }
+
+    const originalFromStatus = draggedFromStatus;
+    const originalIndex = draggedItemIndex;
+
+    statusItems[originalFromStatus].splice(originalIndex, 1);
+    if (!statusItems[targetStatus]) {
+        statusItems[targetStatus] = [];
+    }
+    statusItems[targetStatus].push(item);
+    saveStatusItems();
+    renderStatusFolders();
+    showStatusMessage(`Objekt flyttat till "${getStatusDisplayName(targetStatus)}"`);
+
+    if (!item.is_form_submission) {
+        return;
+    }
+
+    const updated = await updateSubmissionStatusOnServer(item, targetStatus, item.read === true);
+    if (updated) {
+        return;
+    }
+
+    statusItems[targetStatus] = (statusItems[targetStatus] || []).filter(candidate => candidate !== item);
+    if (!statusItems[originalFromStatus]) {
+        statusItems[originalFromStatus] = [];
+    }
+    statusItems[originalFromStatus].splice(Math.min(originalIndex, statusItems[originalFromStatus].length), 0, item);
+    saveStatusItems();
+    renderStatusFolders();
+    showStatusMessage('Kunde inte spara statusändringen');
+}
+// Archive/export installer runs after all legacy status helpers have been declared.
+setTimeout(function installArchiveAndExportTools() {
+    if (typeof $ === 'undefined' || typeof ARCHIVE_STATUS === 'undefined') return;
+
+    const originalIsWorkflowStatus = isWorkflowStatus;
+    const originalRenderStatusBoardLayout = renderStatusBoardLayout;
+    const originalSaveStatusItems = saveStatusItems;
+    const originalHandleDrop = handleDrop;
+    const originalGetStatusDisplayName = getStatusDisplayName;
+
+    isWorkflowStatus = function(statusId) {
+        return statusId === ARCHIVE_STATUS.id || originalIsWorkflowStatus(statusId);
+    };
+
+    getStatusDisplayName = function(statusId) {
+        if (statusId === ARCHIVE_STATUS.id) return ARCHIVE_STATUS.name;
+        return originalGetStatusDisplayName(statusId);
+    };
+
+    function getArchivedSubmissions() {
+        return (statusItems[ARCHIVE_STATUS.id] || []).filter(item => item && item.is_form_submission);
+    }
+
+    function updateArchiveCount() {
+        $('#archive-count').text(String(getArchivedSubmissions().length));
+    }
+
+    function closeStatusFolderMenus() {
+        $('.status-folder-menu').removeClass('active');
+        $('.status-folder-menu-btn').attr('aria-expanded', 'false');
+    }
+
+    function createStatusFolderMenu(statusId) {
+        const menuWrap = $('<div>').addClass('status-folder-menu-wrap');
+        const menuBtn = $('<button>')
+            .attr({
+                type: 'button',
+                class: 'status-folder-menu-btn',
+                'aria-label': 'Mappmeny',
+                'aria-expanded': 'false',
+                'data-status': statusId
+            });
+        const menu = $('<div>').addClass('status-folder-menu').attr('data-status-menu', statusId);
+        menu.append($('<button>').attr({ type: 'button', 'data-export-status': statusId }).text('Exportera Excel'));
+        menuWrap.append(menuBtn, menu);
+        return menuWrap;
+    }
+
+    function decorateStatusFolders() {
+        getWorkflowStatuses().forEach(status => {
+            const header = $(`.status-folder[data-status="${status.id}"] .status-folder-top`);
+            if (header.length && !header.find('.status-folder-menu-wrap').length) {
+                header.append(createStatusFolderMenu(status.id));
+            }
+        });
+
+        $('#archive-drop-zone')
+            .attr('data-status', ARCHIVE_STATUS.id)
+            .addClass('droppable-folder')
+            .off('dragover.archiveDrop dragleave.archiveDrop drop.archiveDrop')
+            .on('dragover.archiveDrop', handleDragOver)
+            .on('dragleave.archiveDrop', handleDragLeave)
+            .on('drop.archiveDrop', handleDrop);
+        updateArchiveCount();
+    }
+
+    renderStatusBoardLayout = function() {
+        originalRenderStatusBoardLayout();
+        decorateStatusFolders();
+    };
+
+    saveStatusItems = function() {
+        originalSaveStatusItems();
+        updateArchiveCount();
+    };
+
+    handleDrop = function(e) {
+        const targetStatus = $(this).attr('data-status');
+        const item = statusItems[draggedFromStatus]?.[draggedItemIndex];
+        if (targetStatus === ARCHIVE_STATUS.id && item && !item.is_form_submission) {
+            e.preventDefault();
+            $(this).removeClass('drag-over');
+            showStatusMessage('Endast formulÃ¤rÃ¤renden kan arkiveras');
+            return;
+        }
+        return originalHandleDrop.call(this, e);
+    };
+
+    function formatSubmissionDateForDisplay(item) {
+        return formatSubmissionDateTime(item.date || item.timestamp);
+    }
+
+    function getArchiveSearchText(item) {
+        const parts = [item.title, item.description, item.form_type, item.category, item.notes, item.proposed_response, formatSubmissionDateForDisplay(item)];
+        if (item.fields && typeof item.fields === 'object') {
+            Object.entries(item.fields).forEach(([key, value]) => parts.push(key, value));
+        }
+        return parts.filter(Boolean).join(' ').toLowerCase();
+    }
+
+    function renderArchiveModalList() {
+        const list = $('#archive-list');
+        if (!list.length) return;
+        const query = String($('#archive-search').val() || '').trim().toLowerCase();
+        const archived = getArchivedSubmissions();
+        const matches = query ? archived.filter(item => getArchiveSearchText(item).includes(query)) : archived;
+
+        list.empty();
+        if (!matches.length) {
+            list.append($('<div>').addClass('archive-empty').text(query ? 'Inga trÃ¤ffar i arkivet' : 'Arkivet Ã¤r tomt'));
+            return;
+        }
+
+        matches.forEach(item => {
+            const index = (statusItems[ARCHIVE_STATUS.id] || []).indexOf(item);
+            const fields = item.fields || {};
+            const personName = getSubmissionField(fields, 'name', 'namn') || item.title || 'OkÃ¤nd';
+            const manufacturer = getSubmissionField(fields, 'manufacturer', 'tillverkare');
+            const model = getSubmissionField(fields, 'model', 'modell');
+            const email = getSubmissionField(fields, 'email', 'epost', 'e-postadress');
+            const phone = getSubmissionField(fields, 'phone', 'telefon', 'telefonnummer');
+            const boat = [manufacturer, model].filter(Boolean).join(' ');
+            const metaParts = [item.form_type, boat, email, phone, formatSubmissionDateForDisplay(item)].filter(Boolean);
+
+            const row = $('<div>').addClass('archive-item').attr({ role: 'button', tabindex: '0', 'data-index': index });
+            row.append(
+                $('<div>').addClass('archive-item-title').append($('<span>').text(personName), $('<span>').text(item.form_type || '')),
+                $('<div>').addClass('archive-item-meta').text(metaParts.join(' | '))
+            );
+            row.on('click keydown', function(e) {
+                if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                viewFormSubmission(ARCHIVE_STATUS.id, index);
+            });
+            list.append(row);
+        });
+    }
+
+    function openArchiveModal() {
+        $('#archive-search').val('');
+        renderArchiveModalList();
+        $('#archive-modal').addClass('active');
+    }
+
+    function closeArchiveModal() {
+        $('#archive-modal').removeClass('active');
+    }
+
+    function excelEscape(value) {
+        return escapeHtml(String(value ?? ''));
+    }
+
+    function xmlEscape(value) {
+        return String(value ?? '')
+            .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+    }
+
+    function normalizeExportKey(value) {
+        return String(value || '')
+            .toLowerCase()
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/Ã¥|å/g, 'a')
+            .replace(/Ã¤|ä/g, 'a')
+            .replace(/Ã¶|ö/g, 'o')
+            .replace(/[^a-z0-9]/g, '');
+    }
+
+    function getExportFieldKeys(items) {
+        const seen = new Set();
+        const keys = [];
+        const exportedAliases = new Set([
+            'epostadress', 'emailaddress',
+            'phonenumber',
+            'boatbrand', 'batmarke',
+            'boatmodel', 'batmodell',
+            'ovriginformation',
+            'name', 'namn',
+            'email', 'epost', 'e_post', 'e-post', 'e-postadress',
+            'phone', 'telefon', 'telefonnummer',
+            'manufacturer', 'tillverkare', 'boat_brand', 'bÃ¥tmÃ¤rke',
+            'model', 'modell', 'boat_model', 'bÃ¥tmodell',
+            'subject', 'amne', 'Ã¤mne',
+            'message', 'meddelande', 'ovrig_information', 'ovrig information', 'Ã¶vrig information'
+        ]);
+        items.forEach(item => {
+            const fields = item.fields && typeof item.fields === 'object' ? item.fields : {};
+            Object.keys(fields).forEach(key => {
+                const normalizedKey = normalizeExportKey(key);
+                const normalizedLabel = normalizeExportKey(getSubmissionFieldLabel(key));
+                if (
+                    String(key).startsWith('__') ||
+                    exportedAliases.has(normalizedKey) ||
+                    exportedAliases.has(normalizedLabel) ||
+                    seen.has(normalizedKey) ||
+                    seen.has(normalizedLabel)
+                ) return;
+                seen.add(normalizedKey);
+                seen.add(normalizedLabel);
+                keys.push(key);
+            });
+        });
+        return keys;
+    }
+
+    function buildSubmissionExportRows(items) {
+        const submissions = (items || []).filter(item => item && item.is_form_submission);
+        const fieldKeys = getExportFieldKeys(submissions);
+        const baseColumns = [
+            { label: 'Formulär', value: item => item.form_type || '' },
+            { label: 'Namn', value: item => getSubmissionField(item.fields, 'name', 'namn') },
+            { label: 'E-post', value: item => getSubmissionField(item.fields, 'email', 'epost', 'e-postadress') },
+            { label: 'Telefon', value: item => getSubmissionField(item.fields, 'phone', 'telefon', 'telefonnummer') },
+            { label: 'Tillverkare', value: item => getSubmissionField(item.fields, 'manufacturer', 'tillverkare') },
+            { label: 'Modell', value: item => getSubmissionField(item.fields, 'model', 'modell') },
+            { label: 'Ämne', value: item => getSubmissionField(item.fields, 'subject', 'ämne', 'amne') },
+            { label: 'Meddelande', value: item => getSubmissionField(item.fields, 'message', 'meddelande', 'övrig information', 'ovrig information') },
+            { label: 'Datum', value: item => formatSubmissionDateForDisplay(item) },
+            { label: 'Anteckningar', value: item => item.notes || '' },
+            { label: 'Bilagor', value: item => Array.isArray(item.attachments) ? item.attachments.length : 0 },
+            { label: 'ID', value: item => item.form_id || '' }
+        ];
+        const fieldColumns = fieldKeys.map(key => ({
+            label: getSubmissionFieldLabel(key),
+            value: item => item.fields && item.fields[key] !== undefined ? item.fields[key] : ''
+        }));
+        return { columns: [...baseColumns, ...fieldColumns], rows: submissions };
+    }
+
+    function downloadSubmissionsExcel(items, title, filenameBase) {
+        const { columns, rows } = buildSubmissionExportRows(items);
+        if (!rows.length) {
+            showStatusMessage('Inga formulärärenden att exportera');
+            return;
+        }
+        const sheetName = xmlEscape(String(title || 'Export').slice(0, 31));
+        const columnWidths = columns.map(column => {
+            const label = String(column.label || '').toLowerCase();
+            if (label === 'meddelande' || label === 'anteckningar') return 220;
+            if (label === 'id') return 150;
+            if (label === 'e-post') return 170;
+            if (label === 'datum') return 115;
+            if (label === 'formulär') return 105;
+            if (label === 'bilagor') return 55;
+            return 100;
+        });
+        const columnXml = columnWidths.map(width => `<Column ss:Width="${width}"/>`).join('');
+        const headerCells = columns
+            .map(column => `<Cell ss:StyleID="Header"><Data ss:Type="String">${xmlEscape(column.label)}</Data></Cell>`)
+            .join('');
+        const rowXml = rows.map((item, rowIndex) => {
+            const styleId = rowIndex % 2 === 0 ? 'Text' : 'TextAlt';
+            return `<Row>${columns.map(column => `<Cell ss:StyleID="${styleId}"><Data ss:Type="String">${xmlEscape(column.value(item))}</Data></Cell>`).join('')}</Row>`;
+        }).join('');
+        const workbookXml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Header">
+   <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#0C1A2B" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="Text">
+   <NumberFormat ss:Format="@"/>
+   <Alignment ss:Vertical="Top" ss:WrapText="0"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="TextAlt">
+   <NumberFormat ss:Format="@"/>
+   <Alignment ss:Vertical="Top" ss:WrapText="0"/>
+   <Interior ss:Color="#F3F4F6" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="${sheetName}">
+  <Table>
+   ${columnXml}
+   <Row>${headerCells}</Row>
+   ${rowXml}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+        const blob = new Blob(['\ufeff', workbookXml], { type: 'application/xml;charset=utf-8' });
+        const link = document.createElement('a');
+        const stamp = new Date().toISOString().slice(0, 10);
+        link.href = URL.createObjectURL(blob);
+        link.download = `${slugifyStatusId(filenameBase || title) || 'export'}-${stamp}.xml`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    function exportStatusToExcel(statusId) {
+        const items = (statusItems[statusId] || []).map(item => ({ ...item, __statusId: statusId }));
+        downloadSubmissionsExcel(items, getStatusDisplayName(statusId), getStatusDisplayName(statusId));
+    }
+
+    function exportArchiveToExcel() {
+        const items = getArchivedSubmissions().map(item => ({ ...item, __statusId: ARCHIVE_STATUS.id }));
+        downloadSubmissionsExcel(items, 'Arkiv', 'arkiv');
+    }
+
+    $(document)
+        .off('click.statusFolderMenu')
+        .on('click.statusFolderMenu', '.status-folder-menu-btn', function(e) {
+            e.stopPropagation();
+            const btn = $(this);
+            const menu = btn.siblings('.status-folder-menu');
+            const isActive = menu.hasClass('active');
+            closeStatusFolderMenus();
+            if (!isActive) {
+                menu.addClass('active');
+                btn.attr('aria-expanded', 'true');
+            }
+        })
+        .on('click.statusFolderMenu', '[data-export-status]', function(e) {
+            e.stopPropagation();
+            closeStatusFolderMenus();
+            exportStatusToExcel($(this).attr('data-export-status'));
+        })
+        .on('click.statusFolderMenu', function() {
+            closeStatusFolderMenus();
+        });
+
+    $(document)
+        .off('click.archiveModal input.archiveModal')
+        .on('click.archiveModal', '#archive-open-btn', openArchiveModal)
+        .on('click.archiveModal', '#archive-close-btn', closeArchiveModal)
+        .on('click.archiveModal', '#archive-export-btn', exportArchiveToExcel)
+        .on('input.archiveModal', '#archive-search', renderArchiveModalList)
+        .on('click.archiveModal', '#archive-modal', function(e) {
+            if ($(e.target).is('#archive-modal')) closeArchiveModal();
+        });
+
+    decorateStatusFolders();
+}, 0);
+
+function moveStatusDraftClientId(clientId, targetIndex) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index <= 0) return;
+    const status = statusConfigDraft[index];
+    if (!status || status.fixed) return;
+    const boundedIndex = Math.max(1, Math.min(targetIndex, statusConfigDraft.length - 1));
+    if (boundedIndex === index) return;
+    const [item] = statusConfigDraft.splice(index, 1);
+    statusConfigDraft.splice(boundedIndex, 0, item);
+    renderStatusConfigDraftList();
+}
+
+function reorderStatusDraftClientId(clientId, targetIndex) {
+    const index = statusConfigDraft.findIndex(status => status.clientId === clientId);
+    if (index <= 0) return index;
+    const status = statusConfigDraft[index];
+    if (!status || status.fixed) return index;
+    const boundedIndex = Math.max(1, Math.min(targetIndex, statusConfigDraft.length - 1));
+    if (boundedIndex === index) return index;
+    const [item] = statusConfigDraft.splice(index, 1);
+    statusConfigDraft.splice(boundedIndex, 0, item);
+    return boundedIndex;
+}
+
+function syncStatusDraftOrderFromDom(list) {
+    const order = $(list).children('.status-config-row').map(function() {
+        return this.dataset.clientId || '';
+    }).get();
+    const itemsById = new Map(statusConfigDraft.map(status => [status.clientId, status]));
+    statusConfigDraft = order.map(clientId => itemsById.get(clientId)).filter(Boolean);
+}
+
+function renderStatusConfigDraftList() {
+    const list = $('#status-config-list');
+    if (!list.length) return;
+    list.empty();
+    list.off('dragover.statusConfigList drop.statusConfigList');
+
+    statusConfigDraft.forEach((status, index) => {
+        const row = $('<div>')
+            .addClass('status-config-row')
+            .attr('data-client-id', status.clientId || '');
+        if (status.fixed) {
+            row.addClass('is-fixed');
+        } else {
+            row.attr('draggable', 'true');
+        }
+
+        const input = $('<input>')
+            .attr('type', 'text')
+            .addClass('status-config-input')
+            .val(status.name)
+            .prop('disabled', status.fixed)
+            .attr('placeholder', 'Namn på status');
+        input.on('input', function() {
+            status.name = sanitizeStatusName($(this).val());
+        });
+
+        if (!status.fixed) {
+            row
+                .on('dragstart', function(e) {
+                    const event = e.originalEvent;
+                    if (!event || !event.dataTransfer) return;
+                    list.attr('data-dragging-client-id', status.clientId);
+                    row.addClass('is-dragging');
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', status.clientId);
+                })
+                .on('dragend', function() {
+                    list.removeAttr('data-dragging-client-id');
+                    list.find('.status-config-row').removeClass('is-dragging is-drop-target-before is-drop-target-after');
+                });
+        }
+
+        const main = $('<div>').addClass('status-config-main');
+        if (!status.fixed) {
+            main.append(
+                $('<div>')
+                    .addClass('status-config-drag-handle')
+                    .attr('aria-hidden', 'true')
+            );
+        }
+        main.append(input);
+
+        const actions = $('<div>').addClass('status-config-row-actions');
+        if (!status.fixed) {
+            actions.append(
+                $('<button>')
+                    .attr('type', 'button')
+                    .addClass('btn-ghost status-config-delete-btn')
+                    .text('×')
+                    .on('click', function() { removeStatusDraftItem(status.clientId); })
+            );
+        }
+
+        const itemCount = status.id ? getStatusItemCount(status.id) : 0;
+        const meta = $('<div>').addClass('status-config-meta');
+        meta.text(status.fixed ? 'Fast mapp' : (itemCount > 0 ? `${itemCount} objekt i mappen` : 'Tom mapp'));
+
+        row.append(main, actions, meta);
+        list.append(row);
+    });
+
+    list
+        .on('dragover.statusConfigList', function(e) {
+            const draggingId = list.attr('data-dragging-client-id');
+            if (!draggingId) return;
+            e.preventDefault();
+            const event = e.originalEvent;
+            if (!event) return;
+            const draggedRow = list.children(`.status-config-row[data-client-id="${draggingId}"]`).get(0);
+            if (!draggedRow) return;
+            const candidates = list.children('.status-config-row[draggable="true"]').not(`[data-client-id="${draggingId}"]`).get();
+            let insertBefore = null;
+            for (const candidate of candidates) {
+                const rect = candidate.getBoundingClientRect();
+                if (event.clientY < rect.top + (rect.height / 2)) {
+                    insertBefore = candidate;
+                    break;
+                }
+            }
+            if (insertBefore) {
+                this.insertBefore(draggedRow, insertBefore);
+            } else {
+                this.appendChild(draggedRow);
+            }
+            syncStatusDraftOrderFromDom(this);
+        })
+        .on('drop.statusConfigList', function(e) {
+            const draggingId = list.attr('data-dragging-client-id');
+            if (!draggingId) return;
+            e.preventDefault();
+        });
+}

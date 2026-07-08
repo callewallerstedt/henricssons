@@ -7,18 +7,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=optional" rel="stylesheet">
     <link rel="icon" href="logo.png">
     <link rel="canonical" href="https://www.henricssonsbatkapell.se/bilder-och-exempel"/>
     <meta property="og:title" content="Bilder och exempel - Henricssons B&aring;tkapell"/>
     <meta property="og:description" content="Vi tillverkar kapell till m&aring;nga typer av b&aring;tar. Med v&aring;rat mallregister med egen tillverkning och tillsammans med v&aring;r import av originalkapell fr&aring;n Norge Finland och Danmark s&aring; t&auml;cker vi ett brett register av modeller"/>
-    <meta property="og:image" content="https://henricssonsbatkapell.se/logo.png"/>
+    <meta property="og:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
     <meta property="og:type" content="website"/>
     <meta property="og:url" content="https://www.henricssonsbatkapell.se/bilder-och-exempel"/>
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="Bilder och exempel - Henricssons B&aring;tkapell"/>
     <meta name="twitter:description" content="Vi tillverkar kapell till m&aring;nga typer av b&aring;tar. Med v&aring;rat mallregister med egen tillverkning och tillsammans med v&aring;r import av originalkapell fr&aring;n Norge Finland och Danmark s&aring; t&auml;cker vi ett brett register av modeller"/>
-    <meta name="twitter:image" content="https://henricssonsbatkapell.se/logo.png"/>
+    <meta name="twitter:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
     <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
 
@@ -29,13 +29,13 @@
         .hb-premium #bildModal .modal-backdrop { position: absolute; inset: 0; background: rgba(12,26,43,0.85); }
         .hb-premium #bildModal .modal-content { position: relative; background: #fff; max-width: 90%; max-height: 92%; overflow: auto; padding: 1.5rem 1.5rem 2rem; box-shadow: 0 24px 60px rgba(0,0,0,0.5); }
         .hb-premium #bildModal .slider { position: relative; width: 690px; max-width: 100%; height: 460px; display: flex; align-items: center; justify-content: center; margin: 0 auto; background: var(--cream-2); }
-        .hb-premium #bildModal .slider-main { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
+        .hb-premium #bildModal .slider-main { width: 100%; height: 100%; object-fit: contain; object-position: center; display: block; cursor: pointer; }
         .hb-premium #bildModal .slide-left,
         .hb-premium #bildModal .slide-right { background: rgba(255,255,255,0.9); border: none; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; color: var(--ink); cursor: pointer; position: absolute; top: 50%; transform: translateY(-50%); z-index: 10; font-weight: 700; }
         .hb-premium #bildModal .slide-left { left: 10px; }
         .hb-premium #bildModal .slide-right { right: 10px; }
         .hb-premium #bildModal .thumb-row { max-width: 884px; margin: 0.75rem auto 0; flex-wrap: wrap; display: flex; gap: 6px; justify-content: center; }
-        .hb-premium #bildModal .thumb-row img { width: 80px; height: 60px; object-fit: cover; border: 2px solid transparent; cursor: pointer; opacity: 0.75; transition: opacity .2s, border-color .2s; }
+        .hb-premium #bildModal .thumb-row img { width: 80px; height: 60px; object-fit: contain; object-position: center; border: 2px solid transparent; cursor: pointer; opacity: 0.75; transition: opacity .2s, border-color .2s; background: var(--cream-2); }
         .hb-premium #bildModal .thumb-row img.active,
         .hb-premium #bildModal .thumb-row img:hover { opacity: 1; border-color: var(--brass); }
         .hb-premium #bildModal .modal-close { position: absolute; top: 8px; right: 14px; font-size: 32px; font-weight: 700; cursor: pointer; color: var(--ink); z-index: 12; background: none; border: none; }
@@ -49,6 +49,25 @@
         .hb-premium #fullscreenModal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: none; align-items: center; justify-content: center; z-index: 3000; cursor: pointer; }
         .hb-premium #fullscreenModal.open { display: flex; }
         .hb-premium #fullscreenModal img { max-width: 95%; max-height: 95%; object-fit: contain; }
+        .hb-premium .hb-item > a.is-placeholder-thumb {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .hb-premium .hb-item > a.is-placeholder-thumb img,
+        .hb-premium .hb-item img.is-placeholder-image {
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transform: none;
+        }
+        .hb-premium .hb-item:hover > a.is-placeholder-thumb img,
+        .hb-premium .hb-item:hover img.is-placeholder-image {
+            transform: none;
+        }
         .hb-premium #fullscreenModal .fullscreen-close { position: absolute; top: 20px; right: 30px; font-size: 32px; font-weight: 700; cursor: pointer; color: #fff; background: rgba(0,0,0,0.5); width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border: none; }
         @media (max-width: 768px) {
             .hb-premium #bildModal .slider { width: 100%; height: 320px; }
@@ -207,13 +226,14 @@
                 </div>
                 <div>
                     <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
+                    <div class="hb-footer-partners" aria-label="Partners">
+                        <img src="assets/optimized/partner-jens-sagen.webp" alt="Jens Sagen" loading="lazy" decoding="async"/>
+                        <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-varuste.webp" alt="VA Varuste" loading="lazy" decoding="async"/>
+                        <img src="assets/schultz.png" alt="Schultz Kalecher" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-hansenprotection.png" alt="Hansen Protection" loading="lazy" decoding="async"/>
+                    </div>
                 </div>
             </div>
             <div class="hb-footer-bottom">
@@ -238,11 +258,63 @@
             if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
                 return `${location.protocol}//${location.hostname}:25565`;
             }
-            if (location.hostname.endsWith('.onrender.com') && location.hostname !== 'henricssons-api.onrender.com') {
-                return 'https://henricssons-api.onrender.com';
+            if (location.hostname === 'henricssonsbatkapell.onrender.com') {
+                return `${location.protocol}//${location.host}`;
             }
             return `${location.protocol}//${location.host}`;
         })();
+        const LEGACY_PUBLIC_HOSTS = new Set([
+            'www.henricssonsbatkapell.se',
+            'henricssonsbatkapell.se',
+            'henricssonsbatkapell.onrender.com',
+            'henricssons-api.onrender.com',
+            'henricssons.onrender.com',
+            'henricssons-app.onrender.com',
+            'localhost',
+            '127.0.0.1'
+        ]);
+
+        function normalizeLegacyUrl(value) {
+            // Defensive: any value coming from JSON may use backslashes (dev import)
+            // or point at a dev/legacy host. Always coerce to a path under API_BASE.
+            const raw = String(value || '').trim().replace(/\\/g, '/');
+            if (!raw || raw.startsWith('data:')) return raw;
+            if (!/^https?:\/\//i.test(raw)) return raw;
+            try {
+                const parsed = new URL(raw);
+                if (!LEGACY_PUBLIC_HOSTS.has(parsed.hostname.toLowerCase())) return raw;
+                return `${API_BASE}${parsed.pathname}${parsed.search}${parsed.hash}`;
+            } catch (_) {
+                return raw;
+            }
+        }
+
+        function normalizeImageUrl(value) {
+            const raw = normalizeLegacyUrl(String(value || '').trim().replace(/\\/g, '/'));
+            if (!raw) return `${API_BASE}/logo.png`;
+            if (raw.startsWith('data:')) return raw;
+            if (/^https?:\/\//i.test(raw)) return raw;
+            const clean = raw.replace(/^\.?\//, '');
+            if (clean === 'logo.png') return `${API_BASE}/logo.png`;
+            if (clean.startsWith('assets/') || clean.startsWith('henricssons_bilder/')) {
+                return `${API_BASE}/${clean}`;
+            }
+            return `${API_BASE}/henricssons_bilder/${clean.replace(/^henricssons_bilder\//, '')}`;
+        }
+
+        function extractExampleSlug(source, fallbackSlug) {
+            const raw = normalizeLegacyUrl(source);
+            if (!raw) return String(fallbackSlug || '').trim();
+            try {
+                const parsed = /^https?:\/\//i.test(raw) ? new URL(raw) : new URL(raw, API_BASE);
+                const match = String(parsed.pathname || '').match(/\/exempel\/([^/?#]+)/i);
+                if (match && match[1]) return decodeURIComponent(match[1]);
+            } catch (_) {
+                const match = String(raw).match(/\/exempel\/([^/?#]+)/i);
+                if (match && match[1]) return match[1];
+            }
+            return String(fallbackSlug || '').trim();
+        }
 
         function buildExamplePath(item) {
             const slug = String(item && item.slug || '').trim();
@@ -268,6 +340,33 @@
                 .replace(/'/g, '&#39;');
         }
 
+        function normalizeSearchText(value) {
+            return String(value || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/g, ' ')
+                .trim();
+        }
+
+        function bilderexMatchesSearch(item, query) {
+            const normalizedQuery = normalizeSearchText(query);
+            if (!normalizedQuery) return true;
+            const searchable = normalizeSearchText([
+                item.tillverkare,
+                item.namn,
+                item.kategori,
+                item.variant,
+                item.leverans,
+                item.beskrivning,
+                item.slug
+            ].filter(Boolean).join(' '));
+            const compactSearchable = searchable.replace(/\s+/g, '');
+            const compactQuery = normalizedQuery.replace(/\s+/g, '');
+            if (compactQuery && compactSearchable.includes(compactQuery)) return true;
+            return normalizedQuery.split(/\s+/).every(token => searchable.includes(token) || compactSearchable.includes(token));
+        }
+
         function buildData() {
             bilderexData = [];
             if (extrasData && typeof extrasData === 'object') {
@@ -282,19 +381,9 @@
                         'Sunbrella Plus Kollektion v\u00e4vprover': { label: 'Sunbrella Plus Kollektion v\u00e4vprover', key: 'sunbrella' }
                     };
                     const map = catMap[item.category] || { label: '\u00d6vrigt', key: 'other' };
-                    const imgs = (item.images && item.images.length ? item.images : []).map(img => {
-                        if (img.startsWith('data:')) return img;
-                        const clean = img.replace(/\\/g, '/').replace(/^\.?\//, '');
-                        if (clean.startsWith('assets/') || clean.startsWith('henricssons_bilder/') || clean === 'logo.png') return clean;
-                        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return 'henricssons_bilder/' + clean;
-                        return `${API_BASE}/henricssons_bilder/` + clean.replace(/^henricssons_bilder\//, '');
-                    });
-                    const finalImgs = imgs.length ? imgs : ['logo.png'];
-                    let detailSlug = slug;
-                    if (item.source) {
-                        const m = String(item.source).match(/\/exempel\/([^/?#]+)/i);
-                        if (m && m[1]) detailSlug = m[1];
-                    }
+                    const imgs = (item.images && item.images.length ? item.images : []).map(normalizeImageUrl);
+                    const finalImgs = imgs.length ? imgs : [`${API_BASE}/logo.png`];
+                    const detailSlug = extractExampleSlug(item.source, slug);
                     bilderexData.push({
                         namn: item.model,
                         tillverkare: item.manufacturer || '',
@@ -470,17 +559,13 @@
             bilderexApplyFilter();
         }
         function bilderexApplyFilter() {
-            const search = document.getElementById('bilderex-search').value.trim().toLowerCase();
+            const search = document.getElementById('bilderex-search').value.trim();
             let items = bilderexData;
             if (bilderexCurrentFilter !== 'all') {
                 items = items.filter(item => (item.kategoriKey || '').toLowerCase() === bilderexCurrentFilter);
             }
             if (search) {
-                items = items.filter(item =>
-                    (item.namn && item.namn.toLowerCase().includes(search)) ||
-                    (item.tillverkare && item.tillverkare.toLowerCase().includes(search)) ||
-                    (item.kategori && item.kategori.toLowerCase().includes(search))
-                );
+                items = items.filter(item => bilderexMatchesSearch(item, search));
             }
             bilderexRenderGallery(items);
             bilderexRenderFilters();
@@ -511,6 +596,7 @@
                 const div = document.createElement('div');
                 div.className = 'hb-item';
                 const thumb = (item.images && item.images.length) ? item.images[0] : 'logo.png';
+                const isPlaceholderThumb = /(?:^|\/)logo\.png(?:$|[?#])/i.test(String(thumb || ''));
                 const safeThumb = escapeHtml(thumb);
                 const safeNamn = escapeHtml(item.namn);
                 const safeTillverkare = escapeHtml(item.tillverkare);
@@ -520,8 +606,8 @@
                 const loading = i < 8 ? 'eager' : 'lazy';
                 const priority = i < 8 ? 'high' : 'low';
                 div.innerHTML = `
-                    <a href="${safeExamplePath}">
-                        <img src="${safeThumb}" alt="${safeNamn}" loading="${loading}" decoding="async" fetchpriority="${priority}" onerror="this.style.display='none'"/>
+                    <a href="${safeExamplePath}"${isPlaceholderThumb ? ' class="is-placeholder-thumb"' : ''}>
+                        <img src="${safeThumb}" alt="${safeNamn}" class="${isPlaceholderThumb ? 'is-placeholder-image' : ''}" loading="${loading}" decoding="async" fetchpriority="${priority}" onerror="this.style.display='none'"/>
                     </a>
                     <div class="caption">
                         <div class="cat">${safeKategori}</div>
@@ -603,6 +689,6 @@
             };
         }
     </script>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
+    <script src="/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>

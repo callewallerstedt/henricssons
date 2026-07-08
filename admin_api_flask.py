@@ -1,6 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
+from collections import defaultdict
 import hashlib
 import html
 import hmac
@@ -10,11 +12,12 @@ import os
 import re
 import time
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode, urlparse
+from zoneinfo import ZoneInfo
 
 import requests
 from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_from_directory, has_request_context
@@ -63,15 +66,26 @@ FORM_SUBMISSIONS_FILE = BASE_DIR / "form_submissions.json"
 FORM_PROMPTS_FILE = BASE_DIR / "form_prompts.json"
 PAGE_TEXTS_FILE = BASE_DIR / "page_texts.json"
 AI_SETTINGS_FILE = BASE_DIR / "ai_settings.json"
+STATUS_CONFIG_FILE = BASE_DIR / "status_config.json"
 LOGO_FILE = BASE_DIR / "logo.png"
 IMAGES_ROOT = (BASE_DIR / "henricssons_bilder").resolve()
 MODELS_META_FILE = IMAGES_ROOT / "models_meta.json"
 EXAMPLES_META_FILE = BASE_DIR / "examples_meta.json"
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://henricssons.onrender.com").rstrip("/")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://www.henricssonsbatkapell.se").rstrip("/")
+LEGACY_PUBLIC_HOSTS = {
+    "www.henricssonsbatkapell.se",
+    "henricssonsbatkapell.se",
+    "henricssonsbatkapell.onrender.com",
+    "henricssons-api.onrender.com",
+    "henricssons.onrender.com",
+    "henricssons-app.onrender.com",
+}
 PUBLIC_ATTACHMENT_BASE_URL = os.getenv(
     "PUBLIC_ATTACHMENT_BASE_URL",
-    os.getenv("PUBLIC_API_BASE_URL", "https://henricssons-api.onrender.com"),
+    os.getenv("PUBLIC_API_BASE_URL", PUBLIC_BASE_URL),
 ).rstrip("/")
+STATUS_ACTION_BASE_URL = os.getenv("STATUS_ACTION_BASE_URL", "").strip().rstrip("/")
+SWEDEN_TZ = ZoneInfo("Europe/Stockholm")
 GENERIC_EXAMPLE_DESCRIPTION = (
     "Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning "
     "och tillsammans med vår import av originalkapell från Norge Finland och Danmark så täcker vi "
@@ -89,38 +103,211 @@ CORE_PUBLIC_PATHS = [
     "/kapellforfragan",
 ]
 LEGACY_EXAMPLE_REDIRECTS = {
+    "16-4400": "/exempel/16-4400ht",
+    "16-4400-mod3": "/exempel/16-4400-mod-3",
     "16-ht": "/bilder-och-exempel",
+    "18-siesta": "/bilder-och-exempel",
+    "19-20": "/bilder-och-exempel",
+    "20-dc-2": "/exempel/20-dc",
+    "20-med-vindruta-2": "/exempel/20-med-vindruta",
+    "21-22": "/bilder-och-exempel",
+    "21-23": "/bilder-och-exempel",
+    "21-24": "/bilder-och-exempel",
+    "21-wa": "/exempel/21-wa-s",
     "215-pilot-house": "/bilder-och-exempel",
-    "26-2657": "/exempel/26-2656",
+    "2100sc-2": "/exempel/2100sc",
+    "22-hardtop-2": "/exempel/22-hardtop",
+    "23-24": "/bilder-och-exempel",
+    "23-dc-2": "/exempel/23-dc",
+    "23ht": "/exempel/23ht-2002-2004",
+    "235-sundowner-2": "/exempel/235-sundowner",
+    "235-sundowner-3": "/exempel/235-sundowner",
+    "24-25": "/bilder-och-exempel",
+    "24-26": "/bilder-och-exempel",
+    "24-27": "/bilder-och-exempel",
+    "25-27": "/bilder-och-exempel",
+    "25-28": "/bilder-och-exempel",
+    "26-2656": "/exempel/2655",
+    "26-2657": "/exempel/2655",
     "26-aldre-med-traram-doghouse-specialkapell": "/exempel/26-102-71-aldre-korta-std-traram-doghouse",
     "26-dc-utan-targa": "/exempel/26-dc",
+    "26-ht-2": "/exempel/26-ht",
+    "26dc": "/exempel/26-dc",
+    "27-28": "/bilder-och-exempel",
+    "27-de-aldre-arsmodellerna-70-80-tal": "/bilder-och-exempel",
+    "27-oc": "/exempel/27-oc-ver-2",
     "27-sun-cruiser": "/bilder-och-exempel",
     "28-2": "/exempel/28",
+    "28-c": "/exempel/28",
+    "29ht-2": "/exempel/29ht",
     "30-scampi": "/bilder-och-exempel",
+    "3003": "/exempel/3003-originalkapell",
     "31-sprayhood-for-22mm-bagar": "/exempel/if-sprayhood-22mm-bagar",
+    "311-312": "/bilder-och-exempel",
+    "311-313": "/bilder-och-exempel",
+    "311-314": "/bilder-och-exempel",
+    "32-33": "/bilder-och-exempel",
     "32-specialsprayhood": "/exempel/32",
+    "320": "/bilder-och-exempel",
     "33": "/bilder-och-exempel",
+    "330-targa-2": "/exempel/330-targa",
     "34-3": "/exempel/34",
+    "34-35": "/bilder-och-exempel",
+    "34-36": "/bilder-och-exempel",
+    "34-37": "/bilder-och-exempel",
+    "342": "/bilder-och-exempel",
+    "480-akterkapell-original": "/exempel/480-sc-akterkapell-original",
+    "5-5-6": "/exempel/5-5",
+    "50-open": "/bilder-och-exempel",
+    "50-tc-original-hamnkapell": "/bilder-och-exempel",
+    "500-clx-commander-2": "/exempel/500-clx-commander",
+    "5000dc-2": "/exempel/5000dc",
+    "5020": "/bilder-och-exempel",
+    "5031": "/bilder-och-exempel",
     "505-ht-d-a": "/exempel/505-ht",
-    "510gts-konsollhuv": "/exempel/510-pulpethuv",
+    "5057-captainblue": "/exempel/5057-captain-blue",
+    "5058-darknavy": "/exempel/5058-dark-navy",
+    "510-gti-2": "/exempel/510-gti",
+    "510-pulpethuv": "/bilder-och-exempel",
+    "510gts-konsollhuv": "/exempel/510gti",
+    "510ht-2": "/exempel/510ht",
+    "512-excel": "/bilder-och-exempel",
+    "512-excel-2": "/bilder-och-exempel",
+    "512-excel-dynsats-aktersoffa": "/bilder-och-exempel",
+    "515-invader-explorer-2": "/exempel/515-invader-explorer",
+    "5150-5220": "/bilder-och-exempel",
+    "520-ht-2": "/exempel/520-ht",
+    "520dc": "/bilder-och-exempel",
+    "520ht-2": "/exempel/520ht",
+    "5210": "/bilder-och-exempel",
+    "5220-5150": "/bilder-och-exempel",
+    "5220-bow-rider": "/exempel/5220-5150-bow-rider",
+    "52cc": "/bilder-och-exempel",
+    "530dc-2": "/exempel/530dc",
+    "530dc-3": "/exempel/530dc",
+    "535-de-luxe-2": "/exempel/535-de-luxe",
+    "535-invader-2": "/exempel/535-invader",
+    "53br-2": "/exempel/53br",
+    "540-dc-cruiser": "/exempel/540dc-cruiser",
+    "5400": "/bilder-och-exempel",
+    "55-br-original-hamnkapell": "/bilder-och-exempel",
+    "555-611": "/bilder-och-exempel",
+    "561-ht-2": "/exempel/561-ht",
     "565-ht": "/exempel/560-ht",
+    "56sc": "/exempel/56-sc",
+    "57-br-cross": "/bilder-och-exempel",
+    "5700-open-aktersoffa-dynsats": "/bilder-och-exempel",
+    "5700-wa": "/bilder-och-exempel",
+    "575ht-2": "/exempel/575ht",
     "5820-58br-original-dynsats": "/exempel/5820",
+    "5910": "/bilder-och-exempel",
+    "5930": "/bilder-och-exempel",
+    "610-dorado-2": "/exempel/610-dorado",
+    "6110": "/bilder-och-exempel",
+    "6110-6111": "/bilder-och-exempel",
+    "6110-6112": "/bilder-och-exempel",
+    "620-dc-2": "/exempel/620-dc",
+    "620-dc-3": "/exempel/620-dc",
+    "620-dc-4": "/exempel/620-dc",
+    "620-dc-5": "/exempel/620-dc",
+    "620c-d-a-2": "/exempel/620c-d-a",
+    "620dc-2": "/exempel/620dc",
+    "620ht-2": "/exempel/620ht",
+    "620ht-3": "/exempel/620ht",
+    "621-622": "/bilder-och-exempel",
+    "6210-62cc-2": "/exempel/6210-62cc",
+    "6210-62cc-3": "/exempel/6210-62cc",
     "630wa-fam": "/exempel/6230wa",
     "630wa-fam-2": "/exempel/6230wa",
     "635-wa-utan-racke-vindruta": "/exempel/635-wa",
     "640-dc-original-hamnkapell-2": "/exempel/640-dc-original-hamnkapell",
+    "640-weekender-2": "/exempel/640-weekender",
+    "640ht-2": "/exempel/640ht",
+    "645-beetle-2": "/exempel/645-beetle",
+    "64dc": "/exempel/64-dc",
+    "66dc-2": "/exempel/66dc",
+    "6600-wa-korta-kapellversion-utan-targabage": "/bilder-och-exempel",
     "6600-wa-med-targabage": "/bilder-och-exempel",
     "68-br-originalkapell": "/exempel/68-dc-originalkapell",
     "680-snipa-originalkapell": "/bilder-och-exempel",
+    "68dc": "/bilder-och-exempel",
+    "68dc-2": "/bilder-och-exempel",
+    "700-701": "/bilder-och-exempel",
+    "700-miniton-2": "/exempel/700-miniton",
+    "700-weekender-originalkapell-2": "/exempel/700-weekender-originalkapell",
+    "703-704": "/bilder-och-exempel",
+    "705-voyager-2": "/exempel/705-voyager",
+    "705-voyager-3": "/exempel/705-voyager",
+    "740-741": "/bilder-och-exempel",
+    "75-cross-br": "/bilder-och-exempel",
+    "75br": "/bilder-och-exempel",
+    "76dc": "/exempel/76-dc",
+    "760-dc-2": "/exempel/760-dc",
     "7700ht-originalkapell": "/bilder-och-exempel",
+    "78-7801": "/bilder-och-exempel",
+    "78-cirrus-2": "/exempel/78-cirrus",
+    "78-cirrus-7": "/exempel/78-cirrus",
+    "79-dc-hamnkapell": "/bilder-och-exempel",
+    "88-dc-hamnkapell": "/bilder-och-exempel",
+    "900-901": "/bilder-och-exempel",
     "95-sprayhood-till-originalbagar": "/exempel/cumulus-sprayhood-pa-originalbagar",
+    "batstol-mini": "/bilder-och-exempel",
+    "batstol-va-elite-s": "/bilder-och-exempel",
+    "batstol-va-mini-gt": "/bilder-och-exempel",
+    "cumulus": "/exempel/cumulus-sittbrunnskapell",
+    "cumulus-2": "/exempel/cumulus-sittbrunnskapell",
+    "cumulus-3": "/exempel/cumulus-sprayhood-pa-originalbagar",
+    "d-55": "/exempel/d-55-5500dc",
+    "d-55-osv-originalkapell": "/bilder-och-exempel",
+    "d65": "/bilder-och-exempel",
+    "dc-21-22": "/bilder-och-exempel",
+    "hajen-2": "/exempel/hajen",
+    "hajen-3": "/exempel/hajen",
+    "hajen-4": "/exempel/hajen",
+    "hr-510-akterkapell-i-original": "/bilder-och-exempel",
+    "husky-r7": "/bilder-och-exempel",
+    "if": "/exempel/if-sprayhood-22mm-bagar",
+    "if-2": "/exempel/if-sprayhood-22mm-bagar",
+    "imperial": "/bilder-och-exempel",
+    "l-2": "/exempel/l",
     "le": "/exempel/l",
     "magnum-dynsats-original-1999-2001": "/exempel/magnum-dynsats-original",
     "magnum-dynsats-original-2010-2014": "/exempel/magnum-dynsats-original",
     "magnum-original-hamnkapell-02-10": "/exempel/magnum-hamnkapell",
+    "markilux-37-356-cherryred": "/bilder-och-exempel",
+    "maxi": "/bilder-och-exempel",
+    "p023-arcticblue": "/exempel/p023-artic-blue",
+    "p024-atlanticblue": "/exempel/p024-atlantic-blue",
+    "p057": "/bilder-och-exempel",
     "s51": "/exempel/s52",
+    "s64-original-dynsats": "/bilder-och-exempel",
+    "sprayhood-och-sittbrunnskapell-2": "/exempel/sprayhood-och-sittbrunnskapell",
+    "t51": "/bilder-och-exempel",
+    "t62-forkapell": "/bilder-och-exempel",
+    "t7-batkapell-2015--original": "/exempel/t7-batkapell-2015-original",
+    "t8-batkapell--14-16-original": "/exempel/t8-batkapell-14-16-original",
+    "x": "/exempel/x-med-kapellbox",
+    "x-original-hamnkapell-2014-2020": "/bilder-och-exempel",
+    "xl-2000-2003": "/exempel/xl-1997-1999",
+    "xl-2008-original-dynsats": "/exempel/xl-2004-2007-original-dynsats",
+    "xl-2012": "/bilder-och-exempel",
+    "xl-original-dynsats-1999-2003": "/exempel/xl-1997-1999",
+    "xl-originalkapell": "/exempel/xl-originalkapell-2004-2011",
+    "xxl-dynsats": "/bilder-och-exempel",
     "xxl-hamnkapell-2015-2019": "/exempel/xxl",
     "xxl-originalkapell-2015-2019": "/exempel/xxl",
+    "z7-8": "/exempel/z7",
+    "z8-9": "/exempel/z8",
+    "24-tour-originalkapell": "/bilder-och-exempel",
+    "510-dc-cruiser": "/bilder-och-exempel",
+    "54-br-cross-hamnkapell": "/bilder-och-exempel",
+    "570-cc-konsollhuv": "/bilder-och-exempel",
+    "628-duo": "/bilder-och-exempel",
+    "65-dc-originalkapell-2014-19": "/exempel/65-dc",
+    "79-dc-hamnkapell-utan-stotta": "/exempel/79-dc-originalkapell",
+    "magnum-original-hamnkapell-2011-2017": "/exempel/magnum-hamnkapell",
+    "r6-original-hamnkapell-2019-osv": "/bilder-och-exempel",
+    "suzumar": "/bilder-och-exempel",
 }
 
 DEFAULT_DATABASE_URL = f"sqlite:///{(BASE_DIR / 'henricssons.db').as_posix()}"
@@ -144,11 +331,7 @@ DEFAULT_ALLOWED_ORIGINS = ",".join(
     [
         "https://henricssonsbatkapell.se",
         "https://www.henricssonsbatkapell.se",
-        "https://henricssons.se",
-        "https://www.henricssons.se",
-        "https://henricssons.onrender.com",
-        "https://henricssons-app.onrender.com",
-        "https://henricssons-api.onrender.com",
+        "https://henricssonsbatkapell.onrender.com",
         "http://localhost:25565",
         "http://127.0.0.1:25565",
         "http://localhost:3000",
@@ -158,11 +341,7 @@ DEFAULT_ALLOWED_ORIGINS = ",".join(
 REQUIRED_ALLOWED_ORIGINS = {
     "https://henricssonsbatkapell.se",
     "https://www.henricssonsbatkapell.se",
-    "https://henricssons.se",
-    "https://www.henricssons.se",
-    "https://henricssons.onrender.com",
-    "https://henricssons-app.onrender.com",
-    "https://henricssons-api.onrender.com",
+    "https://henricssonsbatkapell.onrender.com",
 }
 ALLOWED_ORIGINS = {
     origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",") if origin.strip()
@@ -190,9 +369,43 @@ ATTACHMENT_MIME_BY_EXT = {
     ".pdf": "application/pdf",
 }
 STATUS_FLOW = ["nya-inskick", "vantar-pa-svar", "i-produktion", "redo-for-leverans"]
+DEFAULT_STATUS_CONFIG: List[Dict[str, Any]] = [
+    {"id": "nya-inskick", "name": "Nya inskick", "fixed": True},
+    {"id": "vantar-pa-svar", "name": "Väntar på svar", "fixed": False},
+    {"id": "i-produktion", "name": "I produktion", "fixed": False},
+    {"id": "redo-for-leverans", "name": "Redo för leverans", "fixed": False},
+]
+MAX_WORKFLOW_STATUSES = 12
+MAX_STATUS_NAME_CHARS = 40
+RESERVED_STATUS_IDS = {"todo", "arkiv"}
 MOJIBAKE_MARKERS = ("Ã", "Â", "â")
 ADMIN_SESSION_COOKIE = "henricssons_admin"
 ADMIN_SESSION_MAX_AGE = 60 * 60 * 12
+EMAIL_STATUS_ACTION_MAX_AGE = 60 * 60 * 24 * 30
+EMAIL_STATUS_ACTION_SCANNER_UA_PARTS = (
+    "bot",
+    "crawl",
+    "headless",
+    "lighthouse",
+    "monitor",
+    "preview",
+    "python-requests",
+    "spider",
+    "uptime",
+    "validator",
+    "wget/",
+    "curl/",
+    "barracuda",
+    "defender",
+    "mimecast",
+    "proofpoint",
+    "safe links",
+    "safelinks",
+    "scanner",
+    "security",
+    "urlscan",
+    "virustotal",
+)
 FORM_RATE_LIMIT_WINDOW = 60
 FORM_RATE_LIMIT_MAX = 8
 FORM_RATE_LIMIT_LONG_WINDOW = 60 * 60
@@ -205,6 +418,14 @@ CHAT_WIDGET_DISABLED_JS = (
     "window.HenricssonsChatbotDisabled = true;\n"
     "document.documentElement.classList.add('henricssons-chatbot-disabled');\n"
 )
+try:
+    FORM_BACKGROUND_WORKERS = max(1, int(os.getenv("FORM_BACKGROUND_WORKERS", "2")))
+except ValueError:
+    FORM_BACKGROUND_WORKERS = 2
+FORM_BACKGROUND_EXECUTOR = ThreadPoolExecutor(
+    max_workers=FORM_BACKGROUND_WORKERS,
+    thread_name_prefix="form-bg",
+)
 
 
 def is_env_flag_enabled(name: str, default: str = "0") -> bool:
@@ -215,6 +436,19 @@ def is_env_flag_enabled(name: str, default: str = "0") -> bool:
         raw = os.getenv(name.lower())
     value = str(raw if raw is not None else default).strip().lower()
     return value in {"1", "true", "yes", "on"}
+
+
+def enqueue_form_background_task(label: str, func: Any, *args: Any, **kwargs: Any) -> None:
+    def runner() -> None:
+        try:
+            func(*args, **kwargs)
+        except Exception as exc:
+            print(f"{label} failed: {exc}")
+
+    try:
+        FORM_BACKGROUND_EXECUTOR.submit(runner)
+    except Exception as exc:
+        print(f"Could not queue {label}: {exc}")
 
 
 def is_public_chatbot_enabled() -> bool:
@@ -251,7 +485,7 @@ class FormSubmission(Base):
             "fields": self.fields,
             "form_summary": self.form_summary,
             "proposed_response": self.proposed_response,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "timestamp": serialize_utc_datetime(self.timestamp),
             "status": self.status,
             "read": self.read,
             "submitted_via": submitted_via,
@@ -274,6 +508,17 @@ class SiteContent(Base):
     key = Column(String, primary_key=True)
     data = Column(SQLJSON, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AnalyticsEvent(Base):
+    __tablename__ = "analytics_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_type = Column(String, nullable=False, default="pageview", index=True)
+    path = Column(String, nullable=False, default="", index=True)
+    referrer_host = Column(String, nullable=False, default="", index=True)
+    search_query = Column(String, nullable=False, default="", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
 class SubmissionAttachment(Base):
@@ -343,6 +588,68 @@ class TempProductImage(Base):
             "sort_order": int(self.sort_order or 0),
             "url": f"/api/temp_product_image/{self.id}",
         }
+
+
+class BoatBrand(Base):
+    __tablename__ = "boat_brands"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, default="")
+    description = Column(Text, nullable=False, default="")
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self, images: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name or "",
+            "description": self.description or "",
+            "sort_order": int(self.sort_order or 0),
+            "images": images or [],
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class BoatBrandImage(Base):
+    __tablename__ = "boat_brand_images"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id = Column(Integer, ForeignKey("boat_brands.id", ondelete="CASCADE"), index=True, nullable=False)
+    filename = Column(String, nullable=False, default="")
+    mime = Column(String, nullable=False, default="image/jpeg")
+    data = Column(LargeBinary, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_meta(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "brand_id": self.brand_id,
+            "filename": self.filename or "",
+            "mime": self.mime or "image/jpeg",
+            "sort_order": int(self.sort_order or 0),
+            "url": f"/api/boat_brand_image/{self.id}",
+        }
+
+
+class SiteImage(Base):
+    """Images uploaded through the admin panel.
+
+    Render's disk is reset on every deploy, so the file written by
+    /api/upload_image disappears. The same bytes are stored here and
+    /henricssons_bilder/<path> falls back to this table when the file is
+    missing from disk.
+    """
+
+    __tablename__ = "site_images"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    rel_path = Column(String, unique=True, index=True, nullable=False)
+    mime = Column(String, nullable=False, default="image/jpeg")
+    data = Column(LargeBinary, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 engine = None
@@ -442,6 +749,41 @@ def verify_attachment_token(attachment_id: int, token: str) -> bool:
     return hmac.compare_digest(expected, token.strip())
 
 
+def get_status_action_secret() -> str:
+    return ADMIN_PANEL_PASSWORD or ADMIN_API_KEY or MAILGUN_API_KEY or "status-action-local-fallback"
+
+
+def sign_submission_status_action(submission_id: str, status_id: str, issued_at: int) -> str:
+    payload = f"submission-status:{submission_id}:{status_id}:{issued_at}"
+    return hmac.new(
+        get_status_action_secret().encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+
+
+def verify_submission_status_action(submission_id: str, status_id: str, issued_at: int, token: str) -> bool:
+    if not submission_id or not status_id or not token:
+        return False
+    if issued_at < 1 or int(time.time()) - issued_at > EMAIL_STATUS_ACTION_MAX_AGE:
+        return False
+    expected = sign_submission_status_action(submission_id, status_id, issued_at)
+    return hmac.compare_digest(expected, str(token or "").strip())
+
+
+def is_probable_email_link_scanner_request() -> bool:
+    user_agent = str(request.headers.get("User-Agent", "") or "").strip().lower()
+    if not user_agent:
+        return True
+    if any(part in user_agent for part in EMAIL_STATUS_ACTION_SCANNER_UA_PARTS):
+        return True
+    purpose_headers = " ".join(
+        str(request.headers.get(name, "") or "").strip().lower()
+        for name in ("Purpose", "Sec-Purpose", "X-Purpose", "X-Moz")
+    )
+    return "prefetch" in purpose_headers or "preview" in purpose_headers
+
+
 def check_admin_access() -> bool:
     if verify_admin_session(request.cookies.get(ADMIN_SESSION_COOKIE, "")):
         return True
@@ -463,6 +805,163 @@ def admin_required(fn):
         return fn(*args, **kwargs)
 
     return wrapper
+
+
+TRACKED_RESPONSE_MIME_PREFIXES = ("text/html",)
+TRACKED_EXCLUDED_PATH_PREFIXES = ("/api/", "/admin", "/assets/", "/henricssons_bilder/")
+TRACKED_EXCLUDED_PATHS = {
+    "/robots.txt",
+    "/sitemap.xml",
+    "/healthz",
+    "/favicon.ico",
+}
+TRACKED_BOT_USER_AGENT_PARTS = (
+    "bot",
+    "crawl",
+    "spider",
+    "slurp",
+    "bingpreview",
+    "facebookexternalhit",
+    "whatsapp",
+    "telegrambot",
+    "preview",
+    "uptime",
+    "monitor",
+    "validator",
+    "lighthouse",
+    "pagespeed",
+    "headless",
+    "python-requests",
+    "curl/",
+    "wget/",
+)
+
+
+def normalize_tracked_path(path: str) -> str:
+    clean = str(path or "").strip()
+    if not clean:
+        return "/"
+    if clean != "/" and clean.endswith("/"):
+        clean = clean.rstrip("/")
+    return clean or "/"
+
+
+def normalize_search_query(value: str) -> str:
+    query = " ".join(str(value or "").split()).strip()
+    return query[:200]
+
+
+def ensure_utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def serialize_utc_datetime(value: Optional[datetime]) -> Optional[str]:
+    if value is None:
+        return None
+    return ensure_utc_datetime(value).isoformat().replace("+00:00", "Z")
+
+
+def format_swedish_timestamp(value: Any) -> str:
+    try:
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            raw = str(value or "").strip()
+            if not raw:
+                return ""
+            if raw.endswith("Z"):
+                raw = raw.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(raw)
+        localized = ensure_utc_datetime(dt).astimezone(SWEDEN_TZ)
+        return localized.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(value or "")
+
+
+def normalize_search_text(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", str(value or "").lower())
+    without_marks = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", " ", without_marks).strip()
+
+
+def example_matches_search(item: Dict[str, Any], query: str) -> bool:
+    normalized_query = normalize_search_text(query)
+    if not normalized_query:
+        return True
+    fields = [
+        item.get("manufacturer", ""),
+        item.get("model", ""),
+        item.get("category", ""),
+        item.get("variant", ""),
+        item.get("description", ""),
+        item.get("delivery", ""),
+        item.get("canonical_slug", ""),
+        item.get("fallback_slug", ""),
+    ]
+    haystack = normalize_search_text(" ".join(str(field or "") for field in fields))
+    compact_haystack = haystack.replace(" ", "")
+    compact_query = normalized_query.replace(" ", "")
+    if compact_query and compact_query in compact_haystack:
+        return True
+    return all(token in haystack or token in compact_haystack for token in normalized_query.split())
+
+
+def extract_referrer_host(referrer: str) -> str:
+    raw = str(referrer or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = urlparse(raw)
+    except Exception:
+        return ""
+    return (parsed.netloc or "").strip().lower()[:120]
+
+
+def should_track_analytics_response(response: Response) -> bool:
+    if request.method != "GET":
+        return False
+    user_agent = str(request.headers.get("User-Agent", "") or "").strip().lower()
+    if not user_agent or any(part in user_agent for part in TRACKED_BOT_USER_AGENT_PARTS):
+        return False
+    purpose_headers = " ".join(
+        str(request.headers.get(name, "") or "").strip().lower()
+        for name in ("Purpose", "Sec-Purpose", "X-Purpose", "X-Moz")
+    )
+    if "prefetch" in purpose_headers or "preview" in purpose_headers:
+        return False
+    if response.status_code != 200:
+        return False
+    mimetype = str(response.mimetype or "").lower()
+    if not any(mimetype.startswith(prefix) for prefix in TRACKED_RESPONSE_MIME_PREFIXES):
+        return False
+    path = normalize_tracked_path(request.path)
+    if path in TRACKED_EXCLUDED_PATHS:
+        return False
+    if any(path.startswith(prefix) for prefix in TRACKED_EXCLUDED_PATH_PREFIXES):
+        return False
+    return True
+
+
+def record_analytics_event(event_type: str, path: str, referrer_host: str = "", search_query: str = "") -> None:
+    db = get_db()
+    if not db:
+        return
+    try:
+        db.add(
+            AnalyticsEvent(
+                event_type=str(event_type or "pageview")[:32],
+                path=normalize_tracked_path(path)[:255],
+                referrer_host=str(referrer_host or "")[:120],
+                search_query=normalize_search_query(search_query),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
 
 
 def render_admin_login(error: str = "") -> Response:
@@ -519,8 +1018,38 @@ def enforce_public_host() -> Optional[Any]:
     proto = request.headers.get("X-Forwarded-Proto", request.scheme or "http").split(",")[0].strip().lower()
     if host == PRIMARY_PUBLIC_HOST and proto == "https":
         return None
-    target = f"https://{PRIMARY_PUBLIC_HOST}{request.full_path}".rstrip("?")
+    target_path = request.path or "/"
+    if target_path == "/index.html":
+        target_path = "/"
+    elif target_path.endswith(".html"):
+        target_path = target_path[:-5]
+    query = request.query_string.decode("utf-8", errors="ignore")
+    target = f"https://{PRIMARY_PUBLIC_HOST}{target_path}"
+    if query:
+        target = f"{target}?{query}"
     return redirect(target, code=301)
+
+
+@app.after_request
+def capture_public_analytics(response: Response) -> Response:
+    try:
+        if should_track_analytics_response(response):
+            path = normalize_tracked_path(request.path)
+            search_query = ""
+            event_type = "pageview"
+            if path == "/search":
+                search_query = normalize_search_query(request.args.get("q") or request.args.get("query") or "")
+                if search_query:
+                    event_type = "search"
+            record_analytics_event(
+                event_type=event_type,
+                path=path,
+                referrer_host=extract_referrer_host(request.headers.get("Referer", "")),
+                search_query=search_query,
+            )
+    except Exception:
+        pass
+    return response
 
 
 def read_json_file(path: Path, default: Any) -> Any:
@@ -574,6 +1103,22 @@ def absolute_public_url(path: str) -> str:
     return f"{PUBLIC_BASE_URL}{clean}"
 
 
+def normalize_public_reference(value: str) -> str:
+    clean = str(value or "").strip().replace("\\", "/")
+    if not clean or clean.startswith("data:"):
+        return clean
+    parsed = urlparse(clean)
+    hostname = (parsed.hostname or "").strip().lower()
+    if parsed.scheme in {"http", "https"} and hostname in LEGACY_PUBLIC_HOSTS:
+        path = parsed.path or "/"
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+        if parsed.fragment:
+            path = f"{path}#{parsed.fragment}"
+        return absolute_public_url(path)
+    return clean
+
+
 def normalize_example_record(raw: Any, fallback_slug: str = "") -> Dict[str, Any]:
     if not isinstance(raw, dict):
         return {}
@@ -587,10 +1132,28 @@ def normalize_example_record(raw: Any, fallback_slug: str = "") -> Dict[str, Any
         "variant": str(raw.get("variant", "") or "").strip(),
         "delivery": str(raw.get("delivery", "") or "").strip(),
         "category": str(raw.get("category", "") or "").strip(),
-        "images": [str(image or "").strip() for image in images if str(image or "").strip()],
-        "source": str(raw.get("source", "") or "").strip(),
+        "images": [normalize_public_reference(str(image or "").strip()) for image in images if str(image or "").strip()],
+        "source": normalize_public_reference(str(raw.get("source", "") or "").strip()),
         "fallback_slug": fallback_slug.strip(),
     }
+
+
+def normalize_example_payload(data: Any) -> Dict[str, Dict[str, Any]]:
+    if not isinstance(data, dict):
+        return {}
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for key, raw in data.items():
+        normalized[str(key)] = normalize_example_record(raw, fallback_slug=str(key))
+    return normalized
+
+
+def merge_example_payload_dicts(*payloads: Any) -> Dict[str, Dict[str, Any]]:
+    merged: Dict[str, Dict[str, Any]] = {}
+    for payload in payloads:
+        normalized = normalize_example_payload(payload)
+        for key, record in normalized.items():
+            merged[key] = merge_example_records(merged.get(key, {}), record)
+    return merged
 
 
 def extract_example_slug(source: str, fallback_slug: str = "") -> str:
@@ -662,31 +1225,162 @@ def merge_example_records(base_record: Dict[str, Any], override_record: Dict[str
     return merged
 
 
+def example_identity_key(record: Dict[str, Any]) -> Tuple[str, str]:
+    return (
+        normalize_search_text(str(record.get("manufacturer", "") or "")),
+        normalize_search_text(str(record.get("model", "") or "")),
+    )
+
+
+def example_fields_match(left: Any, right: Any) -> bool:
+    left_normalized = normalize_search_text(str(left or ""))
+    right_normalized = normalize_search_text(str(right or ""))
+    if not left_normalized or not right_normalized:
+        return False
+    return (
+        left_normalized == right_normalized
+        or left_normalized in right_normalized
+        or right_normalized in left_normalized
+    )
+
+
+def score_authoritative_example_match(
+    example_record: Dict[str, Any],
+    candidate_record: Dict[str, Any],
+    fallback_slug: str,
+    source_slug: str,
+) -> int:
+    score = 0
+    candidate_canonical = str(candidate_record.get("canonical_slug", "") or "").strip()
+    candidate_fallback = str(candidate_record.get("fallback_slug", "") or "").strip()
+
+    if fallback_slug and fallback_slug == candidate_fallback:
+        score += 100
+    if fallback_slug and fallback_slug == candidate_canonical:
+        score += 80
+    if source_slug and source_slug == candidate_canonical:
+        score += 60
+    if example_fields_match(example_record.get("variant"), candidate_record.get("variant")):
+        score += 30
+    if example_fields_match(example_record.get("delivery"), candidate_record.get("delivery")):
+        score += 20
+    if example_fields_match(example_record.get("category"), candidate_record.get("category")):
+        score += 10
+
+    return score
+
+
+def find_authoritative_example_match(
+    example_record: Dict[str, Any],
+    fallback_slug: str,
+    source_slug: str,
+    authoritative_entries: Dict[str, Dict[str, Any]],
+    authoritative_aliases: Dict[str, str],
+    identity_index: Dict[Tuple[str, str], List[str]],
+) -> Optional[str]:
+    direct_slug = authoritative_aliases.get(fallback_slug)
+    if direct_slug:
+        direct_record = authoritative_entries.get(direct_slug, {})
+        if example_identity_key(example_record) == example_identity_key(direct_record):
+            return direct_slug
+
+    candidates = identity_index.get(example_identity_key(example_record), [])
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    best_slug: Optional[str] = None
+    best_score = -1
+    score_tie = False
+
+    for candidate_slug in candidates:
+        candidate_record = authoritative_entries.get(candidate_slug, {})
+        score = score_authoritative_example_match(example_record, candidate_record, fallback_slug, source_slug)
+        if score > best_score:
+            best_slug = candidate_slug
+            best_score = score
+            score_tie = False
+        elif score == best_score:
+            score_tie = True
+
+    if best_slug and not score_tie and best_score > 0:
+        return best_slug
+    return None
+
+
 def build_example_registry() -> Dict[str, Dict[str, Any]]:
     registry: Dict[str, Dict[str, Any]] = {}
+    authoritative_entries: Dict[str, Dict[str, Any]] = {}
+    authoritative_aliases: Dict[str, str] = {}
 
-    models_meta = read_json_file(MODELS_META_FILE, {})
+    # Merge admin edits stored in the database with the in-repo file, same as
+    # the /henricssons_bilder/models_meta.json route, so server-rendered
+    # /exempel pages and the sitemap keep reflecting admin changes after a
+    # redeploy resets the disk.
+    stored_models_meta = get_site_content("models_meta")
+    models_meta = merge_example_payload_dicts(
+        stored_models_meta if isinstance(stored_models_meta, dict) else {},
+        read_json_file(MODELS_META_FILE, {}),
+    )
     if isinstance(models_meta, dict):
         for key, raw in models_meta.items():
             normalized = normalize_example_record(raw, fallback_slug=str(key))
             canonical_slug = extract_example_slug(normalized.get("source", ""), str(key))
             normalized["canonical_slug"] = canonical_slug
             if canonical_slug:
-                registry[canonical_slug] = merge_example_records(registry.get(canonical_slug, {}), normalized)
+                authoritative_entries[canonical_slug] = merge_example_records(authoritative_entries.get(canonical_slug, {}), normalized)
+                authoritative_aliases[canonical_slug] = canonical_slug
             if key and str(key) != canonical_slug:
-                registry[str(key)] = merge_example_records(registry.get(str(key), {}), normalized)
+                authoritative_aliases[str(key)] = canonical_slug
 
-    examples_meta = read_json_file(EXAMPLES_META_FILE, {})
+    identity_index: Dict[Tuple[str, str], List[str]] = defaultdict(list)
+    for canonical_slug, record in authoritative_entries.items():
+        identity = example_identity_key(record)
+        if all(identity):
+            identity_index[identity].append(canonical_slug)
+
+    stored_examples_meta = get_site_content("examples_meta")
+    examples_meta = merge_example_payload_dicts(
+        stored_examples_meta if isinstance(stored_examples_meta, dict) else {},
+        read_json_file(EXAMPLES_META_FILE, {}),
+    )
     if isinstance(examples_meta, dict):
         for key, raw in examples_meta.items():
             fallback_slug = str(key).split("::", 1)[-1].strip()
             normalized = normalize_example_record(raw, fallback_slug=fallback_slug)
             canonical_slug = extract_example_slug(normalized.get("source", ""), fallback_slug)
             normalized["canonical_slug"] = canonical_slug
+
+            matched_slug = find_authoritative_example_match(
+                normalized,
+                fallback_slug,
+                canonical_slug,
+                authoritative_entries,
+                authoritative_aliases,
+                identity_index,
+            )
+            if matched_slug:
+                base_record = authoritative_entries.get(matched_slug, {})
+                enrichment = dict(normalized)
+                enrichment["source"] = str(base_record.get("source", "") or "").strip()
+                enrichment["canonical_slug"] = matched_slug
+                enrichment["fallback_slug"] = str(base_record.get("fallback_slug", "") or "").strip() or matched_slug
+                authoritative_entries[matched_slug] = merge_example_records(base_record, enrichment)
+                continue
+
             if canonical_slug:
                 registry[canonical_slug] = merge_example_records(registry.get(canonical_slug, {}), normalized)
             if fallback_slug and fallback_slug != canonical_slug:
                 registry[fallback_slug] = merge_example_records(registry.get(fallback_slug, {}), normalized)
+
+    for canonical_slug, record in authoritative_entries.items():
+        registry[canonical_slug] = merge_example_records(registry.get(canonical_slug, {}), record)
+
+    for alias_slug, canonical_slug in authoritative_aliases.items():
+        base_record = authoritative_entries.get(canonical_slug, {})
+        if base_record:
+            registry[alias_slug] = merge_example_records(registry.get(alias_slug, {}), base_record)
 
     return registry
 
@@ -696,6 +1390,10 @@ def list_canonical_examples() -> List[Dict[str, Any]]:
     for slug, record in build_example_registry().items():
         canonical_slug = str(record.get("canonical_slug", "") or "").strip()
         if not canonical_slug:
+            continue
+        # Slugs shadowed by a legacy redirect never resolve to a page of their
+        # own, so they must not appear in sitemaps, search or related links.
+        if canonical_slug in LEGACY_EXAMPLE_REDIRECTS:
             continue
         record_with_slug = dict(record)
         record_with_slug["canonical_slug"] = canonical_slug
@@ -831,31 +1529,43 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         }
         .seo-gallery-stage {
             position: relative;
-            min-height: 420px;
+            min-height: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1rem 4.25rem;
+            padding: 0;
             background: var(--cream-2);
             overflow: hidden;
         }
         .seo-gallery-main {
             position: relative;
             width: 100%;
-            height: 100%;
-            min-height: 420px;
+            height: auto;
+            min-height: 0;
             cursor: zoom-in;
             overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .seo-gallery-main img {
             width: 100%;
             max-width: 100%;
-            height: 100%;
-            min-height: 420px;
+            height: auto;
+            min-height: 0;
+            max-height: 72vh;
             object-fit: contain;
             object-position: center;
             display: block;
             background: var(--cream-2);
+        }
+        .seo-gallery-main img[src$="logo.png"] {
+            width: auto;
+            height: auto;
+            max-width: min(86%, 420px);
+            max-height: 86%;
+            object-fit: contain;
+            margin: auto;
         }
         .seo-gallery-expand {
             position: absolute;
@@ -945,6 +1655,12 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
             font-weight: 600;
             margin-bottom: 0.35rem;
         }
+        .seo-interest-text {
+            margin: 0.2rem 0 0;
+            color: #627084;
+            font-size: 0.98rem;
+            line-height: 1.6;
+        }
         .seo-cta-row {
             display: flex;
             flex-wrap: wrap;
@@ -997,7 +1713,8 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         .seo-related-grid {
             display: grid;
             gap: 1rem;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 320px));
+            justify-content: start;
         }
         .seo-related-card {
             background: var(--white);
@@ -1160,16 +1877,11 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         @media (max-width: 900px) {
             .seo-grid { grid-template-columns: 1fr; }
             .seo-page { padding-top: 3rem; }
-            .seo-gallery-stage { min-height: 320px; padding-inline: 3.5rem; }
-            .seo-gallery-main,
-            .seo-gallery-main img { min-height: 320px; }
             .seo-thumbs { grid-template-columns: repeat(auto-fit, minmax(60px, 72px)); }
         }
         @media (max-width: 640px) {
             .seo-page { padding: 2.5rem 1rem 3rem; }
-            .seo-gallery-stage { min-height: 280px; padding-inline: 3rem; }
-            .seo-gallery-main,
-            .seo-gallery-main img { min-height: 280px; }
+            .seo-gallery-main img { max-height: 64vh; }
             .seo-hero h1 { font-size: 1.8rem; }
             .seo-cta-row,
             .seo-search-form { flex-direction: column; }
@@ -1289,13 +2001,14 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
                 </div>
                 <div>
                     <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
+                    <div class="hb-footer-partners" aria-label="Partners">
+                        <img src="/assets/optimized/partner-jens-sagen.webp" alt="Jens Sagen"/>
+                        <img src="/assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen"/>
+                        <img src="/assets/optimized/partner-varuste.webp" alt="VA Varuste"/>
+                        <img src="/assets/schultz.png" alt="Schultz Kalecher"/>
+                        <img src="/assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu"/>
+                        <img src="/assets/optimized/partner-hansenprotection.png" alt="Hansen Protection"/>
+                    </div>
                 </div>
             </div>
             <div class="hb-footer-bottom">
@@ -1379,6 +2092,108 @@ def get_site_content(key: str) -> Optional[Any]:
         db.close()
 
 
+def normalize_status_name(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip())[:MAX_STATUS_NAME_CHARS]
+
+
+def slugify_status_id(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = text.encode("ascii", "ignore").decode("ascii").lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    return text[:48]
+
+
+def is_valid_custom_status_id(value: str) -> bool:
+    return bool(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,47}", str(value or "")))
+
+
+def build_unique_status_id(seed: str, seen: set[str]) -> str:
+    base = slugify_status_id(seed) or "status"
+    if base in RESERVED_STATUS_IDS or base == "nya-inskick":
+        base = f"{base}-kolumn"
+    candidate = base
+    suffix = 2
+    while candidate in seen or candidate in RESERVED_STATUS_IDS or candidate == "nya-inskick":
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    return candidate[:48]
+
+
+def normalize_status_config(data: Any) -> List[Dict[str, Any]]:
+    default_statuses = [dict(item) for item in DEFAULT_STATUS_CONFIG]
+    raw_statuses: Any = None
+    if isinstance(data, dict):
+        raw_statuses = data.get("statuses")
+    elif isinstance(data, list):
+        raw_statuses = data
+
+    if not isinstance(raw_statuses, list) or not raw_statuses:
+        return default_statuses
+
+    normalized: List[Dict[str, Any]] = [dict(default_statuses[0])]
+    seen = {"nya-inskick"}
+
+    for raw in raw_statuses:
+        if len(normalized) >= MAX_WORKFLOW_STATUSES:
+            break
+        if isinstance(raw, str):
+            raw = {"name": raw}
+        if not isinstance(raw, dict):
+            continue
+        raw_id = str(raw.get("id", "") or "").strip().lower()
+        if raw_id == "nya-inskick":
+            continue
+        name = normalize_status_name(raw.get("name", ""))
+        if not name and raw_id:
+            fallback = next((item for item in default_statuses if item["id"] == raw_id), None)
+            if fallback:
+                name = fallback["name"]
+        if not name:
+            continue
+        status_id = raw_id if is_valid_custom_status_id(raw_id) and raw_id not in RESERVED_STATUS_IDS else ""
+        if not status_id or status_id in seen:
+            status_id = build_unique_status_id(name, seen)
+        normalized.append({"id": status_id, "name": name, "fixed": False})
+        seen.add(status_id)
+
+    if len(normalized) == 1:
+        keeps_fixed_only = any(
+            isinstance(raw, dict) and str(raw.get("id", "")).strip().lower() == "nya-inskick"
+            for raw in raw_statuses
+        )
+        return normalized if keeps_fixed_only else default_statuses
+    return normalized
+
+
+def load_status_config() -> List[Dict[str, Any]]:
+    data = get_site_content("status_config")
+    if data is None:
+        data = read_json_file(STATUS_CONFIG_FILE, {})
+    return normalize_status_config(data)
+
+
+def save_status_config(data: Any) -> List[Dict[str, Any]]:
+    normalized = normalize_status_config(data)
+    payload = {"statuses": normalized}
+    write_json_file(STATUS_CONFIG_FILE, payload)
+    set_site_content("status_config", payload)
+    return normalized
+
+
+def get_valid_submission_status_ids() -> set[str]:
+    ids = {str(item.get("id", "")).strip() for item in load_status_config() if str(item.get("id", "")).strip()}
+    ids.add("arkiv")
+    return ids
+
+
+def get_status_name(status_id: str) -> str:
+    clean_status_id = str(status_id or "").strip()
+    for status in load_status_config():
+        if str(status.get("id", "") or "").strip() == clean_status_id:
+            return str(status.get("name", "") or clean_status_id)
+    return clean_status_id
+
+
 DEFAULT_FORM_PROMPTS: Dict[str, str] = {
     "Kapellforfragan": (
         "Du svarar på inkomna kapellförfrågningar för Henricssons Båtkapell. "
@@ -1424,7 +2239,7 @@ Regler:
 - Föreslå rätt nästa steg när kunden verkar vilja gå vidare.
 - Du har inga verktyg och kan inte boka tider, skapa bokningar, bekräfta besök, kontrollera kalender, se öppettider som inte uttryckligen står i underlaget eller lova att någon är på plats.
 - Påstå aldrig att du har gjort något i verkligheten. Skriv aldrig att du har bokat, reserverat, meddelat personalen eller lagt in något.
-- Om kunden föreslår en tid eller ett besök: bekräfta inte tiden som bokad. Säg bara att tiden behöver bekräftas av företaget och hänvisa vidare till kontakt om det behövs.
+- Om kunden föreslår en tid eller ett besök: bekräfta inte tiden som bokad. Säg att tiden behöver bekräftas av företaget och att kunden gärna ska ringa innan besök.
 - Om du inte vet ett faktum säkert från sammanhanget: säg det tydligt och hitta inte på.
 - Fråga aldrig efter namn, telefon, e-post, adress, båtmodell, årsmodell eller andra formulärfält.
 - Offentliga chatten ska inte samla in uppgifter och inte skicka formulär.
@@ -1572,6 +2387,59 @@ def save_mailgun_settings(data: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
+DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE = (
+    "Tack fÃ¶r att du kontaktade oss pÃ¥ Henricssons BÃ¥tkapell.\n\n"
+    "Vi har tagit emot ditt Ã¤rende och Ã¥terkommer sÃ¥ snart vi kan med information eller eventuella frÃ¥gor.\n\n"
+    "{sammanfattning}\n"
+    "Om du vill komplettera ditt Ã¤rende under tiden kan du kontakta oss med uppgifterna nedan.\n\n"
+    "{kontaktinfo}\n\n"
+    "VÃ¤nliga hÃ¤lsningar\n"
+    "Henricssons BÃ¥tkapell"
+)
+CUSTOMER_CONFIRMATION_TOKENS = {"{sammanfattning}", "{kontaktinfo}"}
+CUSTOMER_CONFIRMATION_TOKEN_PATTERN = re.compile(r"(\{sammanfattning\}|\{kontaktinfo\})", flags=re.IGNORECASE)
+
+# Override the literal strings above with ASCII-safe unicode escapes to avoid mojibake.
+DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE = (
+    "Hej {namn},\n\n"
+    "Tack f\u00f6r att du kontaktade oss p\u00e5 Henricssons B\u00e5tkapell.\n\n"
+    "Vi har tagit emot ditt \u00e4rende. Vi svarar p\u00e5 inkommande f\u00f6rfr\u00e5gningar l\u00f6pande, men det kan dr\u00f6ja under h\u00f6gs\u00e4song eftersom vi har underbart mycket att g\u00f6ra.\n\n"
+    "{sammanfattning}\n"
+    "Om du vill komplettera ditt \u00e4rende under tiden kan du kontakta oss med uppgifterna nedan.\n\n"
+    "{kontaktinfo}\n\n"
+    "V\u00e4nliga h\u00e4lsningar\n"
+    "Henricssons B\u00e5tkapell"
+)
+CUSTOMER_CONFIRMATION_TOKENS = {"{namn}", "{sammanfattning}", "{kontaktinfo}"}
+CUSTOMER_CONFIRMATION_TOKEN_PATTERN = re.compile(r"(\{namn\}|\{sammanfattning\}|\{kontaktinfo\})", flags=re.IGNORECASE)
+
+
+def normalize_customer_confirmation_settings(data: Any) -> Dict[str, str]:
+    template = DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE
+    if isinstance(data, dict):
+        candidate = str(data.get("body_template", "") or "").strip()
+        if candidate:
+            template = candidate
+    return {
+        "body_template": template,
+        "default_body_template": DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE,
+    }
+
+
+def load_customer_confirmation_settings() -> Dict[str, str]:
+    data = get_site_content("customer_confirmation_settings")
+    return normalize_customer_confirmation_settings(data)
+
+
+def save_customer_confirmation_settings(data: Dict[str, Any]) -> Dict[str, str]:
+    template = str(data.get("body_template", "") or "").strip()
+    if not template:
+        raise ValueError("Texten fÃ¶r kundmejlet kan inte vara tom.")
+    payload = {"body_template": template}
+    set_site_content("customer_confirmation_settings", payload)
+    return normalize_customer_confirmation_settings(payload)
+
+
 def safe_json_loads(text: str) -> Optional[Dict[str, Any]]:
     if not text:
         return None
@@ -1698,6 +2566,8 @@ def get_openai_response(
 
 def normalize_form_type(value: str) -> str:
     lowered = (value or "").lower()
+    if "dyn" in lowered or "dyna" in lowered:
+        return "Dynsatsforfragan"
     if "fender" in lowered:
         return "Fenderforfragan"
     if "kapell" in lowered:
@@ -1711,6 +2581,8 @@ def display_form_type(value: str) -> str:
         return "Kapellförfrågan"
     if key == "Fenderforfragan":
         return "Fenderförfrågan"
+    if key == "Dynsatsforfragan":
+        return "Dynsatsförfrågan"
     return "Kontakt"
 
 
@@ -1815,6 +2687,14 @@ def build_form_summary(form_type: str, fields: Dict[str, str]) -> str:
     return "\n".join(lines)
 
 
+def generate_submission_metadata_fallback(form_type: str, fields: Dict[str, Any]) -> Tuple[str, str]:
+    category = display_form_type(form_type)
+    title = get_field_value(fields, "name", "namn") or "Kund"
+    if len(title) > 70:
+        title = title[:67] + "..."
+    return category, title
+
+
 def finalize_email_reply(text: str) -> str:
     raw = str(text or "").strip()
     if raw.startswith("```"):
@@ -1843,44 +2723,6 @@ def finalize_email_reply(text: str) -> str:
         raw = "Vi har tagit emot din förfrågan och återkommer med nästa steg inom kort."
 
     return f"{EMAIL_REQUIRED_OPENING}\n\n{raw}\n\n{EMAIL_REQUIRED_CLOSING}"
-
-
-def generate_submission_metadata(
-    form_type: str,
-    fields: Dict[str, str],
-    form_summary: str,
-) -> Tuple[str, str]:
-    category = "Allman fraga"
-    title = f"{form_type}: {fields.get('1. Namn', fields.get('Namn', 'Kund'))}"
-    if len(title) > 70:
-        title = title[:67] + "..."
-
-    category_prompt = (
-        "Categorize this customer message into one of: "
-        "Kapellforfragan, Allman fraga, Support/Service, Besoksforfragan.\n\n"
-        f"{form_summary}\n\nOnly return the category name."
-    )
-    title_prompt = (
-        "Create a short subject line (max 60 chars) for this customer message.\n\n"
-        f"{form_summary}\n\nOnly return the title."
-    )
-    try:
-        category_resp = get_openai_response(category_prompt, "You classify incoming service inquiries.", 0.6, 120)
-        candidate = category_resp.strip()
-        if candidate:
-            category = candidate[:80]
-    except Exception:
-        pass
-
-    try:
-        title_resp = get_openai_response(title_prompt, "You create short and clear email subjects.", 0.6, 120)
-        candidate = title_resp.strip().replace('"', "").replace("'", "")
-        if candidate:
-            title = candidate[:60] + ("..." if len(candidate) > 60 else "")
-    except Exception:
-        pass
-
-    return category, title
 
 
 def generate_submission_ai_response(form_type: str, fields: Dict[str, Any], form_summary: str = "") -> str:
@@ -1977,7 +2819,7 @@ FIELD_LABELS_SV: Dict[str, str] = {
     "manufacturer": "Tillverkare",
     "model": "Modell",
     "boat_year": "Årsmodell",
-    "home_port": "Hemmahamn",
+    "home_port": "Hemmahamn + Ort",
     "old_canopy": "Tillverkare av befintligt kapell",
     "wants_cover": "Önskar kapell",
     "wants_fender_socks": "Önskar fenderstrumpor",
@@ -1990,7 +2832,15 @@ FIELD_LABELS_SV: Dict[str, str] = {
 FORM_TYPE_LABELS_SV: Dict[str, str] = {
     "Kapellforfragan": "Kapellförfrågan",
     "Fenderforfragan": "Fenderförfrågan",
+    "Dynsatsforfragan": "Dynsatsförfrågan",
     "Kontakt": "Kontaktärende",
+}
+
+NOTIFICATION_FORM_LABELS_SV: Dict[str, str] = {
+    "Kapellforfragan": "Kapellförfrågan",
+    "Fenderforfragan": "Fenderförfrågan",
+    "Dynsatsforfragan": "Dynsatsförfrågan",
+    "Kontakt": "Kontakt",
 }
 
 FIELD_ORDER = [
@@ -2018,6 +2868,101 @@ def _humanize_value(value: Any) -> str:
     return s
 
 
+def truncate_notification_preview(text: str, limit: int = 120) -> str:
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    if len(clean) <= limit:
+        return clean
+    return clean[: max(0, limit - 3)].rstrip() + "..."
+
+
+def build_submission_notification_preview(fields: Dict[str, Any]) -> Tuple[str, str]:
+    if not isinstance(fields, dict):
+        return "", ""
+
+    manufacturer = get_field_value(fields, "manufacturer", "boat_brand", "tillverkare", "båtmärke")
+    model = get_field_value(fields, "model", "boat_model", "modell", "båtmodell")
+    subject = get_field_value(fields, "subject", "ämne")
+    size = get_field_value(fields, "size", "storlek")
+    quantity = get_field_value(fields, "quantity", "antal")
+    message = get_field_value(fields, "message", "meddelande", "övrig information", "ovrig information")
+
+    primary_line = " ".join(part for part in [manufacturer, model] if part).strip()
+    if not primary_line:
+        primary_line = subject.strip()
+    if not primary_line and (size or quantity):
+        primary_line = " ".join(part for part in [quantity, size] if part).strip()
+
+    return truncate_notification_preview(primary_line, limit=80), truncate_notification_preview(message, limit=140)
+
+
+def get_status_action_url(submission_id: str, status_id: str) -> str:
+    issued_at = int(time.time())
+    params = {
+        "id": submission_id,
+        "status": status_id,
+        "ts": str(issued_at),
+        "token": sign_submission_status_action(submission_id, status_id, issued_at),
+    }
+    if STATUS_ACTION_BASE_URL:
+        base_url = STATUS_ACTION_BASE_URL
+    elif has_request_context():
+        base_url = request.url_root.rstrip("/")
+    else:
+        base_url = PUBLIC_ATTACHMENT_BASE_URL
+    return f"{base_url}/api/email_status_action?{urlencode(params)}"
+
+
+def get_submission_status_action_items(submission_id: str, current_status: str = "nya-inskick") -> List[Dict[str, str]]:
+    clean_submission_id = str(submission_id or "").strip()
+    current = str(current_status or "").strip() or "nya-inskick"
+    if not clean_submission_id:
+        return []
+    items: List[Dict[str, str]] = []
+    for status in load_status_config():
+        status_id = str(status.get("id", "") or "").strip()
+        status_name = str(status.get("name", "") or "").strip()
+        if not status_id or not status_name or status_id == current:
+            continue
+        items.append({
+            "id": status_id,
+            "name": status_name,
+            "url": get_status_action_url(clean_submission_id, status_id),
+        })
+    return items
+
+
+def build_submission_status_actions_html(submission_id: str, current_status: str = "nya-inskick") -> str:
+    actions = get_submission_status_action_items(submission_id, current_status)
+    if not actions:
+        return ""
+
+    buttons = ""
+    for action in actions:
+        buttons += (
+            f"<a href='{html.escape(action['url'], quote=True)}' "
+            "style='display:inline-block;margin:0 8px 8px 0;padding:10px 14px;"
+            "border-radius:999px;background:#2563eb;color:#ffffff;text-decoration:none;"
+            "font-size:13px;font-weight:700;line-height:1.2;'>"
+            f"{html.escape(action['name'])}</a>"
+        )
+
+    return (
+        "<div style='margin-top:20px;padding:14px 14px 6px;background:#f7f9fc;border:1px solid #d9dee5;'>"
+        "<div style='font-size:12px;font-weight:700;color:#222831;margin-bottom:10px;'>Flytta till status</div>"
+        f"{buttons}"
+        "</div>"
+    )
+
+
+def build_submission_status_actions_text(submission_id: str, current_status: str = "nya-inskick") -> str:
+    actions = get_submission_status_action_items(submission_id, current_status)
+    if not actions:
+        return ""
+    lines = ["Flytta till status:"]
+    lines.extend(f"  - {action['name']}: {action['url']}" for action in actions)
+    return "\n\n" + "\n".join(lines) + "\n"
+
+
 def build_notification_html(
     form_type: str,
     fields: Dict[str, Any],
@@ -2025,6 +2970,9 @@ def build_notification_html(
     timestamp_iso: str,
     attachments: Optional[List[Dict[str, Any]]] = None,
     proposed_response: str = "",
+    preview_title: str = "",
+    preview_message: str = "",
+    status_actions_html: str = "",
 ) -> str:
     form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
 
@@ -2055,12 +3003,7 @@ def build_notification_html(
             "color:#6b7280;font-style:italic;'>Inga fält</td></tr>"
         )
 
-    try:
-        from datetime import datetime, timezone
-        dt = datetime.fromisoformat(timestamp_iso.replace("Z", "+00:00"))
-        local_str = dt.strftime("%d %b %Y, %H:%M") + " UTC"
-    except Exception:
-        local_str = html.escape(timestamp_iso)
+    local_str = html.escape(format_swedish_timestamp(timestamp_iso))
 
     attachments_block = ""
     if attachments:
@@ -2100,6 +3043,30 @@ def build_notification_html(
             "</div>"
         )
 
+    preview_block = ""
+    if preview_title or preview_message:
+        preview_parts: List[str] = []
+        if preview_title:
+            preview_parts.append(
+                f"<div style='font-size:20px;font-weight:700;color:#222831;margin:0 0 6px;'>{html.escape(preview_title)}</div>"
+            )
+        if preview_message:
+            preview_parts.append(
+                f"<div style='font-size:14px;line-height:1.6;color:#4b5563;'>{html.escape(preview_message)}</div>"
+            )
+        preview_block = (
+            "<div style='margin:0 0 18px;padding:16px 18px;background:#f7f9fc;border:1px solid #d9dee5;'>"
+            + "".join(preview_parts)
+            + "</div>"
+        )
+
+    meta_block = (
+        "<div style='margin-top:18px;padding:12px 14px;background:#fafafa;border:1px solid #e5e7eb;'>"
+        f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Tid (svensk tid): {local_str}</div>"
+        f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Referens-ID: {html.escape(submission_id)}</div>"
+        "</div>"
+    )
+
     return f"""<!DOCTYPE html>
 <html lang="sv">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -2109,19 +3076,15 @@ def build_notification_html(
 <td align="center">
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;border-collapse:collapse;background:#ffffff;border:1px solid #d9dee5;">
   <tr>
-    <td style="padding:24px 24px 16px;border-bottom:1px solid #d9dee5;">
-      <div style="font-size:24px;font-weight:700;color:#222831;margin:0 0 6px;">Ny {form_label}</div>
-      <div style="font-size:13px;color:#6b7280;line-height:1.5;">{local_str}</div>
-      <div style="font-size:13px;color:#6b7280;line-height:1.5;">Referens-ID: {html.escape(submission_id)}</div>
-    </td>
-  </tr>
-  <tr>
     <td style="padding:20px 24px 24px;">
+      {preview_block}
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         {rows_html}
       </table>
       {attachments_block}
       {ai_reply_block}
+      {status_actions_html}
+      {meta_block}
     </td>
   </tr>
   <tr>
@@ -2137,52 +3100,130 @@ def build_notification_html(
 </html>"""
 
 
-def build_customer_confirmation_html(
-    form_type: str,
-    customer_name: str,
-    summary_html: str = "",
+def build_customer_contact_info_html() -> str:
+    return (
+        '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;border-top:2px solid #b28a4c;margin:24px 0 28px;">'
+        "<tr>"
+        '<td style="padding:20px 22px;">'
+        '<div style="font-size:10px;font-family:Arial,Helvetica,sans-serif;color:#b28a4c;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;margin-bottom:12px;">Kontakta oss</div>'
+        '<div style="font-size:14px;line-height:2;color:#0c1a2b;font-family:Arial,Helvetica,sans-serif;">'
+        '<a href="tel:+46314718200" style="color:#0c1a2b;text-decoration:none;">+46 (0)31 47 18 20</a><br>'
+        '<a href="mailto:info@henricssonsbatkapell.se" style="color:#b28a4c;text-decoration:none;">info@henricssonsbatkapell.se</a><br>'
+        "Energigatan 17E, 434 37 Kungsbacka"
+        "</div>"
+        "</td>"
+        "</tr>"
+        "</table>"
+    )
+
+
+def build_customer_contact_info_text() -> str:
+    return (
+        "Kontaktinfo:\n"
+        "Telefon: +46 (0)31 47 18 20\n"
+        "E-post: info@henricssonsbatkapell.se\n"
+        "Adress: Energigatan 17E, 434 37 Kungsbacka"
+    )
+
+
+def render_customer_confirmation_text_segment(text: str) -> str:
+    return str(text or "").replace("\r\n", "\n")
+
+
+def render_customer_confirmation_html_segment(text: str) -> str:
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in re.split(r"\n\s*\n", str(text or "").replace("\r\n", "\n"))
+        if paragraph.strip()
+    ]
+    return "".join(
+        f'<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">'
+        f'{html.escape(paragraph).replace(chr(10), "<br>")}</p>'
+        for paragraph in paragraphs
+    )
+
+
+def render_customer_confirmation_template(
+    template: str,
+    replacements: Dict[str, str],
+    renderer,
 ) -> str:
-    form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
+    rendered_parts: List[str] = []
+    for part in CUSTOMER_CONFIRMATION_TOKEN_PATTERN.split(str(template or "").replace("\r\n", "\n")):
+        if not part:
+            continue
+        token = part.strip().lower()
+        if token in CUSTOMER_CONFIRMATION_TOKENS:
+            replacement = replacements.get(token, "").strip()
+            if replacement:
+                rendered_parts.append(replacement)
+            continue
+        rendered_segment = renderer(part)
+        if rendered_segment:
+            rendered_parts.append(rendered_segment)
+    return "".join(rendered_parts).strip()
+
+
+def build_customer_confirmation_text_body(customer_name: str, body_content_text: str) -> str:
+    greeting = f"Hej {customer_name.strip()}," if str(customer_name or "").strip() else "Hej,"
+    body_parts = [greeting, str(body_content_text or "").strip()]
+    return re.sub(r"\n{3,}", "\n\n", "\n\n".join(part for part in body_parts if part).strip())
+
+
+def build_customer_confirmation_html(*args, **kwargs) -> str:
+    logo_src = str(kwargs.get("logo_src", "cid:henricssons-logo") or "cid:henricssons-logo")
+    if "summary_html" in kwargs:
+        legacy_form_type = str(args[0] if len(args) > 0 else kwargs.get("form_type", "") or "")
+        customer_name = str(args[1] if len(args) > 1 else kwargs.get("customer_name", "") or "")
+        summary_html = str(kwargs.get("summary_html", "") or "")
+        form_label = FORM_TYPE_LABELS_SV.get(normalize_form_type(legacy_form_type), display_form_type(legacy_form_type))
+        followup_text = (
+            "Vi har tagit emot ditt meddelande och Ã¥terkommer sÃ¥ snart vi kan."
+            if normalize_form_type(legacy_form_type) == "Kontakt"
+            else f"Vi har tagit emot din {form_label.lower()} och Ã¥terkommer sÃ¥ snart vi kan med information eller eventuella frÃ¥gor."
+        )
+        body_content_html = (
+            '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Tack f&#246;r att du kontaktade oss p&#229; Henricssons B&#229;tkapell.</p>'
+            f'<p style="margin:0 0 20px;font-size:15px;line-height:1.75;color:#1b2e47;">{html.escape(followup_text)}</p>'
+            f"{summary_html}"
+            '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Om du vill komplettera ditt Ã¤rende under tiden kan du kontakta oss med uppgifterna nedan.</p>'
+            f"{build_customer_contact_info_html()}"
+            '<p style="margin:0;font-size:15px;line-height:1.7;color:#0c1a2b;">V&#228;nliga h&#228;lsningar<br><strong>Henricssons B&#229;tkapell</strong></p>'
+        )
+    else:
+        customer_name = str(args[0] if len(args) > 0 else kwargs.get("customer_name", "") or "")
+        body_content_html = str(args[1] if len(args) > 1 else kwargs.get("body_content_html", "") or "")
     safe_name = html.escape((customer_name or "").strip())
     greeting = f"Hej {safe_name}," if safe_name else "Hej,"
+    safe_logo_src = html.escape(logo_src, quote=True)
     html_doc = f"""<!DOCTYPE html>
 <html lang="sv">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#eef2f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#17212f;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;padding:32px 16px;">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+</head>
+<body style="margin:0;padding:0;background:#f5f0e6;font-family:Georgia,'Times New Roman',serif;color:#0c1a2b;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;padding:40px 16px 48px;">
 <tr><td align="center">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border:1px solid #d9e1ea;border-radius:14px;overflow:hidden;">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #d9cfbe;">
   <tr>
-    <td style="background:#10263f;padding:28px 32px;text-align:center;">
-      <div style="display:inline-block;background:#ffffff;border-radius:10px;padding:10px 16px;margin-bottom:14px;border:1px solid #d9e1ea;">
-        <img src="cid:henricssons-logo" alt="Henricssons Båtkapell" width="148" style="display:block;width:148px;height:auto;border:0;outline:none;text-decoration:none;">
-      </div>
-      <div style="color:#ffffff;font-size:22px;font-weight:700;margin-bottom:4px;">Tack för din förfrågan</div>
-      <div style="color:#c4cfdb;font-size:13px;">{form_label}</div>
+    <td style="background:#0c1a2b;padding:32px 40px 28px;text-align:center;">
+      <img src="{safe_logo_src}" alt="Henricssons B&#229;tkapell" width="156" style="display:block;width:156px;height:auto;border:0;margin:0 auto 20px;">
+      <div style="width:40px;height:1px;background:#b28a4c;margin:0 auto 16px;"></div>
+      <div style="color:#f5f0e6;font-size:11px;font-family:Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;">Tack f&#246;r din f&#246;rfr&#229;gan</div>
     </td>
   </tr>
   <tr>
-    <td style="padding:28px 32px 18px;background:#ffffff;">
-      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">{greeting}</p>
-      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Tack för att du kontaktade oss på Henricssons Båtkapell.</p>
-      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Vi har tagit emot din förfrågan och återkommer så snart vi kan med information eller eventuella följdfrågor.</p>
-      {summary_html}
-      <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#17212f;">Om du vill komplettera din förfrågan under tiden kan du kontakta oss med uppgifterna nedan.</p>
-      <div style="margin:18px 0 16px;padding:16px 18px;background:#f7f9fc;border:1px solid #e6ebf2;border-radius:10px;">
-        <div style="font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Kontaktuppgifter</div>
-        <div style="font-size:14px;line-height:1.8;color:#17212f;">
-          Telefon: <a href="tel:+46314718200" style="color:#10263f;text-decoration:none;">+46 (0)31 47 18 20</a><br>
-          E-post: <a href="mailto:info@henricssonsbatkapell.se" style="color:#10263f;text-decoration:none;">info@henricssonsbatkapell.se</a><br>
-          Adress: Energigatan 17E, 434 37 Kungsbacka
-        </div>
-      </div>
-      <p style="margin:0;font-size:15px;line-height:1.7;color:#17212f;">Vänliga hälsningar<br>Henricssons Båtkapell</p>
+    <td style="padding:36px 40px 28px;background:#ffffff;">
+      <p style="margin:0 0 16px;font-size:16px;line-height:1.75;color:#0c1a2b;">{greeting}</p>
+      {body_content_html}
     </td>
   </tr>
   <tr>
-    <td style="background:#f7f9fc;padding:18px 32px;border-top:1px solid #e6ebf2;">
-      <p style="margin:0;color:#7d8796;font-size:12px;text-align:center;line-height:1.6;">
-        Detta är en automatisk bekräftelse på att vi tagit emot ditt formulär.
+    <td style="background:#0c1a2b;padding:16px 40px;">
+      <p style="margin:0;color:#6b7788;font-size:11px;font-family:Arial,Helvetica,sans-serif;text-align:center;line-height:1.6;letter-spacing:0.04em;">
+        Du kan svara p&#229; detta e-postmeddelande s&#229; h&#246;r du fr&#229;n oss.
       </p>
     </td>
   </tr>
@@ -2195,14 +3236,11 @@ def build_customer_confirmation_html(
 
 
 def make_mailgun_safe_text(text: str) -> str:
-    raw = str(text or "")
-    normalized = unicodedata.normalize("NFKD", raw)
-    return normalized.encode("ascii", "ignore").decode("ascii")
+    return unicodedata.normalize("NFC", str(text or ""))
 
 
 def make_mailgun_safe_html(html_body: str) -> str:
-    raw = str(html_body or "")
-    return raw.encode("ascii", "xmlcharrefreplace").decode("ascii")
+    return unicodedata.normalize("NFC", str(html_body or ""))
 
 
 def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
@@ -2214,8 +3252,10 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
         "model",
         "boat_year",
         "home_port",
+        "old_canopy",
         "quantity",
         "size",
+        "address",
         "subject",
         "message",
     ]
@@ -2232,10 +3272,12 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
         return "", ""
 
     summary_html = (
-        '<div style="margin:18px 0 16px;padding:16px 18px;background:#fcfbf7;border:1px solid #e6ebf2;border-radius:10px;">'
-        '<div style="font-size:11px;color:#7d8796;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Sammanfattning</div>'
+        '<div style="margin:24px 0 20px;padding:20px 22px;background:#eae2d2;border-left:3px solid #b28a4c;">'
+        '<div style="font-size:10px;color:#b28a4c;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:14px;">Sammanfattning</div>'
         + "".join(
-            f'<div style="font-size:14px;line-height:1.75;color:#17212f;"><strong>{html.escape(label)}:</strong> {html.escape(value)}</div>'
+            f'<div style="font-size:13px;line-height:1.8;color:#0c1a2b;border-bottom:1px solid #d9cfbe;padding:5px 0;">'
+            f'<span style="color:#6b7788;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;">{html.escape(label)}</span>'
+            f'<br><span style="color:#0c1a2b;">{html.escape(value)}</span></div>'
             for label, value in rows
         )
         + '</div>'
@@ -2244,6 +3286,296 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
         f"- {label}: {value}" for label, value in rows
     ) + "\n\n"
     return summary_html, summary_text
+
+
+def build_customer_confirmation_email_content(
+    form_type: str,
+    customer_name: str,
+    fields: Dict[str, Any],
+    body_template: str,
+    logo_src: str = "cid:henricssons-logo",
+) -> Dict[str, str]:
+    normalized_form_type = normalize_form_type(form_type)
+    form_label = FORM_TYPE_LABELS_SV.get(normalized_form_type, display_form_type(form_type))
+    summary_html, summary_text = build_customer_summary(fields)
+    replacements_text = {
+        "{sammanfattning}": summary_text.strip(),
+        "{kontaktinfo}": build_customer_contact_info_text(),
+    }
+    replacements_html = {
+        "{sammanfattning}": summary_html.strip(),
+        "{kontaktinfo}": build_customer_contact_info_html(),
+    }
+    body_content_text = render_customer_confirmation_template(
+        body_template,
+        replacements_text,
+        render_customer_confirmation_text_segment,
+    )
+    body_content_html = render_customer_confirmation_template(
+        body_template,
+        replacements_html,
+        render_customer_confirmation_html_segment,
+    )
+    return {
+        "form_type": normalized_form_type,
+        "form_label": form_label,
+        "subject": f"Tack fÃ¶r att du kontaktade oss - {form_label}",
+        "text_body": build_customer_confirmation_text_body(customer_name, body_content_text),
+        "html_body": build_customer_confirmation_html(customer_name, body_content_html, logo_src=logo_src),
+    }
+
+
+def build_customer_confirmation_preview_submission(form_type: str) -> Dict[str, Any]:
+    normalized_form_type = normalize_form_type(form_type)
+    samples: Dict[str, Dict[str, Any]] = {
+        "Kapellforfragan": {
+            "form_type": "KapellfÃ¶rfrÃ¥gan",
+            "fields": {
+                "name": "Anna Andersson",
+                "email": "anna@example.com",
+                "phone": "070-123 45 67",
+                "manufacturer": "Nimbus",
+                "model": "280 Coupe",
+                "boat_year": "2006",
+                "home_port": "Kungsbacka",
+                "old_canopy": "Original",
+                "message": "Vi behÃ¶ver ett nytt hamnkapell innan sommaren.",
+            },
+        },
+        "Fenderforfragan": {
+            "form_type": "FenderfÃ¶rfrÃ¥gan",
+            "fields": {
+                "name": "Erik Berg",
+                "email": "erik@example.com",
+                "phone": "073-987 65 43",
+                "address": "Hamngatan 5, 114 56 Stockholm",
+                "quantity": "6",
+                "size": "F-3",
+            },
+        },
+        "Dynsatsforfragan": {
+            "form_type": "DynsatsfÃ¶rfrÃ¥gan",
+            "fields": {
+                "name": "Maria Svensson",
+                "email": "maria@example.com",
+                "phone": "076-555 44 33",
+                "manufacturer": "Yamarin",
+                "model": "63 DC",
+                "quantity": "1 sats",
+                "message": "Vi vill gÃ¤rna ha en originalnÃ¤ra dynsats i ljusgrÃ¥tt tyg.",
+            },
+        },
+        "Kontakt": {
+            "form_type": "Kontakt",
+            "fields": {
+                "name": "Johan Nilsson",
+                "email": "johan@example.com",
+                "phone": "031-47 18 20",
+                "subject": "BesÃ¶k i verkstaden",
+                "message": "Jag vill boka en tid fÃ¶r att visa upp bÃ¥ten och diskutera upplÃ¤gg.",
+            },
+        },
+    }
+    return samples.get(normalized_form_type, samples["Kontakt"])
+
+
+def normalize_customer_confirmation_template_text(template: str, customer_name: str) -> str:
+    text = str(template or "").replace("\r\n", "\n")
+    name_value = str(customer_name or "").strip()
+    text = re.sub(r"\{namn\}", name_value, text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+,", ",", text)
+    return text
+
+
+def build_customer_confirmation_render_parts(
+    template: str,
+    customer_name: str,
+    summary_text: str,
+    summary_html: str,
+    contact_text: str,
+    contact_html: str,
+) -> Tuple[str, str]:
+    normalized = normalize_customer_confirmation_template_text(template, customer_name)
+    block_markers = {
+        "{sammanfattning}": "__HB_SUMMARY_BLOCK__",
+        "{kontaktinfo}": "__HB_CONTACT_BLOCK__",
+    }
+    for token, marker in block_markers.items():
+        normalized = re.sub(re.escape(token), f"\n\n{marker}\n\n", normalized, flags=re.IGNORECASE)
+
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in re.split(r"\n\s*\n", normalized)
+        if paragraph.strip()
+    ]
+    text_parts: List[str] = []
+    html_parts: List[str] = []
+    for paragraph in paragraphs:
+        if paragraph == block_markers["{sammanfattning}"]:
+            if summary_text.strip():
+                text_parts.append(summary_text.strip())
+            if summary_html.strip():
+                html_parts.append(summary_html.strip())
+            continue
+        if paragraph == block_markers["{kontaktinfo}"]:
+            if contact_text.strip():
+                text_parts.append(contact_text.strip())
+            if contact_html.strip():
+                html_parts.append(contact_html.strip())
+            continue
+        text_parts.append(paragraph)
+        html_parts.append(
+            f'<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">'
+            f'{html.escape(paragraph).replace(chr(10), "<br>")}</p>'
+        )
+    return "\n\n".join(text_parts).strip(), "".join(html_parts).strip()
+
+
+def build_customer_confirmation_text_body(customer_name: str, body_content_text: str) -> str:
+    return re.sub(r"\n{3,}", "\n\n", str(body_content_text or "").strip())
+
+
+def build_customer_confirmation_html(*args, **kwargs) -> str:
+    logo_src = str(kwargs.get("logo_src", "cid:henricssons-logo") or "cid:henricssons-logo")
+    if "summary_html" in kwargs:
+        legacy_form_type = str(args[0] if len(args) > 0 else kwargs.get("form_type", "") or "")
+        customer_name = str(args[1] if len(args) > 1 else kwargs.get("customer_name", "") or "")
+        summary_html = str(kwargs.get("summary_html", "") or "")
+        followup_text = (
+            "Vi har tagit emot ditt meddelande och \u00e5terkommer s\u00e5 snart vi kan."
+            if normalize_form_type(legacy_form_type) == "Kontakt"
+            else "Vi har tagit emot ditt \u00e4rende och \u00e5terkommer s\u00e5 snart vi kan med information eller eventuella fr\u00e5gor."
+        )
+        body_content_html = (
+            f'<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Hej {html.escape(customer_name or "")},</p>'
+            '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Tack f&#246;r att du kontaktade oss p&#229; Henricssons B&#229;tkapell.</p>'
+            f'<p style="margin:0 0 20px;font-size:15px;line-height:1.75;color:#1b2e47;">{html.escape(followup_text)}</p>'
+            f"{summary_html}"
+            '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#1b2e47;">Om du vill komplettera ditt \u00e4rende under tiden kan du kontakta oss med uppgifterna nedan.</p>'
+            f"{build_customer_contact_info_html()}"
+            '<p style="margin:0;font-size:15px;line-height:1.7;color:#0c1a2b;">V&#228;nliga h&#228;lsningar<br><strong>Henricssons B&#229;tkapell</strong></p>'
+        )
+    else:
+        customer_name = str(args[0] if len(args) > 0 else kwargs.get("customer_name", "") or "")
+        body_content_html = str(args[1] if len(args) > 1 else kwargs.get("body_content_html", "") or "")
+    safe_logo_src = html.escape(logo_src, quote=True)
+    html_doc = f"""<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+</head>
+<body style="margin:0;padding:0;background:#f5f0e6;font-family:Georgia,'Times New Roman',serif;color:#0c1a2b;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0e6;padding:40px 16px 48px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #d9cfbe;">
+  <tr>
+    <td style="background:#0c1a2b;padding:32px 40px 28px;text-align:center;">
+      <img src="{safe_logo_src}" alt="Henricssons B&#229;tkapell" width="156" style="display:block;width:156px;height:auto;border:0;margin:0 auto 20px;">
+      <div style="width:40px;height:1px;background:#b28a4c;margin:0 auto 16px;"></div>
+      <div style="color:#f5f0e6;font-size:11px;font-family:Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;">Tack f&#246;r din f&#246;rfr&#229;gan</div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:36px 40px 28px;background:#ffffff;">
+      {body_content_html}
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#0c1a2b;padding:16px 40px;">
+      <p style="margin:0;color:#6b7788;font-size:11px;font-family:Arial,Helvetica,sans-serif;text-align:center;line-height:1.6;letter-spacing:0.04em;">
+        Du kan svara p&#229; detta e-postmeddelande s&#229; h&#246;r du fr&#229;n oss.
+      </p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+    return html_doc.encode("ascii", "xmlcharrefreplace").decode("ascii")
+
+
+def build_customer_confirmation_email_content(
+    form_type: str,
+    customer_name: str,
+    fields: Dict[str, Any],
+    body_template: str,
+    logo_src: str = "cid:henricssons-logo",
+) -> Dict[str, str]:
+    normalized_form_type = normalize_form_type(form_type)
+    form_label = FORM_TYPE_LABELS_SV.get(normalized_form_type, display_form_type(form_type))
+    summary_html, summary_text = build_customer_summary(fields)
+    body_text, body_html = build_customer_confirmation_render_parts(
+        body_template,
+        customer_name,
+        summary_text,
+        summary_html,
+        build_customer_contact_info_text(),
+        build_customer_contact_info_html(),
+    )
+    return {
+        "form_type": normalized_form_type,
+        "form_label": form_label,
+        "subject": f"Tack f\u00f6r att du kontaktade oss - {form_label}",
+        "text_body": build_customer_confirmation_text_body(customer_name, body_text),
+        "html_body": build_customer_confirmation_html(customer_name, body_html, logo_src=logo_src),
+    }
+
+
+def build_customer_confirmation_preview_submission(form_type: str) -> Dict[str, Any]:
+    normalized_form_type = normalize_form_type(form_type)
+    samples: Dict[str, Dict[str, Any]] = {
+        "Kapellforfragan": {
+            "form_type": "Kapellf\u00f6rfr\u00e5gan",
+            "fields": {
+                "name": "Anna Andersson",
+                "email": "anna@example.com",
+                "phone": "070-123 45 67",
+                "manufacturer": "Nimbus",
+                "model": "280 Coupe",
+                "boat_year": "2006",
+                "home_port": "Kungsbacka",
+                "old_canopy": "Original",
+                "message": "Vi beh\u00f6ver ett nytt hamnkapell innan sommaren.",
+            },
+        },
+        "Fenderforfragan": {
+            "form_type": "Fenderf\u00f6rfr\u00e5gan",
+            "fields": {
+                "name": "Erik Berg",
+                "email": "erik@example.com",
+                "phone": "073-987 65 43",
+                "address": "Hamngatan 5, 114 56 Stockholm",
+                "quantity": "6",
+                "size": "F-3",
+            },
+        },
+        "Dynsatsforfragan": {
+            "form_type": "Dynsatsf\u00f6rfr\u00e5gan",
+            "fields": {
+                "name": "Maria Svensson",
+                "email": "maria@example.com",
+                "phone": "076-555 44 33",
+                "manufacturer": "Yamarin",
+                "model": "63 DC",
+                "quantity": "1 sats",
+                "message": "Vi vill g\u00e4rna ha en originaln\u00e4ra dynsats i ljusgr\u00e5tt tyg.",
+            },
+        },
+        "Kontakt": {
+            "form_type": "Kontakt",
+            "fields": {
+                "name": "Johan Nilsson",
+                "email": "johan@example.com",
+                "phone": "031-47 18 20",
+                "subject": "Bes\u00f6k i verkstaden",
+                "message": "Jag vill boka en tid f\u00f6r att visa upp b\u00e5ten och diskutera uppl\u00e4gg.",
+            },
+        },
+    }
+    return samples.get(normalized_form_type, samples["Kontakt"])
 
 
 def send_mailgun_email(
@@ -2411,7 +3743,9 @@ def send_mailgun_submission_notification(
     timestamp_iso = str(submission.get("timestamp", ""))
     proposed_response = ""
     form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
-    subject = f"Ny {form_label} — Henricssons"
+    notification_form_label = NOTIFICATION_FORM_LABELS_SV.get(form_type, form_label)
+    preview_title, preview_message = build_submission_notification_preview(fields)
+    subject = f"Ny {notification_form_label}"
     field_lines = "\n".join(
         f"  {_label(k)}: {_humanize_value(v)}"
         for k, v in fields.items()
@@ -2457,14 +3791,20 @@ def send_mailgun_submission_notification(
             f"  - {a['filename']} ({max(1, int(a['size']/1024))} KB) {a['public_url']}"
             for a in enriched
         )
+    current_status = str(submission.get("status", "nya-inskick") or "nya-inskick")
+    status_action_lines = build_submission_status_actions_text(submission_id, current_status)
+    status_actions_html = build_submission_status_actions_html(submission_id, current_status)
     ai_reply_lines = ""
+    preview_lines = "\n".join(line for line in [preview_title, preview_message] if line)
+    if preview_lines:
+        preview_lines += "\n\n"
     text_body = (
-        f"Ny {form_label}\n"
-        f"{'=' * (len(form_label) + 4)}\n\n"
+        f"{preview_lines}"
         f"{field_lines}"
         f"{attachment_lines}\n\n"
         f"{ai_reply_lines}"
-        f"Tid (UTC): {timestamp_iso}\n"
+        f"{status_action_lines}"
+        f"Tid (svensk tid): {format_swedish_timestamp(timestamp_iso)}\n"
         f"ID: {submission_id}\n"
     )
     html_body = build_notification_html(
@@ -2474,6 +3814,9 @@ def send_mailgun_submission_notification(
         timestamp_iso,
         attachments=enriched,
         proposed_response=proposed_response,
+        preview_title=preview_title,
+        preview_message=preview_message,
+        status_actions_html=status_actions_html,
     )
     ok, info = send_mailgun_email(
         recipients=recipients,
@@ -2514,6 +3857,16 @@ def send_mailgun_customer_confirmation(submission: Dict[str, Any]) -> None:
         f"Henricssons Båtkapell\n"
     )
     html_body = build_customer_confirmation_html(form_type, customer_name, summary_html=summary_html)
+    customer_confirmation_settings = load_customer_confirmation_settings()
+    rendered_email = build_customer_confirmation_email_content(
+        form_type,
+        customer_name,
+        fields,
+        customer_confirmation_settings.get("body_template", DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE),
+    )
+    subject = rendered_email["subject"]
+    text_body = rendered_email["text_body"]
+    html_body = rendered_email["html_body"]
     inline_files: List[Tuple[str, bytes, str]] = []
     try:
         inline_files.append(("henricssons-logo", LOGO_FILE.read_bytes(), "image/png"))
@@ -2539,7 +3892,7 @@ def process_form_submission(
     normalized_form_type = display_form_type(form_type)
     safe_fields = sanitize_fields(fields, submitted_via=submitted_via)
     form_summary = build_form_summary(normalized_form_type, safe_fields)
-    category, title = generate_submission_metadata(normalized_form_type, safe_fields, form_summary)
+    category, title = generate_submission_metadata_fallback(normalized_form_type, safe_fields)
     submission_id = f"form_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{os.urandom(4).hex()}"
     submission = {
         "id": submission_id,
@@ -2549,15 +3902,24 @@ def process_form_submission(
         "fields": safe_fields,
         "form_summary": form_summary,
         "proposed_response": "",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "status": "nya-inskick",
         "read": False,
         "submitted_via": submitted_via,
     }
     save_submission_record(submission)
     saved_attachments = save_submission_attachments(submission_id, upload_files or [])
-    send_mailgun_submission_notification(submission, attachments=saved_attachments)
-    send_mailgun_customer_confirmation(submission)
+    enqueue_form_background_task(
+        "Mailgun submission notification",
+        send_mailgun_submission_notification,
+        submission,
+        attachments=saved_attachments,
+    )
+    enqueue_form_background_task(
+        "Mailgun customer confirmation",
+        send_mailgun_customer_confirmation,
+        submission,
+    )
     return submission_id
 
 
@@ -2643,6 +4005,7 @@ def label_submission_field_for_admin(key: str) -> str:
 
 def build_admin_chat_context() -> Dict[str, Any]:
     submissions = get_all_submissions()
+    status_config = load_status_config()
     normalized_submissions: List[Dict[str, Any]] = []
 
     for row in submissions:
@@ -2917,7 +4280,7 @@ FIELD_LABELS: Dict[str, str] = {
     "size": "Storlek",
     "address": "Adress",
     "boat_year": "Årsmodell",
-    "home_port": "Hemmahamn",
+    "home_port": "Hemmahamn + Ort",
     "old_canopy": "Tillverkare av befintligt kapell",
 }
 
@@ -2933,7 +4296,7 @@ FIELD_LABELS_EN: Dict[str, str] = {
     "size": "Size",
     "address": "Address",
     "boat_year": "Year model",
-    "home_port": "Home port",
+    "home_port": "Home port + City",
     "old_canopy": "Current canopy manufacturer",
 }
 
@@ -3125,7 +4488,7 @@ def map_draft_to_submission(intent: str, draft: Dict[str, Any]) -> Tuple[str, Di
                 "4. Tillverkare": str(normalized.get("manufacturer", "")).strip(),
                 "5. Modell": str(normalized.get("model", "")).strip(),
                 "6. Årsmodell": str(normalized.get("boat_year", "")).strip(),
-                "7. Hemmahamn": str(normalized.get("home_port", "")).strip(),
+                "7. Hemmahamn + Ort": str(normalized.get("home_port", "")).strip(),
                 "8. Tillverkare av befintligt kapell": str(normalized.get("old_canopy", "")).strip(),
                 "9. Övrig information": str(normalized.get("message", "")).strip(),
             },
@@ -3319,6 +4682,18 @@ def get_form_submissions():
     return jsonify(get_all_submissions())
 
 
+@app.route("/api/status_config", methods=["GET", "POST"])
+@admin_required
+def status_config_route():
+    if request.method == "GET":
+        return jsonify(statuses=load_status_config())
+
+    payload = request.get_json()
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    return jsonify(statuses=save_status_config(payload))
+
+
 @app.route("/api/update_submission_status", methods=["POST"])
 @admin_required
 def update_submission_status_route():
@@ -3329,8 +4704,10 @@ def update_submission_status_route():
     if not submission_id:
         return jsonify(error="Missing id"), 400
     new_status = payload.get("status")
-    if new_status is not None and new_status not in STATUS_FLOW:
-        return jsonify(error="Invalid status"), 400
+    if new_status is not None:
+        new_status = str(new_status).strip()
+        if new_status not in get_valid_submission_status_ids():
+            return jsonify(error="Invalid status"), 400
     read_value = payload.get("read")
     if read_value is not None:
         read_value = bool(read_value)
@@ -3338,6 +4715,131 @@ def update_submission_status_route():
     if not updated:
         return jsonify(error="Submission not found"), 404
     return jsonify(success=True)
+
+
+def render_email_status_action_page(
+    title: str,
+    message: str,
+    *,
+    status_code: int = 200,
+    auto_submit: bool = False,
+    form_values: Optional[Dict[str, str]] = None,
+) -> Tuple[str, int]:
+    form_values = form_values or {}
+    hidden_inputs = "".join(
+        f'<input type="hidden" name="{html.escape(key, quote=True)}" value="{html.escape(value, quote=True)}">'
+        for key, value in form_values.items()
+    )
+    form_html = ""
+    script_html = ""
+    if auto_submit:
+        form_html = (
+            '<form id="status-action-form" method="post" action="/api/email_status_action">'
+            f"{hidden_inputs}"
+            '<button type="submit">Bekräfta</button>'
+            "</form>"
+        )
+        script_html = (
+            "<script>(function(){"
+            "var form=document.getElementById('status-action-form');"
+            "var done=false;"
+            "function submit(){"
+            "if(done||!form||document.visibilityState!=='visible'||!document.hasFocus())return;"
+            "done=true;form.submit();"
+            "}"
+            "window.addEventListener('focus',function(){setTimeout(submit,250);},{once:true});"
+            "document.addEventListener('visibilitychange',function(){setTimeout(submit,250);},{once:true});"
+            "setTimeout(submit,650);"
+            "})();</script>"
+        )
+    admin_href = "/admin"
+    return render_template_string(
+        """<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>{{ title }}</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f5f5;color:#222831;font-family:Arial,Helvetica,sans-serif}
+    main{width:min(92vw,460px);background:#fff;border:1px solid #d9dee5;padding:28px;box-shadow:0 14px 32px rgba(12,26,43,.12)}
+    h1{margin:0 0 10px;font-size:22px}
+    p{margin:0 0 20px;color:#4b5563;line-height:1.55}
+    button,a{display:inline-block;border:0;border-radius:999px;background:#2563eb;color:#fff;text-decoration:none;padding:11px 16px;font-weight:700;font-size:14px;cursor:pointer}
+    a.secondary{background:#eef2f7;color:#222831;margin-left:8px}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    {{ form_html|safe }}
+    {% if not auto_submit %}<a href="{{ admin_href }}">Öppna admin</a>{% endif %}
+    {{ script_html|safe }}
+  </main>
+</body>
+</html>""",
+        title=title,
+        message=message,
+        form_html=form_html,
+        script_html=script_html,
+        auto_submit=auto_submit,
+        admin_href=admin_href,
+    ), status_code
+
+
+@app.route("/api/email_status_action", methods=["GET", "POST"])
+def email_status_action_route():
+    source = request.form if request.method == "POST" else request.args
+    submission_id = str(source.get("id", "") or "").strip()
+    status_id = str(source.get("status", "") or "").strip()
+    token = str(source.get("token", "") or "").strip()
+    try:
+        issued_at = int(str(source.get("ts", "") or "0"))
+    except ValueError:
+        issued_at = 0
+
+    if is_probable_email_link_scanner_request():
+        return Response(status=204)
+
+    if not verify_submission_status_action(submission_id, status_id, issued_at, token):
+        return render_email_status_action_page(
+            "Länken gäller inte",
+            "Statusen kunde inte uppdateras. Öppna adminpanelen och flytta ärendet manuellt.",
+            status_code=403,
+        )
+    if status_id not in get_valid_submission_status_ids():
+        return render_email_status_action_page(
+            "Statusmappen saknas",
+            "Den här statusmappen finns inte längre.",
+            status_code=400,
+        )
+
+    if request.method == "GET":
+        return render_email_status_action_page(
+            "Flyttar ärendet",
+            f"Ärendet flyttas till {get_status_name(status_id)}.",
+            auto_submit=True,
+            form_values={
+                "id": submission_id,
+                "status": status_id,
+                "ts": str(issued_at),
+                "token": token,
+            },
+        )
+
+    updated = update_submission_status_record(submission_id, status_id, None)
+    if not updated:
+        return render_email_status_action_page(
+            "Ärendet hittades inte",
+            "Statusen kunde inte uppdateras eftersom ärendet saknas.",
+            status_code=404,
+        )
+    return render_email_status_action_page(
+        "Status uppdaterad",
+        f"Ärendet har flyttats till {get_status_name(status_id)}.",
+    )
 
 
 @app.route("/api/delete_submission", methods=["POST"])
@@ -3491,6 +4993,58 @@ def mailgun_settings_route():
     return jsonify(success=True, **saved)
 
 
+@app.route("/api/customer_confirmation_settings", methods=["GET", "POST"])
+@admin_required
+def customer_confirmation_settings_route():
+    if request.method == "GET":
+        return jsonify(load_customer_confirmation_settings())
+
+    data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify(error="Invalid payload"), 400
+    try:
+        saved = save_customer_confirmation_settings(data)
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+    return jsonify(success=True, **saved)
+
+
+@app.route("/api/customer_confirmation_preview", methods=["POST"])
+@admin_required
+def customer_confirmation_preview_route():
+    data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify(error="Invalid payload"), 400
+
+    requested_form_type = str(data.get("form_type", "Kontakt") or "Kontakt")
+    sample_submission = build_customer_confirmation_preview_submission(requested_form_type)
+    fields = sample_submission.get("fields", {})
+    customer_name = get_field_value(fields, "name", "namn")
+    if "body_template" in data:
+        template = str(data.get("body_template", "") or "").strip()
+    else:
+        template = ""
+    if not template:
+        template = load_customer_confirmation_settings().get("body_template", DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE)
+
+    logo_src = request.url_root.rstrip("/") + "/logo.png"
+    preview_email = build_customer_confirmation_email_content(
+        str(sample_submission.get("form_type", requested_form_type)),
+        customer_name,
+        fields if isinstance(fields, dict) else {},
+        template,
+        logo_src=logo_src,
+    )
+    return jsonify(
+        success=True,
+        form_type=preview_email["form_type"],
+        form_label=preview_email["form_label"],
+        subject=preview_email["subject"],
+        text_body=preview_email["text_body"],
+        html_body=preview_email["html_body"],
+    )
+
+
 @app.route("/api/upload_image", methods=["POST"])
 @admin_required
 def upload_image():
@@ -3523,6 +5077,26 @@ def upload_image():
     abs_path.parent.mkdir(parents=True, exist_ok=True)
     with abs_path.open("wb") as handle:
         handle.write(raw)
+
+    # Persist in the database as well; the disk copy does not survive a
+    # redeploy on Render.
+    mime = f"image/{'jpeg' if ext == '.jpg' else ext.lstrip('.')}"
+    db = get_db()
+    if db:
+        try:
+            normalized_rel = safe_rel_path.replace("\\", "/")
+            row = db.query(SiteImage).filter_by(rel_path=normalized_rel).first()
+            if row:
+                row.data = raw
+                row.mime = mime
+            else:
+                db.add(SiteImage(rel_path=normalized_rel, mime=mime, data=raw))
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            print(f"SiteImage save failed for {safe_rel_path}: {exc}")
+        finally:
+            db.close()
 
     return jsonify(success=True, saved_path=safe_rel_path.replace("/", "\\"))
 
@@ -3563,8 +5137,15 @@ def enrich_temp_products(products: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     return enriched
 
 
+def is_public_temp_product(product: Dict[str, Any]) -> bool:
+    title = str(product.get("title") or "").strip().lower()
+    if not title or title == "ny produkt" or title.startswith("test"):
+        return False
+    return True
+
+
 def get_public_temp_products() -> List[Dict[str, Any]]:
-    return enrich_temp_products(_fetch_temp_products())
+    return enrich_temp_products([product for product in _fetch_temp_products() if is_public_temp_product(product)])
 
 
 def get_temp_product_by_slug(slug: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -3601,6 +5182,8 @@ def _fetch_temp_products(include_images: bool = True) -> List[Dict[str, Any]]:
 
 @app.route("/api/temp_products", methods=["GET"])
 def list_temp_products_public():
+    if check_admin_access():
+        return jsonify(enrich_temp_products(_fetch_temp_products()))
     return jsonify(get_public_temp_products())
 
 
@@ -3781,6 +5364,247 @@ def delete_temp_product_image(image_id: int):
         db.close()
 
 
+BOAT_BRAND_MAX_IMAGE_BYTES = 8 * 1024 * 1024
+BOAT_BRAND_MAX_IMAGES = 20
+BOAT_BRAND_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+
+def slugify_boat_brand(value: Any, fallback: str = "marke") -> str:
+    raw = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_value = raw.encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_value.lower()).strip("-")
+    return slug or fallback
+
+
+def _fetch_boat_brands(include_images: bool = True) -> List[Dict[str, Any]]:
+    db = get_db()
+    if not db:
+        return []
+    try:
+        rows = db.query(BoatBrand).order_by(BoatBrand.sort_order.asc(), BoatBrand.id.asc()).all()
+        images_by_brand: Dict[int, List[Dict[str, Any]]] = {}
+        if include_images and rows:
+            img_rows = (
+                db.query(BoatBrandImage)
+                .order_by(BoatBrandImage.sort_order.asc(), BoatBrandImage.id.asc())
+                .all()
+            )
+            for img in img_rows:
+                images_by_brand.setdefault(img.brand_id, []).append(img.to_meta())
+        return [row.to_dict(images=images_by_brand.get(row.id, [])) for row in rows]
+    except Exception as exc:
+        print(f"_fetch_boat_brands failed: {exc}")
+        return []
+    finally:
+        db.close()
+
+
+def enrich_boat_brands(brands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    used_slugs: set[str] = set()
+    enriched: List[Dict[str, Any]] = []
+    for item in brands:
+        brand = dict(item)
+        base_slug = slugify_boat_brand(brand.get("name"), fallback=f"marke-{brand.get('id') or 'x'}")
+        slug = base_slug
+        suffix = 2
+        while slug in used_slugs:
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+        used_slugs.add(slug)
+        brand["slug"] = slug
+        brand["href"] = f"/dynsatser/{slug}"
+        images = brand.get("images") if isinstance(brand.get("images"), list) else []
+        brand["images"] = images
+        brand["primary_image_url"] = images[0]["url"] if images else ""
+        enriched.append(brand)
+    return enriched
+
+
+def get_boat_brand_by_slug(slug: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
+    brands = enrich_boat_brands(_fetch_boat_brands())
+    clean_slug = str(slug or "").strip().strip("/")
+    for brand in brands:
+        if brand.get("slug") == clean_slug:
+            return brand, brands
+    return None, brands
+
+
+@app.route("/api/boat_brands", methods=["GET"])
+def list_boat_brands():
+    return jsonify(enrich_boat_brands(_fetch_boat_brands()))
+
+
+@app.route("/api/boat_brands", methods=["POST"])
+@admin_required
+def create_boat_brand():
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        next_order = db.query(BoatBrand).count() or 0
+        brand = BoatBrand(
+            name=str(payload.get("name", "") or "").strip()[:300],
+            description=str(payload.get("description", "") or "").strip()[:4000],
+            sort_order=int(payload.get("sort_order", next_order) or next_order),
+        )
+        db.add(brand)
+        db.commit()
+        db.refresh(brand)
+        return jsonify(brand.to_dict())
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brands/<int:brand_id>", methods=["PUT"])
+@admin_required
+def update_boat_brand(brand_id: int):
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        brand = db.query(BoatBrand).filter_by(id=brand_id).first()
+        if not brand:
+            return jsonify(error="Not found"), 404
+        if "name" in payload:
+            brand.name = str(payload.get("name", "") or "").strip()[:300]
+        if "description" in payload:
+            brand.description = str(payload.get("description", "") or "").strip()[:4000]
+        if "sort_order" in payload:
+            try:
+                brand.sort_order = int(payload.get("sort_order") or 0)
+            except (TypeError, ValueError):
+                pass
+        db.commit()
+        db.refresh(brand)
+        return jsonify(brand.to_dict())
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brands/<int:brand_id>", methods=["DELETE"])
+@admin_required
+def delete_boat_brand(brand_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        brand = db.query(BoatBrand).filter_by(id=brand_id).first()
+        if not brand:
+            return jsonify(error="Not found"), 404
+        db.query(BoatBrandImage).filter_by(brand_id=brand_id).delete(synchronize_session=False)
+        db.delete(brand)
+        db.commit()
+        return jsonify(success=True)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brands/<int:brand_id>/images", methods=["POST"])
+@admin_required
+def upload_boat_brand_image(brand_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        brand = db.query(BoatBrand).filter_by(id=brand_id).first()
+        if not brand:
+            return jsonify(error="Brand not found"), 404
+        existing_count = db.query(BoatBrandImage).filter_by(brand_id=brand_id).count()
+        files = request.files.getlist("images") or request.files.getlist("image")
+        if not files:
+            return jsonify(error="No images provided"), 400
+        saved: List[Dict[str, Any]] = []
+        next_order = existing_count
+        for file_storage in files:
+            if existing_count + len(saved) >= BOAT_BRAND_MAX_IMAGES:
+                break
+            raw_name = getattr(file_storage, "filename", "") or f"image-{int(time.time())}"
+            mime = (getattr(file_storage, "mimetype", "") or "").lower()
+            if mime not in BOAT_BRAND_ALLOWED_MIMES:
+                ext = os.path.splitext(raw_name)[1].lower()
+                mime = {
+                    ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                    ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
+                }.get(ext, "")
+            if mime not in BOAT_BRAND_ALLOWED_MIMES:
+                continue
+            blob = file_storage.read()
+            if not blob or len(blob) > BOAT_BRAND_MAX_IMAGE_BYTES:
+                continue
+            image = BoatBrandImage(
+                brand_id=brand_id,
+                filename=sanitize_attachment_filename(raw_name, fallback_ext=os.path.splitext(raw_name)[1]),
+                mime=mime,
+                data=blob,
+                sort_order=next_order,
+            )
+            db.add(image)
+            db.flush()
+            saved.append(image.to_meta())
+            next_order += 1
+        db.commit()
+        return jsonify(success=True, images=saved)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brand_image/<int:image_id>", methods=["GET"])
+def get_boat_brand_image(image_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        row = db.query(BoatBrandImage).filter_by(id=image_id).first()
+        if not row:
+            return jsonify(error="Not found"), 404
+        response = Response(row.data, mimetype=row.mime or "image/jpeg")
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        response.headers["Content-Length"] = str(len(row.data or b""))
+        return response
+    except Exception as exc:
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/boat_brand_image/<int:image_id>", methods=["DELETE"])
+@admin_required
+def delete_boat_brand_image(image_id: int):
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        row = db.query(BoatBrandImage).filter_by(id=image_id).first()
+        if not row:
+            return jsonify(error="Not found"), 404
+        db.delete(row)
+        db.commit()
+        return jsonify(success=True)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
 @app.route("/api/mailgun_test", methods=["POST"])
 @admin_required
 def mailgun_test():
@@ -3808,22 +5632,78 @@ def get_boat_data():
     return jsonify({})
 
 
+_LEGACY_ASSET_HOST_RE = re.compile(
+    r"^https?://(localhost|127\.0\.0\.1|([a-z0-9-]+\.)*onrender\.com|(www\.)?henricssonsbatkapell\.se)(:\d+)?/+",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_asset_url(value: Any) -> Any:
+    """Strip dev/legacy hosts and backslashes from image URLs so they always
+    resolve relative to the current origin. Defense against dev-saved data
+    that bakes in localhost:25565 URLs."""
+    if not isinstance(value, str):
+        return value
+    if value.startswith("data:"):
+        return value
+    cleaned = value.replace("\\", "/")
+    cleaned = _LEGACY_ASSET_HOST_RE.sub("", cleaned)
+    cleaned = re.sub(r"(?<!:)/{2,}", "/", cleaned)
+    return cleaned
+
+
+def _sanitize_models_meta_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return payload
+    for key, record in payload.items():
+        if not isinstance(record, dict):
+            continue
+        imgs = record.get("images")
+        if isinstance(imgs, list):
+            record["images"] = [_sanitize_asset_url(img) for img in imgs]
+    return payload
+
+
 @app.route("/henricssons_bilder/<path:filename>")
 def get_henricssons_files(filename: str):
     if filename == "models_meta.json":
-        data = get_site_content("models_meta")
-        if isinstance(data, dict):
-            return app.response_class(json.dumps(data, ensure_ascii=False), mimetype="application/json")
-        if MODELS_META_FILE.exists():
-            return send_from_directory(str(IMAGES_ROOT), "models_meta.json")
-        return jsonify({})
+        stored = get_site_content("models_meta")
+        file_data = read_json_file(MODELS_META_FILE, {})
+        normalized = merge_example_payload_dicts(stored if isinstance(stored, dict) else {}, file_data)
+        normalized = _sanitize_models_meta_payload(normalized)
+        return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
     full_path = (IMAGES_ROOT / filename).resolve()
     if IMAGES_ROOT not in full_path.parents:
         return jsonify(error="Invalid path"), 400
     if full_path.exists() and full_path.is_file():
         return send_from_directory(str(full_path.parent), full_path.name)
+
+    # Admin-uploaded images live in the database; the disk copy is lost on
+    # each redeploy.
+    db = get_db()
+    if db:
+        try:
+            rel = filename.replace("\\", "/").lstrip("/")
+            row = db.query(SiteImage).filter_by(rel_path=rel).first()
+            if row:
+                response = Response(row.data, mimetype=row.mime or "application/octet-stream")
+                response.headers["Cache-Control"] = "public, max-age=3600"
+                return response
+        except Exception as exc:
+            print(f"SiteImage lookup failed for {filename}: {exc}")
+        finally:
+            db.close()
     return jsonify(error="File not found"), 404
+
+
+@app.route("/examples_meta.json")
+def get_examples_meta():
+    stored = get_site_content("examples_meta")
+    file_data = read_json_file(EXAMPLES_META_FILE, {})
+    normalized = merge_example_payload_dicts(stored if isinstance(stored, dict) else {}, file_data)
+    normalized = _sanitize_models_meta_payload(normalized)
+    return app.response_class(json.dumps(normalized, ensure_ascii=False), mimetype="application/json")
 
 
 @app.route("/api/chat", methods=["POST", "OPTIONS"])
@@ -3930,7 +5810,7 @@ def assistant_chat():
                     "manufacturer": "Tillverkare",
                     "model": "Modell",
                     "boat_year": "Årsmodell",
-                    "home_port": "Hemmahamn",
+                "home_port": "Hemmahamn + Ort",
                     "old_canopy": "Tillverkare av befintligt kapell",
                     "message": "Meddelande",
                 },
@@ -3941,7 +5821,7 @@ def assistant_chat():
                     "manufacturer": "Manufacturer",
                     "model": "Model",
                     "boat_year": "Year model",
-                    "home_port": "Home port",
+                    "home_port": "Home port + City",
                     "old_canopy": "Current canopy manufacturer",
                     "message": "Message",
                 },
@@ -3997,7 +5877,7 @@ def assistant_chat():
         "- Answer customer questions directly in chat whenever possible.\n"
         "- Never pretend to book, reserve, schedule, confirm a visit, confirm a time slot, or perform any real-world action.\n"
         "- Never claim you checked availability, a calendar, opening hours, or staff presence unless that exact information is explicitly present in the provided context.\n"
-        "- If the customer suggests a time or visit, do not confirm it as booked. State that it must be confirmed by the company.\n"
+        "- If the customer suggests a time or visit, do not confirm it as booked. State that it must be confirmed by the company and ask them to call before visiting.\n"
         "- Never ask the customer for contact details or other form fields in public chat.\n"
         "- Never use hidden command blocks or JSON in the reply.\n"
         "- Only show route buttons by writing one of these exact visible tokens on its own line at the end: %kapellförfrågan% or %fenderförfrågan% or %kontakt%.\n"
@@ -4099,7 +5979,15 @@ def assistant_submit():
 @app.route("/robots.txt", methods=["GET"])
 def robots_txt():
     return Response(
-        f"User-agent: *\nAllow: /\nSitemap: {PUBLIC_BASE_URL}/sitemap.xml\n",
+        "\n".join(
+            [
+                "User-agent: *",
+                "Disallow: /admin",
+                "Disallow: /admin.html",
+                f"Sitemap: {PUBLIC_BASE_URL}/sitemap.xml",
+                "",
+            ]
+        ),
         mimetype="text/plain",
     )
 
@@ -4127,22 +6015,9 @@ def sitemap_xml():
 @app.route("/search", methods=["GET"])
 def search_page():
     query = str(request.args.get("q") or request.args.get("query") or "").strip()
-    query_lower = query.lower()
     examples = list_canonical_examples()
-    if query_lower:
-        results = [
-            item
-            for item in examples
-            if query_lower in " ".join(
-                [
-                    str(item.get("manufacturer", "")),
-                    str(item.get("model", "")),
-                    str(item.get("category", "")),
-                    str(item.get("variant", "")),
-                    str(item.get("description", "")),
-                ]
-            ).lower()
-        ]
+    if query:
+        results = [item for item in examples if example_matches_search(item, query)]
     else:
         results = examples[:48]
 
@@ -4325,7 +6200,6 @@ def example_page(slug: str):
             </div>
             <div class="seo-kicker">{html.escape(str(item.get('category', '') or 'Exempel'))}</div>
             <h1>{html.escape(full_title)}</h1>
-            <p>Exempel på tidigare projekt från Henricssons Båtkapell. Här hittar du bilder, variantinformation och leveransinfo för modellen.</p>
         </section>
         <section class="seo-grid">
             <article class="seo-card">{gallery_html}</article>
@@ -4456,9 +6330,8 @@ def temp_product_page(slug: str):
     price_text = str(product.get("price") or "").strip()
     images = [absolute_public_url(img.get("url", "")) for img in product.get("images", []) if img.get("url")]
     image_urls = images or [absolute_public_url("/logo.png")]
-    lead_text = description_text or "En aktuell produkt från Henricssons Båtkapell med delbar produktsida och bildgalleri."
     page_title = f"{title_text} - Tillfälliga produkter - Henricssons Båtkapell"
-    page_description = product.get("share_description") or lead_text[:160]
+    page_description = product.get("share_description") or description_text[:160] or f"{title_text} hos Henricssons Båtkapell."
     contact_query = urlencode({"product": title_text, "product_slug": canonical_slug})
     contact_href = f"/kontakt?{contact_query}" if contact_query else "/kontakt"
 
@@ -4511,12 +6384,9 @@ def temp_product_page(slug: str):
             <div class="seo-meta-label">Om produkten</div>
             <p style="margin:0;">{html.escape(description_text or 'Kontakta oss för mer information om denna produkt.')}</p>
         </div>
-        <div class="seo-meta-block">
-            <div class="seo-meta-label">Delbar länk</div>
-            <p style="margin:0;">Skicka den här sidan direkt till kunden eller använd den som referens i kontaktformuläret.</p>
-        </div>
+        <p class="seo-interest-text">Är du intresserad? Kontakta oss så återkommer vi.</p>
         <div class="seo-cta-row">
-            <a class="seo-btn seo-btn-primary" href="{html.escape(contact_href)}">Fråga om produkten</a>
+            <a class="seo-btn seo-btn-primary" href="{html.escape(contact_href)}">Kontakta oss</a>
             <a class="seo-btn" href="/tillfalliga-produkter">Till alla produkter</a>
         </div>
     </div>
@@ -4534,7 +6404,6 @@ def temp_product_page(slug: str):
             </nav>
             <span class="seo-kicker">Övriga produkter</span>
             <h1>{html.escape(title_text)}</h1>
-            <p>{html.escape(lead_text)}</p>
         </section>
         <section class="seo-grid">
             <article class="seo-card">{gallery_html}</article>
@@ -4576,6 +6445,251 @@ def temp_product_page(slug: str):
         content_html=content_html,
         og_image=image_urls[0],
     )
+
+
+@app.route("/dynsatser/<path:slug>", methods=["GET"])
+def boat_brand_page(slug: str):
+    clean_slug = slug.strip().rstrip("/")
+    if clean_slug.endswith(".html"):
+        return redirect(f"/dynsatser/{clean_slug[:-5]}", code=301)
+
+    brand, brands = get_boat_brand_by_slug(clean_slug)
+    if not brand:
+        abort(404)
+
+    canonical_slug = str(brand.get("slug") or "").strip()
+    if clean_slug != canonical_slug:
+        return redirect(f"/dynsatser/{canonical_slug}", code=301)
+
+    name_text = str(brand.get("name") or "Båtmärke").strip()
+    description_text = str(brand.get("description") or "").strip()
+    images = [absolute_public_url(img.get("url", "")) for img in brand.get("images", []) if img.get("url")]
+    image_urls = images or [absolute_public_url("/logo.png")]
+    page_title = f"Dynsatser till {name_text} - Henricssons Båtkapell"
+    page_description = (description_text[:160] if description_text else f"Dynsatser och båtdynor till {name_text} hos Henricssons Båtkapell.")
+    contact_query = urlencode({"manufacturer": name_text})
+    contact_href = f"/dynsatser?{contact_query}#dynForm"
+
+    other_brands: List[str] = []
+    for other in brands:
+        if other.get("slug") == canonical_slug:
+            continue
+        other_name = html.escape(str(other.get("name") or ""))
+        other_href = html.escape(str(other.get("href") or "/dynsatser"))
+        other_image = html.escape(absolute_public_url(str(other.get("primary_image_url") or "/logo.png")))
+        other_brands.append(
+            f"""
+            <a class="seo-related-card" href="{other_href}">
+                <img src="{other_image}" alt="{other_name}" loading="lazy" decoding="async">
+                <div class="seo-related-copy">
+                    <strong>{other_name}</strong>
+                    <span>Visa dynsatser</span>
+                </div>
+            </a>
+            """
+        )
+        if len(other_brands) >= 4:
+            break
+
+    nav_style = "" if len(image_urls) > 1 else ' style="display:none;"'
+    thumbs_html = "".join(
+        f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(url)}" alt="{html.escape(name_text)} bild {idx + 1}" loading="lazy" decoding="async"></button>'
+        for idx, url in enumerate(image_urls[:10])
+    )
+    gallery_html = f"""
+    <div class="seo-gallery">
+        <div class="seo-gallery-stage">
+            <button type="button" class="seo-gallery-nav seo-gallery-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
+            <div class="seo-gallery-main">
+                <img id="seoGalleryMainImage" src="{html.escape(image_urls[0])}" alt="{html.escape(name_text)}" loading="eager" decoding="async" fetchpriority="high">
+            </div>
+            <button type="button" class="seo-gallery-nav seo-gallery-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
+        </div>
+        {f'<div class="seo-thumbs">{thumbs_html}</div>' if len(image_urls) > 1 else ''}
+    </div>
+    """
+
+    meta_html = f"""
+    <div class="seo-meta">
+        <div class="seo-meta-block">
+            <div class="seo-meta-label">Om {html.escape(name_text)}</div>
+            <p style="margin:0;">{html.escape(description_text or f'Vi tillverkar dynsatser anpassade för {name_text}. Kontakta oss för mer information och prisförfrågan.')}</p>
+        </div>
+        <p class="seo-interest-text">Intresserad av dynsatser till din {html.escape(name_text)}? Kontakta oss så återkommer vi.</p>
+        <div class="seo-cta-row">
+            <a class="seo-btn seo-btn-primary" href="{html.escape(contact_href)}">Skicka förfrågan</a>
+            <a class="seo-btn" href="/dynsatser">Alla märken</a>
+        </div>
+    </div>
+    """
+
+    content_html = f"""
+    <main class="seo-page">
+        <section class="seo-hero">
+            <nav class="seo-breadcrumbs" aria-label="Brödsmulor">
+                <a href="/">Hem</a>
+                <span>/</span>
+                <a href="/dynsatser">Dynsatser</a>
+                <span>/</span>
+                <span>{html.escape(name_text)}</span>
+            </nav>
+            <span class="seo-kicker">Dynsatser</span>
+            <h1>{html.escape(name_text)}</h1>
+        </section>
+        <section class="seo-grid">
+            <article class="seo-card">{gallery_html}</article>
+            <aside class="seo-card">{meta_html}</aside>
+        </section>
+        <section class="seo-related">
+            <h2>Fler båtmärken</h2>
+            <div class="seo-related-grid">
+                {''.join(other_brands) if other_brands else '<div class="seo-card"><p style="margin:0;">Kontakta oss för information om fler märken.</p></div>'}
+            </div>
+        </section>
+    </main>
+    <script>
+        (function () {{
+            const images = {json.dumps(image_urls[:10])};
+            if (images.length < 2) return;
+            const mainImage = document.getElementById('seoGalleryMainImage');
+            const thumbs = Array.from(document.querySelectorAll('.seo-thumb'));
+            const prevButton = document.querySelector('.seo-gallery-prev');
+            const nextButton = document.querySelector('.seo-gallery-next');
+            let currentIndex = 0;
+            function render(index) {{
+                currentIndex = (index + images.length) % images.length;
+                if (mainImage) mainImage.src = images[currentIndex];
+                thumbs.forEach((thumb, i) => thumb.classList.toggle('is-active', i === currentIndex));
+            }}
+            thumbs.forEach((thumb, index) => thumb.addEventListener('click', () => render(index)));
+            if (prevButton) prevButton.addEventListener('click', () => render(currentIndex - 1));
+            if (nextButton) nextButton.addEventListener('click', () => render(currentIndex + 1));
+        }})();
+    </script>
+    """
+    return render_public_page(
+        title=page_title,
+        description=page_description,
+        canonical_path=f"/dynsatser/{canonical_slug}",
+        content_html=content_html,
+        og_image=image_urls[0],
+    )
+
+
+def build_analytics_summary(days: int = 30) -> Dict[str, Any]:
+    days = max(1, min(int(days or 30), 365))
+    analytics_tz = ZoneInfo("Europe/Stockholm")
+    today_local = datetime.now(analytics_tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_local = today_local - timedelta(days=days - 1)
+    start_at = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    db = get_db()
+    if not db:
+        return {
+            "days": days,
+            "totals": {"pageviews": 0, "searches": 0},
+            "daily": [],
+            "top_pages": [],
+            "top_referrers": [],
+            "top_searches": [],
+        }
+    try:
+        events = (
+            db.query(AnalyticsEvent)
+            .filter(AnalyticsEvent.created_at >= start_at)
+            .order_by(AnalyticsEvent.created_at.asc())
+            .all()
+        )
+    finally:
+        db.close()
+
+    day_stats: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "total": 0,
+            "empty_referrer": 0,
+            "example": 0,
+            "paths": set(),
+        }
+    )
+    for event in events:
+        created_at = event.created_at or datetime.utcnow()
+        local_created_at = created_at.replace(tzinfo=timezone.utc).astimezone(analytics_tz)
+        day_key = local_created_at.strftime("%Y-%m-%d")
+        path = str(event.path or "/")
+        stats = day_stats[day_key]
+        stats["total"] += 1
+        stats["paths"].add(path)
+        if not str(event.referrer_host or "").strip():
+            stats["empty_referrer"] += 1
+        if path.startswith("/exempel/"):
+            stats["example"] += 1
+
+    crawler_sweep_days = {
+        day
+        for day, stats in day_stats.items()
+        if stats["total"] >= 500
+        and len(stats["paths"]) >= 200
+        and stats["example"] >= int(stats["total"] * 0.6)
+        and stats["empty_referrer"] >= int(stats["total"] * 0.8)
+    }
+
+    daily_map: Dict[str, Dict[str, int]] = defaultdict(lambda: {"pageviews": 0, "searches": 0})
+    page_counts: Dict[str, int] = defaultdict(int)
+    referrer_counts: Dict[str, int] = defaultdict(int)
+    search_counts: Dict[str, int] = defaultdict(int)
+
+    totals = {"pageviews": 0, "searches": 0}
+
+    for event in events:
+        event_type = str(event.event_type or "pageview").strip().lower()
+        created_at = event.created_at or datetime.utcnow()
+        local_created_at = created_at.replace(tzinfo=timezone.utc).astimezone(analytics_tz)
+        day_key = local_created_at.strftime("%Y-%m-%d")
+        path = str(event.path or "/")
+        referrer_host = str(event.referrer_host or "").strip().lower()
+        if day_key in crawler_sweep_days and not referrer_host and path.startswith("/exempel/"):
+            continue
+        daily_map[day_key]["pageviews"] += 1
+        totals["pageviews"] += 1
+        page_counts[path] += 1
+
+        if referrer_host:
+            referrer_counts[referrer_host] += 1
+
+        search_query = normalize_search_query(event.search_query or "")
+        if event_type == "search" and search_query:
+            daily_map[day_key]["searches"] += 1
+            totals["searches"] += 1
+            search_counts[search_query] += 1
+
+    daily = []
+    for offset in range(days):
+        current = start_local + timedelta(days=offset)
+        day_key = current.strftime("%Y-%m-%d")
+        counts = daily_map.get(day_key, {"pageviews": 0, "searches": 0})
+        daily.append({"date": day_key, "pageviews": counts["pageviews"], "searches": counts["searches"]})
+
+    def top_items(counter_map: Dict[str, int], label_key: str) -> List[Dict[str, Any]]:
+        ordered = sorted(counter_map.items(), key=lambda item: (-item[1], item[0].lower()))
+        return [{label_key: key, "count": value} for key, value in ordered[:10]]
+
+    return {
+        "days": days,
+        "totals": totals,
+        "daily": daily,
+        "top_pages": top_items(page_counts, "path"),
+        "top_referrers": top_items(referrer_counts, "host"),
+        "top_searches": top_items(search_counts, "query"),
+    }
+
+
+@app.route("/api/analytics/summary", methods=["GET"])
+@admin_required
+def analytics_summary():
+    try:
+        days = int(request.args.get("days", "30"))
+    except ValueError:
+        days = 30
+    return jsonify(build_analytics_summary(days))
 
 
 @app.route("/healthz", methods=["GET"])
@@ -4628,6 +6742,13 @@ def root():
     return jsonify(status="ok")
 
 
+@app.route("/favicon.ico", methods=["GET"])
+def favicon():
+    response = send_from_directory(str(BASE_DIR), "logo.png")
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
 @app.route("/chat_widget.js", methods=["GET"])
 def chat_widget_script():
     if not is_public_chatbot_enabled():
@@ -4639,6 +6760,41 @@ def chat_widget_script():
     return response
 
 
+PUBLIC_STATIC_EXTENSIONS = {
+    ".html", ".css", ".js", ".mjs", ".map",
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico", ".avif",
+    ".woff", ".woff2", ".ttf", ".otf", ".eot",
+    ".json", ".xml", ".webmanifest", ".pdf", ".mp4",
+}
+PRIVATE_STATIC_FILES = {
+    "form_submissions.json",
+    "ai_settings.json",
+    "form_prompts.json",
+    "status_config.json",
+    "package.json",
+    "package-lock.json",
+}
+PRIVATE_STATIC_DIRS = {"arkiv", "archive", "__pycache__", "node_modules", "tasks"}
+
+
+def is_public_static_path(clean_name: str) -> bool:
+    parts = [part for part in clean_name.replace("\\", "/").split("/") if part]
+    if not parts:
+        return False
+    # Dotfiles and dot-directories (.git, .env, .claude, ...)
+    if any(part.startswith(".") for part in parts):
+        return False
+    if parts[0] in PRIVATE_STATIC_DIRS:
+        return False
+    if parts[-1] in PRIVATE_STATIC_FILES:
+        return False
+    suffix = Path(parts[-1]).suffix.lower()
+    # Extensionless paths are page slugs resolved to <slug>.html below.
+    if suffix and suffix not in PUBLIC_STATIC_EXTENSIONS:
+        return False
+    return True
+
+
 @app.route("/<path:filename>", methods=["GET"])
 def serve_static(filename: str):
     if filename.startswith("api/"):
@@ -4647,6 +6803,9 @@ def serve_static(filename: str):
     clean_name = filename.rstrip("/")
     if not clean_name:
         return redirect("/", code=301)
+
+    if not is_public_static_path(clean_name):
+        abort(404)
 
     admin_html_path = (BASE_DIR / "admin.html").resolve()
     requested_file_path = (BASE_DIR / clean_name).resolve()
@@ -4685,6 +6844,30 @@ if repaired_files:
         print(f" - {repaired_path.name}")
 
 init_db()
+
+
+def seed_boat_brands() -> None:
+    db = get_db()
+    if not db:
+        return
+    try:
+        count = db.query(BoatBrand).count()
+        if count == 0:
+            default_brands = ["Uttern", "Bella", "Buster", "Yamarin", "Flipper", "Finnmaster", "MV Marin"]
+            for i, name in enumerate(default_brands):
+                db.add(BoatBrand(name=name, description="", sort_order=i))
+            db.commit()
+    except Exception as exc:
+        print(f"seed_boat_brands failed: {exc}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+seed_boat_brands()
 
 
 if __name__ == "__main__":

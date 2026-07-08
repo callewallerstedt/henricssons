@@ -5,13 +5,14 @@ if (!window.boatData || typeof window.boatData !== 'object') {
 const port = '25565';
 const DATA_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? `${location.protocol}//${location.hostname}:${port}`
-    : 'https://henricssons-api.onrender.com';
+    : `${location.protocol}//${location.host}`;
 
 const state = {
     manufacturers: [],
     selectedManufacturerKey: '',
     selectedModelName: '',
     searchTerm: '',
+    modelSearchTerm: '',
     refreshTimer: null,
     elements: {}
 };
@@ -34,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function cacheElements() {
     state.elements = {
         searchInput: document.getElementById('tillverkare'),
+        modelSearchInput: document.getElementById('modell'),
         clearSearch: document.getElementById('clear-qs'),
         manufacturerGrid: document.querySelector('.grid1'),
         modelGrid: document.querySelector('.grid2'),
@@ -53,6 +55,7 @@ function cacheElements() {
 function bindEvents() {
     const {
         searchInput,
+        modelSearchInput,
         clearSearch,
         clearManufacturer,
         clearModel,
@@ -65,6 +68,13 @@ function bindEvents() {
             state.searchTerm = state.elements.searchInput.value.trim();
             renderManufacturers();
             updateActions();
+        }, 120));
+    }
+
+    if (modelSearchInput) {
+        modelSearchInput.addEventListener('input', debounce(() => {
+            state.modelSearchTerm = state.elements.modelSearchInput.value.trim();
+            renderModels();
         }, 120));
     }
 
@@ -98,6 +108,11 @@ function bindEvents() {
                 return;
             }
 
+            if (item.dataset.customValue) {
+                selectCustomManufacturer(item.dataset.customValue);
+                return;
+            }
+
             selectManufacturer(item.dataset.key, { scrollToModels: true });
         });
     }
@@ -106,6 +121,11 @@ function bindEvents() {
         modelGrid.addEventListener('click', (event) => {
             const item = event.target.closest('.grid2-item');
             if (!item) {
+                return;
+            }
+
+            if (item.dataset.customValue) {
+                selectCustomModel(item.dataset.customValue, { scrollToForm: true });
                 return;
             }
 
@@ -213,7 +233,7 @@ function renderManufacturers() {
         return !term || normalizeText(manufacturer.name).includes(term);
     });
 
-    if (matches.length === 0) {
+    if (matches.length === 0 && !state.searchTerm) {
         grid.appendChild(createEmptyState('Ingen tillverkare matchar sökningen.'));
         return;
     }
@@ -232,6 +252,7 @@ function renderManufacturers() {
 
         fragment.appendChild(button);
     });
+    appendCustomEntry(fragment, state.searchTerm, 'grid1-item', 'Använd egen tillverkare');
     grid.appendChild(fragment);
 }
 
@@ -253,13 +274,18 @@ function renderModels() {
 
     container.classList.remove('inaktiv');
 
-    if (selectedManufacturer.models.length === 0) {
+    const term = normalizeText(state.modelSearchTerm);
+    const matches = selectedManufacturer.models.filter((modelName) => {
+        return !term || normalizeText(modelName).includes(term);
+    });
+
+    if (selectedManufacturer.models.length === 0 && !state.modelSearchTerm) {
         grid.appendChild(createEmptyState('Det finns inga modeller registrerade för den här tillverkaren än.'));
         return;
     }
 
     const fragment = document.createDocumentFragment();
-    selectedManufacturer.models.forEach((modelName) => {
+    matches.forEach((modelName) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'grid2-item';
@@ -272,7 +298,31 @@ function renderModels() {
 
         fragment.appendChild(button);
     });
+    appendCustomEntry(fragment, state.modelSearchTerm, 'grid2-item', 'Använd egen modell');
     grid.appendChild(fragment);
+}
+
+function appendCustomEntry(fragment, value, itemClass, label) {
+    const customValue = String(value || '').trim();
+    if (!customValue) {
+        return;
+    }
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `${itemClass} grid-custom-entry`;
+    button.dataset.customValue = customValue;
+    button.setAttribute('aria-label', `${label}: ${customValue}`);
+    button.textContent = customValue;
+
+    if (itemClass === 'grid1-item' && !state.selectedManufacturerKey && state.elements.manufacturerField.value === customValue) {
+        button.classList.add('selected-t');
+    }
+    if (itemClass === 'grid2-item' && state.selectedModelName === customValue) {
+        button.classList.add('selected-m');
+    }
+
+    fragment.appendChild(button);
 }
 
 function createEmptyState(message) {
@@ -292,6 +342,10 @@ function selectManufacturer(key, { scrollToModels = false } = {}) {
     state.selectedModelName = '';
     state.elements.manufacturerField.value = manufacturer.name;
     state.elements.modelField.value = '';
+    state.modelSearchTerm = '';
+    if (state.elements.modelSearchInput) {
+        state.elements.modelSearchInput.value = '';
+    }
 
     renderManufacturers();
     renderModels();
@@ -302,14 +356,49 @@ function selectManufacturer(key, { scrollToModels = false } = {}) {
     }
 }
 
+function selectCustomManufacturer(manufacturerName) {
+    state.selectedManufacturerKey = '';
+    state.selectedModelName = '';
+    state.modelSearchTerm = '';
+    state.elements.manufacturerField.value = manufacturerName;
+    state.elements.modelField.value = '';
+    if (state.elements.modelSearchInput) {
+        state.elements.modelSearchInput.value = '';
+    }
+    state.elements.modelContainer.classList.add('inaktiv');
+    renderManufacturers();
+    updateActions();
+    scrollToElement(state.elements.contactForm, 128);
+}
+
 function clearManufacturerSelection() {
     state.selectedManufacturerKey = '';
     state.selectedModelName = '';
+    state.modelSearchTerm = '';
     state.elements.manufacturerField.value = '';
     state.elements.modelField.value = '';
+    if (state.elements.modelSearchInput) {
+        state.elements.modelSearchInput.value = '';
+    }
     renderManufacturers();
     renderModels();
     updateActions();
+}
+
+function selectCustomModel(modelName, { scrollToForm = false } = {}) {
+    const customModelName = String(modelName || '').trim();
+    if (!customModelName) {
+        return;
+    }
+
+    state.selectedModelName = customModelName;
+    state.elements.modelField.value = customModelName;
+    renderModels();
+    updateActions();
+
+    if (scrollToForm) {
+        scrollToElement(state.elements.contactForm, 128);
+    }
 }
 
 function selectModel(modelName, { scrollToForm = false } = {}) {

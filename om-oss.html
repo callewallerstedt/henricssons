@@ -7,24 +7,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=optional" rel="stylesheet">
     <link rel="icon" href="logo.png">
     <link rel="canonical" href="https://www.henricssonsbatkapell.se/om-oss"/>
     <!-- Open Graph -->
     <meta property="og:title" content="Om oss - Henricssons Båtkapell"/>
     <meta property="og:description" content="Företaget grundades 1967 av Alf Henricsson, mer känd som Henric i båtkretsar och har under åren försett båtindustri och båtägare med båtkapell under namnet Båtkapellspecialisten Henrics Product AB."/>
-    <meta property="og:image" content="https://henricssonsbatkapell.se/logo.png"/>
+    <meta property="og:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
     <meta property="og:type" content="article"/>
     <meta property="og:url" content="https://www.henricssonsbatkapell.se/om-oss"/>
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="Om oss - Henricssons Båtkapell"/>
     <meta name="twitter:description" content="Företaget grundades 1967 av Alf Henricsson, mer känd som Henric i båtkretsar och har under åren försett båtindustri och båtägare med båtkapell under namnet Båtkapellspecialisten Henrics Product AB."/>
-    <meta name="twitter:image" content="https://henricssonsbatkapell.se/logo.png"/>
+    <meta name="twitter:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
     <link rel="stylesheet" href="premium.css?v=20260420b"/>
     <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
     <style>
         .hb-content-split .side-image.hb-about-image {
             aspect-ratio: auto;
+            max-height: none;
             overflow: visible;
             background: var(--cream-2);
             padding: 1rem;
@@ -34,6 +35,13 @@
             height: auto;
             object-fit: contain;
             display: block;
+        }
+        @media (max-width: 900px) {
+            .hb-content-split .side-image.hb-about-image {
+                position: static;
+                max-height: none;
+                padding: 0.75rem;
+            }
         }
     </style>
 </head>
@@ -163,7 +171,7 @@
             <span class="eyebrow" style="color: var(--brass);">Behöver du ett nytt kapell?</span>
             <span class="rule"></span>
             <h2>Kontakta oss för en <em>kostnadsfri offert</em></h2>
-            <p>Eller besök vår verkstad på Energigatan 17E i Kungsbacka. Vi svarar oftast samma dag.</p>
+            <p>Eller ring oss innan du besöker verkstaden på Energigatan 17E i Kungsbacka. Vi svarar oftast samma dag.</p>
             <div class="hb-ctas">
                 <a href="/kapellforfragan" class="hb-btn hb-btn-primary"><span>Skicka kapellförfrågan</span></a>
                 <a href="/kontakt" class="hb-btn hb-btn-ghost">Kontakta oss</a>
@@ -211,13 +219,14 @@
                 </div>
                 <div>
                     <h5>Partners</h5>
-                    <ul>
-                        <li>Jens Sagen</li>
-                        <li>Helly Hansen</li>
-                        <li>VA Varuste</li>
-                        <li>Schultz Kalecher</li>
-                        <li>MP Venekuomu</li>
-                    </ul>
+                    <div class="hb-footer-partners" aria-label="Partners">
+                        <img src="assets/optimized/partner-jens-sagen.webp" alt="Jens Sagen" loading="lazy" decoding="async"/>
+                        <img src="assets/5e79d73a63cc8b5939552a05_helly-hansen.svg" alt="Helly Hansen" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-varuste.webp" alt="VA Varuste" loading="lazy" decoding="async"/>
+                        <img src="assets/schultz.png" alt="Schultz Kalecher" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-mpvenekuomo.webp" alt="MP Venekuomu" loading="lazy" decoding="async"/>
+                        <img src="assets/optimized/partner-hansenprotection.png" alt="Hansen Protection" loading="lazy" decoding="async"/>
+                    </div>
                 </div>
             </div>
             <div class="hb-footer-bottom">
@@ -226,6 +235,6 @@
             </div>
         </div>
     </footer>
-    <script src="https://henricssons-api.onrender.com/chat_widget.js?v=20260420a" defer></script>
+    <script src="/chat_widget.js?v=20260420a" defer></script>
 </body>
 </html>
