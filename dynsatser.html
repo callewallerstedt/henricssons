@@ -76,6 +76,24 @@
             transform: none;
         }
         .hb-premium .hb-dyn-brand-card:hover .hb-dyn-brand-media--logo img { transform: none; }
+        .hb-premium .hb-dyn-brand-media::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(110deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 42%, rgba(255,255,255,0) 78%);
+            transform: translateX(-100%);
+            animation: hbDynImageLoading 1.35s ease-in-out infinite;
+            z-index: 1;
+        }
+        .hb-premium .hb-dyn-brand-media.is-loaded::before { display: none; }
+        .hb-premium .hb-dyn-brand-media img {
+            opacity: 0;
+            transition: opacity 0.25s ease, transform 0.55s ease;
+        }
+        .hb-premium .hb-dyn-brand-media.is-loaded img { opacity: 1; }
+        @keyframes hbDynImageLoading {
+            100% { transform: translateX(100%); }
+        }
         .hb-premium .hb-dyn-back {
             display: inline-flex;
             align-items: center;
@@ -252,16 +270,43 @@
             if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
             return `${apiBase}${url.startsWith('/') ? '' : '/'}${url}`;
         };
+        const buildImageVariantUrl = (url, width = 520, quality = 72) => {
+            const src = imgSrc(url);
+            if (!src || src.startsWith('data:') || /(?:^|\/)logo\.png(?:$|[?#])/i.test(src) || /\.svg(?:$|[?#])/i.test(src)) return src;
+            try {
+                const parsed = new URL(src, location.origin);
+                const apiOrigin = new URL(apiBase || location.origin, location.origin).origin;
+                if (parsed.origin !== apiOrigin) return src;
+                parsed.searchParams.set('w', String(width));
+                parsed.searchParams.set('q', String(quality));
+                return parsed.href;
+            } catch (_) {
+                return src;
+            }
+        };
 
         let manufacturers = [];
         let entriesByMaker = new Map();
 
         function mediaHtml(url, alt, isLogoMedia = false) {
-            const src = imgSrc(url);
+            const src = buildImageVariantUrl(url, isLogoMedia ? 360 : 520, isLogoMedia ? 76 : 72);
             const isLogo = isLogoMedia || src === LOGO || src.endsWith('/logo.png') || /\.svg(?:$|[?#])/i.test(src);
             return `<div class="hb-dyn-brand-media${isLogo ? ' hb-dyn-brand-media--logo' : ''}">
-                <img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" decoding="async">
+                <img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" decoding="async" fetchpriority="low">
             </div>`;
+        }
+
+        function bindCardImageLoading(card) {
+            const media = card.querySelector('.hb-dyn-brand-media');
+            const image = media && media.querySelector('img');
+            if (!media || !image) return;
+            const markLoaded = () => media.classList.add('is-loaded');
+            image.addEventListener('load', markLoaded, { once: true });
+            image.addEventListener('error', () => {
+                image.src = LOGO;
+                markLoaded();
+            }, { once: true });
+            if (image.complete) markLoaded();
         }
 
         function showMakers() {
@@ -290,6 +335,7 @@
                         <span class="hb-dyn-brand-cta">Se dynsatser${count ? ` (${count})` : ''} →</span>
                     </div>
                 `;
+                bindCardImageLoading(card);
                 makersGrid.appendChild(card);
             });
         }
@@ -305,17 +351,17 @@
             entriesGrid.innerHTML = '';
             entriesEmpty.style.display = entries.length ? 'none' : 'block';
             entries.forEach(entry => {
-                const cover = (entry.images || [])[0];
                 const card = document.createElement('a');
                 card.className = 'hb-dyn-brand-card';
                 card.href = entry.href || `/dynsatser/${entry.slug}`;
                 card.innerHTML = `
-                    ${mediaHtml(cover && cover.url, entry.name)}
+                    ${mediaHtml(entry.primary_image_url, entry.name)}
                     <div class="hb-dyn-brand-body">
                         <span class="hb-dyn-brand-name">${esc(entry.name)}</span>
                         <span class="hb-dyn-brand-cta">Se bilder →</span>
                     </div>
                 `;
+                bindCardImageLoading(card);
                 entriesGrid.appendChild(card);
             });
             makersView.style.display = 'none';
@@ -332,14 +378,11 @@
             if (slug) openMaker(slug); else showMakers();
         });
 
-        Promise.all([
-            fetch(`${apiBase}/api/dyn_manufacturers`).then(r => r.ok ? r.json() : Promise.reject(r.status)),
-            fetch(`${apiBase}/api/boat_brands`).then(r => r.ok ? r.json() : Promise.reject(r.status)),
-        ]).then(([makers, entries]) => {
+        fetch(`${apiBase}/api/dynsatser_catalog`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then((catalog) => {
             loading.style.display = 'none';
-            manufacturers = Array.isArray(makers) ? makers : [];
+            manufacturers = Array.isArray(catalog.manufacturers) ? catalog.manufacturers : [];
             entriesByMaker = new Map();
-            (Array.isArray(entries) ? entries : []).forEach(e => {
+            (Array.isArray(catalog.entries) ? catalog.entries : []).forEach(e => {
                 if (e.manufacturer_id == null) return;
                 if (!entriesByMaker.has(e.manufacturer_id)) entriesByMaker.set(e.manufacturer_id, []);
                 entriesByMaker.get(e.manufacturer_id).push(e);

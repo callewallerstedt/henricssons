@@ -420,9 +420,9 @@ CHAT_WIDGET_DISABLED_JS = (
     "document.documentElement.classList.add('henricssons-chatbot-disabled');\n"
 )
 try:
-    FORM_BACKGROUND_WORKERS = max(1, int(os.getenv("FORM_BACKGROUND_WORKERS", "2")))
+    FORM_BACKGROUND_WORKERS = max(1, int(os.getenv("FORM_BACKGROUND_WORKERS", "1")))
 except ValueError:
-    FORM_BACKGROUND_WORKERS = 2
+    FORM_BACKGROUND_WORKERS = 1
 FORM_BACKGROUND_EXECUTOR = ThreadPoolExecutor(
     max_workers=FORM_BACKGROUND_WORKERS,
     thread_name_prefix="form-bg",
@@ -3863,18 +3863,37 @@ def save_submission_attachments(submission_id: str, files: List[Any]) -> List[Di
     return saved
 
 
+def submission_attachment_meta(row: Any) -> Dict[str, Any]:
+    mime = row.mime or "application/octet-stream"
+    return {
+        "id": row.id,
+        "submission_id": row.submission_id,
+        "filename": row.filename,
+        "mime": mime,
+        "size": int(row.size or 0),
+        "is_image": str(mime).startswith("image/"),
+        "url": f"/api/attachment/{row.id}",
+    }
+
+
 def get_submission_attachments_meta(submission_id: str) -> List[Dict[str, Any]]:
     db = get_db()
     if not db:
         return []
     try:
         rows = (
-            db.query(SubmissionAttachment)
+            db.query(
+                SubmissionAttachment.id,
+                SubmissionAttachment.submission_id,
+                SubmissionAttachment.filename,
+                SubmissionAttachment.mime,
+                SubmissionAttachment.size,
+            )
             .filter_by(submission_id=submission_id)
             .order_by(SubmissionAttachment.id.asc())
             .all()
         )
-        return [row.to_meta() for row in rows]
+        return [submission_attachment_meta(row) for row in rows]
     except Exception:
         return []
     finally:
@@ -4098,12 +4117,18 @@ def get_all_submissions() -> List[Dict[str, Any]]:
     if db_for_attachments:
         try:
             rows = (
-                db_for_attachments.query(SubmissionAttachment)
+                db_for_attachments.query(
+                    SubmissionAttachment.id,
+                    SubmissionAttachment.submission_id,
+                    SubmissionAttachment.filename,
+                    SubmissionAttachment.mime,
+                    SubmissionAttachment.size,
+                )
                 .order_by(SubmissionAttachment.id.asc())
                 .all()
             )
             for row in rows:
-                attachments_by_sub.setdefault(row.submission_id, []).append(row.to_meta())
+                attachments_by_sub.setdefault(row.submission_id, []).append(submission_attachment_meta(row))
         except Exception:
             pass
         finally:
@@ -5257,6 +5282,17 @@ TEMP_PRODUCT_MAX_IMAGES = 12
 TEMP_PRODUCT_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
+def temp_product_image_meta(row: Any) -> Dict[str, Any]:
+    return {
+        "id": row.id,
+        "product_id": row.product_id,
+        "filename": row.filename or "",
+        "mime": row.mime or "image/jpeg",
+        "sort_order": int(row.sort_order or 0),
+        "url": f"/api/temp_product_image/{row.id}",
+    }
+
+
 def slugify_temp_product(value: Any, fallback: str = "produkt") -> str:
     raw = unicodedata.normalize("NFKD", str(value or ""))
     ascii_value = raw.encode("ascii", "ignore").decode("ascii")
@@ -5317,12 +5353,18 @@ def _fetch_temp_products(include_images: bool = True) -> List[Dict[str, Any]]:
         images_by_product: Dict[int, List[Dict[str, Any]]] = {}
         if include_images and rows:
             img_rows = (
-                db.query(TempProductImage)
+                db.query(
+                    TempProductImage.id,
+                    TempProductImage.product_id,
+                    TempProductImage.filename,
+                    TempProductImage.mime,
+                    TempProductImage.sort_order,
+                )
                 .order_by(TempProductImage.sort_order.asc(), TempProductImage.id.asc())
                 .all()
             )
             for img in img_rows:
-                images_by_product.setdefault(img.product_id, []).append(img.to_meta())
+                images_by_product.setdefault(img.product_id, []).append(temp_product_image_meta(img))
         return [row.to_dict(images=images_by_product.get(row.id, [])) for row in rows]
     except Exception as exc:
         print(f"fetch_temp_products failed: {exc}")
@@ -5485,6 +5527,9 @@ def get_temp_product_image(image_id: int):
         row = db.query(TempProductImage).filter_by(id=image_id).first()
         if not row:
             return jsonify(error="Not found"), 404
+        variant_response = _send_image_variant_from_bytes(row.data, row.mime, f"temp-product-image:{row.id}:{row.created_at}")
+        if variant_response:
+            return variant_response
         response = Response(row.data, mimetype=row.mime or "image/jpeg")
         response.headers["Cache-Control"] = "public, max-age=86400"
         response.headers["Content-Length"] = str(len(row.data or b""))
@@ -5542,6 +5587,17 @@ def default_dyn_manufacturer_logo(name: Any) -> str:
     return DEFAULT_DYN_MANUFACTURER_LOGOS.get(slug, "")
 
 
+def boat_brand_image_meta(row: Any) -> Dict[str, Any]:
+    return {
+        "id": row.id,
+        "brand_id": row.brand_id,
+        "filename": row.filename or "",
+        "mime": row.mime or "image/jpeg",
+        "sort_order": int(row.sort_order or 0),
+        "url": f"/api/boat_brand_image/{row.id}",
+    }
+
+
 def _fetch_boat_brands(include_images: bool = True) -> List[Dict[str, Any]]:
     db = get_db()
     if not db:
@@ -5551,12 +5607,18 @@ def _fetch_boat_brands(include_images: bool = True) -> List[Dict[str, Any]]:
         images_by_brand: Dict[int, List[Dict[str, Any]]] = {}
         if include_images and rows:
             img_rows = (
-                db.query(BoatBrandImage)
+                db.query(
+                    BoatBrandImage.id,
+                    BoatBrandImage.brand_id,
+                    BoatBrandImage.filename,
+                    BoatBrandImage.mime,
+                    BoatBrandImage.sort_order,
+                )
                 .order_by(BoatBrandImage.sort_order.asc(), BoatBrandImage.id.asc())
                 .all()
             )
             for img in img_rows:
-                images_by_brand.setdefault(img.brand_id, []).append(img.to_meta())
+                images_by_brand.setdefault(img.brand_id, []).append(boat_brand_image_meta(img))
         return [row.to_dict(images=images_by_brand.get(row.id, [])) for row in rows]
     except Exception as exc:
         print(f"_fetch_boat_brands failed: {exc}")
@@ -5618,10 +5680,13 @@ def _fetch_dyn_manufacturers() -> List[Dict[str, Any]]:
         db.close()
 
 
-def enrich_dyn_manufacturers() -> List[Dict[str, Any]]:
+def enrich_dyn_manufacturers(
+    manufacturers: Optional[List[Dict[str, Any]]] = None,
+    entries: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
     """Manufacturers with slug + logo/image used on the /dynsatser cards."""
-    manufacturers = _fetch_dyn_manufacturers()
-    entries = enrich_boat_brands(_fetch_boat_brands())
+    manufacturers = manufacturers if manufacturers is not None else _fetch_dyn_manufacturers()
+    entries = entries if entries is not None else enrich_boat_brands(_fetch_boat_brands(include_images=False))
     entries_by_mfr: Dict[int, List[Dict[str, Any]]] = {}
     for entry in entries:
         mid = entry.get("manufacturer_id")
@@ -5655,6 +5720,24 @@ def enrich_dyn_manufacturers() -> List[Dict[str, Any]]:
 @app.route("/api/dyn_manufacturers", methods=["GET"])
 def list_dyn_manufacturers():
     return jsonify(enrich_dyn_manufacturers())
+
+
+@app.route("/api/dynsatser_catalog", methods=["GET"])
+def dynsatser_catalog():
+    entries = enrich_boat_brands(_fetch_boat_brands(include_images=True))
+    manufacturers = enrich_dyn_manufacturers(entries=entries)
+    public_entries = [
+        {
+            "id": entry.get("id"),
+            "name": entry.get("name") or "",
+            "manufacturer_id": entry.get("manufacturer_id"),
+            "slug": entry.get("slug") or "",
+            "href": entry.get("href") or "",
+            "primary_image_url": entry.get("primary_image_url") or "",
+        }
+        for entry in entries
+    ]
+    return jsonify({"manufacturers": manufacturers, "entries": public_entries})
 
 
 @app.route("/api/dyn_manufacturers", methods=["POST"])
@@ -5910,6 +5993,9 @@ def get_boat_brand_image(image_id: int):
         row = db.query(BoatBrandImage).filter_by(id=image_id).first()
         if not row:
             return jsonify(error="Not found"), 404
+        variant_response = _send_image_variant_from_bytes(row.data, row.mime, f"boat-brand-image:{row.id}:{row.created_at}")
+        if variant_response:
+            return variant_response
         response = Response(row.data, mimetype=row.mime or "image/jpeg")
         response.headers["Cache-Control"] = "public, max-age=86400"
         response.headers["Content-Length"] = str(len(row.data or b""))
@@ -6069,6 +6155,39 @@ def _send_image_variant_from_path(full_path: Path) -> Optional[Response]:
         return None
 
 
+def _send_image_variant_from_bytes(raw: bytes, mime: str, cache_identity: str) -> Optional[Response]:
+    width, quality = _parse_image_variant_args()
+    if width <= 0 or not raw or str(mime or "").lower() not in {"image/jpeg", "image/jpg", "image/png", "image/webp"}:
+        return None
+    try:
+        from PIL import Image, ImageOps
+        from io import BytesIO
+    except Exception:
+        return None
+
+    try:
+        cache_key = hashlib.sha256(
+            f"{cache_identity}:{len(raw)}:{hashlib.sha256(raw).hexdigest()}:{width}:{quality}:webp".encode("utf-8")
+        ).hexdigest()
+        cache_path = IMAGE_VARIANT_CACHE_DIR / f"{cache_key}.webp"
+        if not cache_path.exists():
+            IMAGE_VARIANT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            with Image.open(BytesIO(raw)) as image:
+                image = ImageOps.exif_transpose(image)
+                if image.width > width:
+                    max_height = max(width * 4, width)
+                    image.thumbnail((width, max_height), Image.Resampling.LANCZOS)
+                if image.mode not in {"RGB", "RGBA"}:
+                    image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+                image.save(cache_path, "WEBP", quality=quality, method=6)
+        response = send_from_directory(str(cache_path.parent), cache_path.name, mimetype="image/webp")
+        response.headers["Cache-Control"] = "public, max-age=604800, stale-while-revalidate=2592000"
+        return response
+    except Exception as exc:
+        print(f"Image byte variant failed for {cache_identity}: {exc}")
+        return None
+
+
 @app.route("/henricssons_bilder/<path:filename>")
 def get_henricssons_files(filename: str):
     if filename == "models_meta.json":
@@ -6096,6 +6215,9 @@ def get_henricssons_files(filename: str):
             rel = filename.replace("\\", "/").lstrip("/")
             row = db.query(SiteImage).filter_by(rel_path=rel).first()
             if row:
+                variant_response = _send_image_variant_from_bytes(row.data, row.mime, f"site-image:{row.rel_path}:{row.updated_at}")
+                if variant_response:
+                    return variant_response
                 response = Response(row.data, mimetype=row.mime or "application/octet-stream")
                 response.headers["Cache-Control"] = "public, max-age=3600"
                 return response
@@ -6741,7 +6863,8 @@ def temp_product_page(slug: str):
     title_text = str(product.get("title") or "Tillfällig produkt").strip()
     description_text = str(product.get("description") or "").strip()
     price_text = str(product.get("price") or "").strip()
-    images = [absolute_public_url(img.get("url", "")) for img in product.get("images", []) if img.get("url")]
+    raw_images = [str(img.get("url", "") or "") for img in product.get("images", []) if img.get("url")]
+    images = [image_variant_url(img, 1400, 82) for img in raw_images]
     image_urls = images or [absolute_public_url("/logo.png")]
     page_title = f"{title_text} - Tillfälliga produkter - Henricssons Båtkapell"
     page_description = product.get("share_description") or description_text[:160] or f"{title_text} hos Henricssons Båtkapell."
@@ -6756,7 +6879,7 @@ def temp_product_page(slug: str):
         related_href = html.escape(str(related.get("href") or "/tillfalliga-produkter"))
         related_description = html.escape(str(related.get("share_description") or ""))
         related_price = html.escape(str(related.get("price") or ""))
-        related_image = html.escape(absolute_public_url(str(related.get("primary_image_url") or "/logo.png")))
+        related_image = html.escape(image_variant_url(str(related.get("primary_image_url") or "/logo.png"), 520, 72))
         related_cards.append(
             f"""
             <a class="seo-related-card" href="{related_href}">
@@ -6774,8 +6897,8 @@ def temp_product_page(slug: str):
 
     nav_style = "" if len(image_urls) > 1 else ' style="display:none;"'
     thumbs_html = "".join(
-        f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(url)}" alt="{html.escape(title_text)} bild {idx + 1}" loading="lazy" decoding="async"></button>'
-        for idx, url in enumerate(image_urls[:10])
+        f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(image_variant_url(raw, 180, 68))}" alt="{html.escape(title_text)} bild {idx + 1}" loading="lazy" decoding="async"></button>'
+        for idx, raw in enumerate(raw_images[:10])
     )
     gallery_html = f"""
     <div class="seo-gallery">
@@ -6876,7 +6999,8 @@ def boat_brand_page(slug: str):
 
     name_text = str(brand.get("name") or "Båtmärke").strip()
     description_text = str(brand.get("description") or "").strip()
-    images = [absolute_public_url(img.get("url", "")) for img in brand.get("images", []) if img.get("url")]
+    raw_images = [str(img.get("url", "") or "") for img in brand.get("images", []) if img.get("url")]
+    images = [image_variant_url(img, 1400, 82) for img in raw_images]
     image_urls = images or [absolute_public_url("/logo.png")]
     page_title = f"Dynsatser till {name_text} - Henricssons Båtkapell"
     page_description = (description_text[:160] if description_text else f"Dynsatser och båtdynor till {name_text} hos Henricssons Båtkapell.")
@@ -6889,7 +7013,7 @@ def boat_brand_page(slug: str):
             continue
         other_name = html.escape(str(other.get("name") or ""))
         other_href = html.escape(str(other.get("href") or "/dynsatser"))
-        other_image = html.escape(absolute_public_url(str(other.get("primary_image_url") or "/logo.png")))
+        other_image = html.escape(image_variant_url(str(other.get("primary_image_url") or "/logo.png"), 520, 72))
         other_brands.append(
             f"""
             <a class="seo-related-card" href="{other_href}">
@@ -6906,8 +7030,8 @@ def boat_brand_page(slug: str):
 
     nav_style = "" if len(image_urls) > 1 else ' style="display:none;"'
     thumbs_html = "".join(
-        f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(url)}" alt="{html.escape(name_text)} bild {idx + 1}" loading="lazy" decoding="async"></button>'
-        for idx, url in enumerate(image_urls[:10])
+        f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(image_variant_url(raw, 180, 68))}" alt="{html.escape(name_text)} bild {idx + 1}" loading="lazy" decoding="async"></button>'
+        for idx, raw in enumerate(raw_images[:10])
     )
     gallery_html = f"""
     <div class="seo-gallery">
