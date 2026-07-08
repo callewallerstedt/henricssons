@@ -573,9 +573,10 @@
         aspect-ratio: 4 / 5;
         position: relative;
         overflow: hidden;
+        border-radius: 4px;
     }
     .hb-intro .image img {
-        width: 100%; height: 100%; object-fit: cover; display: block;
+        width: 100%; height: 100%; object-fit: cover; object-position: top; display: block;
     }
     .hb-intro .image .badge {
         position: absolute; right: -12px; bottom: 32px;
@@ -664,45 +665,66 @@
     .hb-seo-band { background: var(--white); }
     .hb-seo-grid {
         display: grid;
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
+        grid-template-columns: 1fr 1fr;
+        gap: 3.5rem;
         align-items: start;
-        max-width: 980px;
+        max-width: 1080px;
     }
-    .hb-seo-band h2 { font-size: clamp(1.8rem, 3.2vw, 2.35rem); max-width: 780px; }
+    @media (max-width: 900px) { .hb-seo-grid { grid-template-columns: 1fr; gap: 2.25rem; } }
+    .hb-seo-band h2 { font-size: clamp(1.8rem, 3.2vw, 2.35rem); max-width: 620px; }
     .hb-seo-band .intro {
         color: var(--muted);
         margin-top: 1rem;
-        max-width: 760px;
+        line-height: 1.8;
     }
-    .hb-seo-lines {
+    .hb-seo-cards {
         display: grid;
-        gap: 0.9rem;
-        padding-top: 0.25rem;
-        border-top: 1px solid var(--line);
+        gap: 1.25rem;
     }
-    .hb-seo-line {
-        color: var(--muted);
-        font-size: 0.95rem;
-        line-height: 1.75;
+    .hb-seo-card {
+        background: var(--cream);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 1.5rem 1.6rem;
     }
-    .hb-seo-line strong {
-        color: var(--ink-soft);
+    .hb-seo-card-label {
+        display: block;
+        font-size: 0.72rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
         font-weight: 600;
+        color: var(--brass-dark);
+        margin-bottom: 1rem;
     }
-    .hb-seo-line a {
+    .hb-seo-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .hb-seo-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.42rem 0.85rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--white);
+        font-size: 0.86rem;
         color: var(--ink);
         text-decoration: none;
-        border-bottom: 1px solid rgba(178, 138, 76, 0.35);
+        transition: all 0.2s ease;
     }
-    .hb-seo-line a:hover {
+    a.hb-seo-tag:hover {
+        border-color: var(--brass);
         color: var(--brass-dark);
-        border-bottom-color: var(--brass);
+        background: rgba(178, 138, 76, 0.07);
+        transform: translateY(-1px);
     }
+    .hb-seo-tag-static { color: var(--ink-soft); cursor: default; }
     .hb-seo-note {
-        margin-top: 1.3rem;
+        margin: 0.25rem 0 0;
         color: var(--muted);
-        font-size: 0.95rem;
+        font-size: 0.92rem;
+        line-height: 1.7;
     }
 
     /* ---------- Gallery ---------- */
@@ -1104,14 +1126,42 @@
     <section class="hb-section hb-seo-band">
         <div class="wrap">
             <div class="hb-seo-grid">
-                <div>
+                <div class="hb-seo-intro">
                     <span class="eyebrow">Fler modeller och produkter</span>
                     <span class="rule"></span>
                     <h2>Båtkapell, hamnkapell, sprayhood, dynsatser, båtdynor och fenderstrumpor för många vanliga båtmodeller.</h2>
                     <p class="intro">Vi hjälper båtägare i Sverige och övriga Norden med nya kapell, originalkapell, båtdynor och specialsömnad. I vårt mallregister finns många modeller från bland annat Yamarin, Uttern, Bella, Flipper, Askeladden, Finnmaster, Buster, Ryds, Örnvik, Aquador, Nimbus och AMT.</p>
-                    <div class="hb-seo-lines">
-                        <p class="hb-seo-line"><strong>Vanliga arbeten:</strong> <a href="/kapellforfragan">båtkapell</a>, <a href="/bilder-och-exempel">hamnkapell</a>, <a href="/bilder-och-exempel">sprayhood</a>, <a href="/dynsatser">dynsatser</a>, <a href="/dynsatser">båtdynor</a>, <a href="/tillbehor">fenderstrumpor</a>, <a href="/bilder-och-exempel">originalkapell</a> och <a href="/kontakt">specialsömnad</a>.</p>
-                        <p class="hb-seo-line"><strong>Modeller vi ofta hjälper med:</strong> Yamarin, Uttern, Bella, Flipper, Askeladden, Finnmaster, Buster, Ryds, Örnvik, Aquador, Nimbus och AMT.</p>
+                </div>
+                <div class="hb-seo-cards">
+                    <div class="hb-seo-card">
+                        <span class="hb-seo-card-label">Vanliga arbeten</span>
+                        <div class="hb-seo-tags">
+                            <a class="hb-seo-tag" href="/kapellforfragan">Båtkapell</a>
+                            <a class="hb-seo-tag" href="/bilder-och-exempel">Hamnkapell</a>
+                            <a class="hb-seo-tag" href="/bilder-och-exempel">Sprayhood</a>
+                            <a class="hb-seo-tag" href="/dynsatser">Dynsatser</a>
+                            <a class="hb-seo-tag" href="/dynsatser">Båtdynor</a>
+                            <a class="hb-seo-tag" href="/tillbehor">Fenderstrumpor</a>
+                            <a class="hb-seo-tag" href="/bilder-och-exempel">Originalkapell</a>
+                            <a class="hb-seo-tag" href="/kontakt">Specialsömnad</a>
+                        </div>
+                    </div>
+                    <div class="hb-seo-card">
+                        <span class="hb-seo-card-label">Modeller vi ofta hjälper med</span>
+                        <div class="hb-seo-tags">
+                            <span class="hb-seo-tag hb-seo-tag-static">Yamarin</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Uttern</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Bella</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Flipper</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Askeladden</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Finnmaster</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Buster</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Ryds</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Örnvik</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Aquador</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">Nimbus</span>
+                            <span class="hb-seo-tag hb-seo-tag-static">AMT</span>
+                        </div>
                     </div>
                     <p class="hb-seo-note">Söker du kapell till en specifik modell, en ny dynsats, båtdynor till sittbrunnen eller fenderstrumpor med logotyp hjälper vi dig vidare via vårt formulär eller genom att du kontaktar verkstaden direkt.</p>
                 </div>
