@@ -625,6 +625,24 @@
             color: #fff !important;
             border-color: var(--brand);
         }
+        .status-board-search {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.4rem 0.9rem;
+            font: inherit;
+            font-size: 0.8rem;
+            color: var(--text);
+            min-height: 32px;
+            width: 220px;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .status-board-search:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+        .status-board-search::placeholder { color: var(--text-muted); }
 
         .status-folders {
             display: grid;
@@ -879,6 +897,35 @@
         .folder-item-delete:hover { opacity: 1; background: var(--danger-soft); }
         .folder-item-content { color: var(--text-muted); font-size: 0.78rem; margin-top: 0.25rem; }
         .form-submission-item { border-left: 3px solid var(--accent); }
+        .folder-item.unread {
+            border-color: var(--accent);
+            background: #fffdf5;
+            box-shadow: 0 1px 3px rgba(212, 162, 74, 0.18);
+        }
+        .folder-item-title .unread-badge {
+            display: inline-block;
+            margin-left: 0.45rem;
+            padding: 1px 7px;
+            font-size: 0.64rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #fff;
+            background: var(--accent);
+            border-radius: 999px;
+            vertical-align: 2px;
+        }
+        .folder-item-title .message-snippet {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            color: var(--text-soft);
+            font-size: 0.76rem;
+            font-weight: 400;
+            line-height: 1.4;
+            margin-top: 4px;
+        }
         .status-config-list {
             display: flex;
             flex-direction: column;
@@ -1702,6 +1749,8 @@
         .form-field { margin-bottom: 0.55rem; padding-bottom: 0.55rem; border-bottom: 1px solid var(--border); font-size: 0.87rem; }
         .form-field:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
         .form-field strong { color: var(--text-soft); display: inline-block; min-width: 140px; font-weight: 500; }
+        .form-field a { color: var(--primary); text-decoration: none; font-weight: 500; }
+        .form-field a:hover { text-decoration: underline; }
         .submission-notes {
             width: 100%;
             min-height: 170px;
@@ -2076,6 +2125,7 @@
                         <div class="statusmappar-header">
                             <h2 class="statusmappar-title">Statusmappar</h2>
                             <div class="statusmappar-actions">
+                                <input type="search" id="status-board-search" class="status-board-search" placeholder="Sök kund, båt, e-post..." aria-label="Sök bland inskick" />
                                 <div class="form-type-filters">
                                     <button class="form-filter-btn active" data-filter="all">Alla</button>
                                     <button class="form-filter-btn" data-filter="Kapellförfrågan">Kapell</button>
@@ -2473,7 +2523,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260708b" defer></script>
+<script src="admin.js?v=20260712a" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle

@@ -220,6 +220,10 @@ const SUBMISSION_FIELD_LABELS = {
     modell: 'Modell',
     boat_brand: 'Båtmärke',
     boat_model: 'Båtmodell',
+    batmodell: 'Båtmodell',
+    namn: 'Namn',
+    meddelande: 'Meddelande',
+    mobil: 'Mobilnummer',
     boat_year: 'Årsmodell',
     arsmodell: 'Årsmodell',
     home_port: 'Hemmahamn + Ort',
@@ -472,6 +476,7 @@ let calendar = null;
 let statusItems = createEmptyStatusItems();
 let nyaInskickSortOrder = 'newest'; // 'newest' or 'oldest'
 let currentFormFilter = 'all'; // 'all', 'Kapellförfrågan', 'Fenderförfrågan', 'Dynsatsförfrågan', 'Kontakt'
+let statusBoardSearchQuery = '';
 let chatbotPrompt = 'Du är en hjälpsam assistent för Henricssons Båtkapell. Du hjälper till med frågor om båtkapell, beställningar och allmän service.';
 let currentEditingItem = null;
 let statusFoldersLoading = false;
@@ -1695,6 +1700,25 @@ function initFormFilters() {
         currentFormFilter = $(this).data('filter');
         renderStatusFolders();
     });
+    $('#status-board-search').off('input search').on('input search', function() {
+        statusBoardSearchQuery = String($(this).val() || '').trim().toLowerCase();
+        renderStatusFolders();
+    });
+}
+
+function submissionMatchesSearch(item, query) {
+    if (!query) return true;
+    const parts = [];
+    if (item.is_form_submission && item.fields) {
+        Object.entries(item.fields).forEach(([key, value]) => {
+            if (!key.startsWith('__') && value) parts.push(String(value));
+        });
+        parts.push(item.form_type || '');
+    } else {
+        parts.push(item.title || '', item.description || '');
+    }
+    parts.push(item.notes || '');
+    return parts.join(' ').toLowerCase().includes(query);
 }
 
 function initChatbot() {
@@ -3425,6 +3449,7 @@ async function viewFormSubmission(status, index) {
     // Mark as read
     item.read = true;
     saveStatusItems();
+    renderStatusFolders();
     const updated = await updateSubmissionStatusOnServer(item, status, true);
     if (!updated) {
         showStatusMessage('Kunde inte spara läst-status');
@@ -3483,13 +3508,38 @@ async function viewFormSubmission(status, index) {
     // Form fields - the main content
     if (item.fields) {
         const fieldsList = $('<div>').addClass('form-fields');
-        Object.keys(item.fields).forEach(key => {
+        const fieldPriority = (key) => {
+            const nk = normalizeSubmissionFieldKey(key);
+            const order = [
+                'namn', 'name',
+                'e_post', 'e_postadress', 'epost', 'email',
+                'telefon', 'telefonnummer', 'phone', 'mobil',
+                'tillverkare', 'manufacturer', 'modell', 'model', 'batmodell', 'boat_model', 'boat_brand',
+                'arsmodell', 'boat_year', 'hemmahamn', 'home_port'
+            ];
+            const idx = order.indexOf(nk);
+            if (idx >= 0) return idx;
+            if (['meddelande', 'message', 'beskrivning', 'description', 'ovrigt'].includes(nk)) return 900;
+            return 500;
+        };
+        Object.keys(item.fields).sort((a, b) => fieldPriority(a) - fieldPriority(b)).forEach(key => {
             if (!key.startsWith('__') && item.fields[key]) {
                 const fieldRow = $('<div>').addClass('form-field');
-                fieldRow.append(
-                    $('<strong>').text(`${getSubmissionFieldLabel(key)}:`),
-                    document.createTextNode(` ${item.fields[key]}`)
-                );
+                fieldRow.append($('<strong>').text(`${getSubmissionFieldLabel(key)}:`));
+                const value = String(item.fields[key]);
+                const normalizedKey = normalizeSubmissionFieldKey(key);
+                if (['email', 'e_post', 'e_postadress', 'epost'].includes(normalizedKey) && value.includes('@')) {
+                    fieldRow.append(document.createTextNode(' '), $('<a>').attr('href', `mailto:${value.trim()}`).text(value));
+                } else if (['telefon', 'phone', 'telefonnummer', 'tel', 'mobil'].includes(normalizedKey)) {
+                    const telValue = value.replace(/[^+\d]/g, '');
+                    if (telValue.length >= 5) {
+                        fieldRow.append(document.createTextNode(' '), $('<a>').attr('href', `tel:${telValue}`).text(value));
+                    } else {
+                        fieldRow.append(document.createTextNode(` ${value}`));
+                    }
+                } else {
+                    fieldRow.append(document.createTextNode(` ${value}`));
+                }
                 fieldsList.append(fieldRow);
             }
         });
@@ -3608,6 +3658,23 @@ async function viewFormSubmission(status, index) {
     modal.addClass('active');
 }
 
+function getSubmissionCustomerEmail(item) {
+    return String(getSubmissionField(item.fields || {}, 'email', 'e-post', 'e-postadress', 'epost') || '').trim();
+}
+
+function buildReplyMailtoUrl(item, body) {
+    const email = getSubmissionCustomerEmail(item);
+    if (!email) return '';
+    const formType = String(item.form_type || '');
+    const topic = formType && formType !== 'Kontakt' ? `din ${formType.toLowerCase()}` : 'ditt meddelande till oss';
+    const subject = `Ang. ${topic} – Henricssons Båtkapell`;
+    let url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}`;
+    if (body) {
+        url += `&body=${encodeURIComponent(body)}`;
+    }
+    return url;
+}
+
 function renderAiResponsePanel(responseColumn, item, status, index, modal) {
     responseColumn.empty();
     const responseSection = $('<div>').addClass('form-section');
@@ -3662,6 +3729,20 @@ function renderAiResponsePanel(responseColumn, item, status, index, modal) {
                 $(this).text('Kopierat!');
                 setTimeout(() => $(this).text('Kopiera svar'), 2000);
             });
+        }));
+    }
+
+    if (getSubmissionCustomerEmail(item)) {
+        actionButtons.append($('<button>').addClass('btn btn-secondary').css('margin-left', '0.5rem').text('Svara via e-post').on('click', function() {
+            let body = String(item.proposed_response || '');
+            if (body.length > 1500) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(body);
+                }
+                showStatusMessage('AI-svaret är långt – det har kopierats. Klistra in det i mejlet.');
+                body = '';
+            }
+            window.location.href = buildReplyMailtoUrl(item, body);
         }));
     }
 
@@ -4783,6 +4864,16 @@ function updateStatusSummaryCounts() {
         if (!target) return;
         target.textContent = String((statusItems[status.id] || []).length);
     });
+
+    let unreadCount = 0;
+    getStatusBuckets().forEach(statusId => {
+        (statusItems[statusId] || []).forEach(item => {
+            if (item && item.is_form_submission && !item.read) unreadCount += 1;
+        });
+    });
+    document.title = unreadCount > 0
+        ? `(${unreadCount}) Admin · Henricssons Båtkapell`
+        : 'Admin · Henricssons Båtkapell';
 }
 
 function renderStatusBoardLayout() {
@@ -5143,6 +5234,9 @@ function renderStatusFolders() {
                 return true;
             });
         }
+        if (statusBoardSearchQuery) {
+            itemsToShow = itemsToShow.filter(item => submissionMatchesSearch(item, statusBoardSearchQuery));
+        }
 
         if (itemsToShow.length === 0) {
             const emptyDiv = $('<div>').addClass('folder-item folder-item-empty').css({
@@ -5152,9 +5246,13 @@ function renderStatusFolders() {
                 padding: '2rem 1rem'
             });
             const statusName = getStatusDisplayName(statusId).toLowerCase();
-            emptyDiv.text(currentFormFilter === 'all'
-                ? `Inga ${statusName} att visa`
-                : `Inga ${currentFormFilter.toLowerCase()} i ${statusName}`);
+            if (statusBoardSearchQuery) {
+                emptyDiv.text(`Inga träffar i ${statusName}`);
+            } else {
+                emptyDiv.text(currentFormFilter === 'all'
+                    ? `Inga ${statusName} att visa`
+                    : `Inga ${currentFormFilter.toLowerCase()} i ${statusName}`);
+            }
             folderDiv.append(emptyDiv);
         } else {
             itemsToShow.forEach(item => {
@@ -5181,7 +5279,12 @@ function renderStatusFolders() {
                     const manufacturer = getSubmissionField(item.fields, 'manufacturer', 'tillverkare');
                     const model = getSubmissionField(item.fields, 'model', 'modell');
 
-                    titleDiv.append($('<div>').addClass('person-name').text(personName));
+                    const nameRow = $('<div>').addClass('person-name').text(personName);
+                    if (!item.read) {
+                        itemDiv.addClass('unread');
+                        nameRow.append($('<span>').addClass('unread-badge').text('Ny'));
+                    }
+                    titleDiv.append(nameRow);
                     titleDiv.append($('<div>').addClass('form-type-line').text(formType));
                     if (item.submitted_via === 'ai_chatbot') {
                         titleDiv.append($('<div>').addClass('ai-source-badge').text('AI'));
@@ -5196,6 +5299,13 @@ function renderStatusFolders() {
                         const boatInfo = [manufacturer, model].filter(Boolean).join(' ');
                         if (boatInfo) {
                             titleDiv.append($('<div>').addClass('boat-model-line').text(boatInfo));
+                        }
+                    }
+                    const messageText = getSubmissionField(item.fields, 'message', 'meddelande', 'beskrivning', 'description', 'ovrigt');
+                    if (messageText) {
+                        const snippet = String(messageText).replace(/\s+/g, ' ').trim();
+                        if (snippet) {
+                            titleDiv.append($('<div>').addClass('message-snippet').text(snippet.length > 140 ? snippet.slice(0, 140) + '\u2026' : snippet));
                         }
                     }
                     if (Array.isArray(item.attachments) && item.attachments.length > 0) {
