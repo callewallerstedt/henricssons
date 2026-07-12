@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
@@ -3180,6 +3180,17 @@ def build_submission_status_actions_text(submission_id: str, current_status: str
     return "\n\n" + "\n".join(lines) + "\n"
 
 
+def build_customer_reply_mailto(form_type: str, email: str) -> str:
+    """Mailto link that pre-fills the reply address and subject for the admin."""
+    form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
+    if form_type == "Kontakt":
+        topic = "ditt meddelande till oss"
+    else:
+        topic = f"din {form_label.lower()}"
+    subject = f"Ang. {topic} \u2013 Henricssons B\u00e5tkapell"
+    return f"mailto:{quote(str(email or '').strip(), safe='@')}?subject={quote(subject)}"
+
+
 def build_notification_html(
     form_type: str,
     fields: Dict[str, Any],
@@ -3194,7 +3205,7 @@ def build_notification_html(
     form_label = html.escape(FORM_TYPE_LABELS_SV.get(form_type, form_type))
 
     ordered_keys = [k for k in FIELD_ORDER if k in fields]
-    extra_keys = [k for k in fields if k not in FIELD_ORDER and k != "__submitted_via"]
+    extra_keys = [k for k in fields if k not in FIELD_ORDER and not str(k).startswith("__")]
     all_keys = ordered_keys + extra_keys
 
     rows_html = ""
@@ -3203,6 +3214,21 @@ def build_notification_html(
         val = _humanize_value(raw)
         if not val:
             continue
+        lookup = field_lookup_key(str(key))
+        value_html = html.escape(val)
+        if lookup == "email" and is_valid_email_address(val):
+            reply_href = build_customer_reply_mailto(form_type, val)
+            value_html = (
+                f"<a href='{html.escape(reply_href)}' "
+                f"style='color:#0b3b65;text-decoration:underline;'>{html.escape(val)}</a>"
+            )
+        elif lookup == "phone":
+            tel_digits = re.sub(r"[^+\d]", "", val)
+            if len(tel_digits) >= 5:
+                value_html = (
+                    f"<a href='tel:{html.escape(tel_digits)}' "
+                    f"style='color:#0b3b65;text-decoration:underline;'>{html.escape(val)}</a>"
+                )
         rows_html += (
             "<tr>"
             f"<td style='padding:10px 12px;border:1px solid #d9dee5;"
@@ -3210,7 +3236,7 @@ def build_notification_html(
             f"{html.escape(_label(key))}</td>"
             f"<td style='padding:10px 12px;border:1px solid #d9dee5;"
             f"color:#222831;font-size:14px;word-break:break-word;'>"
-            f"{html.escape(val)}</td>"
+            f"{value_html}</td>"
             "</tr>"
         )
 
@@ -3277,6 +3303,19 @@ def build_notification_html(
             + "</div>"
         )
 
+    reply_block = ""
+    customer_email = get_field_value(fields, "email", "e-post", "e-postadress")
+    if is_valid_email_address(customer_email):
+        reply_href = build_customer_reply_mailto(form_type, customer_email)
+        reply_block = (
+            "<div style='margin-top:20px;'>"
+            f"<a href='{html.escape(reply_href)}' "
+            "style='display:inline-block;background:#b28a4c;color:#ffffff;text-decoration:none;"
+            "padding:11px 22px;font-size:14px;font-weight:700;'>"
+            "Svara kunden via e-post</a>"
+            "</div>"
+        )
+
     meta_block = (
         "<div style='margin-top:18px;padding:12px 14px;background:#fafafa;border:1px solid #e5e7eb;'>"
         f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Tid (svensk tid): {local_str}</div>"
@@ -3300,6 +3339,7 @@ def build_notification_html(
       </table>
       {attachments_block}
       {ai_reply_block}
+      {reply_block}
       {status_actions_html}
       {meta_block}
     </td>
@@ -3985,7 +4025,7 @@ def send_mailgun_submission_notification(
     field_lines = "\n".join(
         f"  {_label(k)}: {_humanize_value(v)}"
         for k, v in fields.items()
-        if k != "__submitted_via" and _humanize_value(v)
+        if not str(k).startswith("__") and _humanize_value(v)
     )
     attachment_lines = ""
     attachments = attachments or []
@@ -6112,6 +6152,90 @@ def mailgun_test():
     text_body = str(payload.get("text", "Testmail från Henricssons backend.")).strip() or "Testmail från Henricssons backend."
     html_body = f"<p>{html.escape(text_body)}</p>"
     ok, info = send_mailgun_email(recipients=recipients, subject=subject, text_body=text_body, html_body=html_body)
+    if not ok:
+        return jsonify(success=False, error=info), 400
+    return jsonify(success=True, provider_response=info)
+
+
+TEST_EMAIL_SAMPLE_FIELDS: Dict[str, Any] = {
+    "name": "Test Testsson",
+    "email": "test.kund@example.com",
+    "phone": "070-123 45 67",
+    "manufacturer": "Nimbus",
+    "model": "26 Epoca",
+    "boat_year": "2005",
+    "home_port": "Bullandö Marina",
+    "message": (
+        "Detta är ett testmeddelande. Så här ser ett inskick ut när en kund "
+        "skickar en förfrågan via hemsidan."
+    ),
+}
+
+
+@app.route("/api/send_test_email", methods=["POST"])
+@admin_required
+def send_test_email():
+    """Send a sample internal-notification or customer-confirmation email to a
+    chosen address. Builds everything in memory – nothing is written to the DB."""
+    payload = request.get_json(silent=True) or {}
+    to_email = str(payload.get("to", "")).strip()
+    kind = str(payload.get("kind", "internal")).strip().lower()
+    if not is_valid_email_address(to_email):
+        return jsonify(success=False, error="Ange en giltig e-postadress."), 400
+    if kind not in ("internal", "customer"):
+        return jsonify(success=False, error="Ogiltig mejltyp."), 400
+
+    form_type = "Kapellforfragan"
+    fields = dict(TEST_EMAIL_SAMPLE_FIELDS)
+    inline_files: List[Tuple[str, bytes, str]] = []
+    try:
+        inline_files.append(("henricssons-logo", LOGO_FILE.read_bytes(), "image/png"))
+    except Exception as exc:
+        print(f"Could not attach test email logo: {exc}")
+
+    if kind == "customer":
+        settings = load_customer_confirmation_settings()
+        rendered = build_customer_confirmation_email_content(
+            form_type,
+            fields.get("name", ""),
+            fields,
+            settings.get("body_template", DEFAULT_CUSTOMER_CONFIRMATION_TEMPLATE),
+        )
+        subject = f"[TEST] {rendered['subject']}"
+        text_body = rendered["text_body"]
+        html_body = rendered["html_body"]
+    else:
+        timestamp_iso = datetime.now(timezone.utc).isoformat()
+        preview_title, preview_message = build_submission_notification_preview(fields)
+        form_label = NOTIFICATION_FORM_LABELS_SV.get(form_type, form_type)
+        subject = f"[TEST] Ny {form_label}"
+        field_lines = "\n".join(
+            f"  {_label(k)}: {_humanize_value(v)}"
+            for k, v in fields.items()
+            if _humanize_value(v)
+        )
+        text_body = (
+            f"{preview_title}\n{preview_message}\n\n"
+            f"{field_lines}\n\n"
+            f"Tid (svensk tid): {format_swedish_timestamp(timestamp_iso)}\n"
+            f"ID: TEST\n"
+        )
+        html_body = build_notification_html(
+            form_type,
+            fields,
+            "TEST",
+            timestamp_iso,
+            preview_title=preview_title,
+            preview_message=preview_message,
+        )
+
+    ok, info = send_mailgun_email(
+        recipients=[to_email],
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        inline_attachments=inline_files,
+    )
     if not ok:
         return jsonify(success=False, error=info), 400
     return jsonify(success=True, provider_response=info)

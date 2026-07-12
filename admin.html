@@ -926,6 +926,53 @@
             line-height: 1.4;
             margin-top: 4px;
         }
+        .folder-item-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .folder-item-footer .meta-left {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+        .folder-item-footer .form-type-line {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 0.68rem;
+            font-weight: 500;
+            border-radius: 999px;
+            background: var(--info-soft);
+            color: var(--brand-2);
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+        .folder-item-footer .ai-source-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            font-size: 0.64rem;
+            font-weight: 600;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            background: var(--accent-soft);
+            border-radius: 3px;
+        }
+        .folder-item-footer .attachment-badge {
+            font-size: 0.72rem;
+            color: #8b6f18;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .folder-item-footer .item-date {
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
         .status-config-list {
             display: flex;
             flex-direction: column;
@@ -2358,6 +2405,25 @@
                         <iframe id="customer-confirmation-preview-frame" title="F&#246;rhandsvisning kundmejl" style="width:100%; min-height:720px; border:1px solid var(--border-strong); border-radius:12px; background:#f2ede3;"></iframe>
                     </div>
                 </div>
+                <div class="dashboard-card">
+                    <h2>Testmejl</h2>
+                    <p class="hint" style="margin:0 0 0.9rem 0;">Skicka ett testmejl till valfri adress f&#246;r att se hur mejlen ser ut &#8211; b&#229;de det interna notifieringsmejlet och kundbekr&#228;ftelsen. Testmejlet anv&#228;nder p&#229;hittade exempeluppgifter och sparas inte som ett inskick.</p>
+                    <div style="display:grid; grid-template-columns:minmax(220px, 1fr) auto auto; gap:0.6rem; align-items:end; max-width:680px;">
+                        <div>
+                            <label for="test-email-to" style="display:block; margin-bottom:0.3rem;">Skicka till</label>
+                            <input type="email" id="test-email-to" placeholder="din@adress.se" style="width:100%;" />
+                        </div>
+                        <div>
+                            <label for="test-email-kind" style="display:block; margin-bottom:0.3rem;">Typ av mejl</label>
+                            <select id="test-email-kind">
+                                <option value="internal">Internt notifieringsmejl</option>
+                                <option value="customer">Kundbekr&#228;ftelse</option>
+                            </select>
+                        </div>
+                        <button class="btn" id="send-test-email-btn" type="button">Skicka testmejl</button>
+                    </div>
+                    <div id="test-email-status" class="hint" style="margin-top:0.6rem;"></div>
+                </div>
             </div>
 
             <!-- BOATS -->
@@ -2523,7 +2589,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260712a" defer></script>
+<script src="admin.js?v=20260712b" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle

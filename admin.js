@@ -1859,6 +1859,36 @@ function bindSettings() {
             setCustomerConfirmationPreviewType($(this).data('formType'));
         });
     setCustomerConfirmationPreviewType(customerConfirmationPreviewFormType);
+    $('#send-test-email-btn').off('click').on('click', sendTestEmail);
+}
+
+async function sendTestEmail() {
+    const button = $('#send-test-email-btn');
+    const statusEl = $('#test-email-status');
+    const to = String($('#test-email-to').val() || '').trim();
+    const kind = String($('#test-email-kind').val() || 'internal');
+    if (!to || !to.includes('@')) {
+        statusEl.css('color', 'var(--danger)').text('Ange en giltig e-postadress att skicka till.');
+        return;
+    }
+    button.prop('disabled', true).text('Skickar...');
+    statusEl.css('color', 'var(--text-muted)').text('');
+    try {
+        const res = await adminFetch(`${API_BASE}/api/send_test_email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to, kind })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || ('HTTP ' + res.status));
+        }
+        statusEl.css('color', 'var(--success)').text(`Testmejl skickat till ${to}. Kolla inkorgen (och skräpposten).`);
+    } catch (err) {
+        statusEl.css('color', 'var(--danger)').text('Kunde inte skicka: ' + (err.message || err));
+    } finally {
+        button.prop('disabled', false).text('Skicka testmejl');
+    }
 }
 
 function loadAiSettings() {
@@ -5273,11 +5303,12 @@ function renderStatusFolders() {
                 const header = $('<div>').addClass('folder-item-header');
                 const titleDiv = $('<div>').addClass('folder-item-title');
 
+                let footerRow = null;
                 if (item.is_form_submission && item.fields) {
                     const personName = getSubmissionField(item.fields, 'name', 'namn') || 'Okänd';
                     const formType = item.form_type || 'Formulär';
-                    const manufacturer = getSubmissionField(item.fields, 'manufacturer', 'tillverkare');
-                    const model = getSubmissionField(item.fields, 'model', 'modell');
+                    const manufacturer = getSubmissionField(item.fields, 'manufacturer', 'tillverkare', 'boat_brand', 'batmarke');
+                    const model = getSubmissionField(item.fields, 'model', 'modell', 'boat_model', 'batmodell');
 
                     const nameRow = $('<div>').addClass('person-name').text(personName);
                     if (!item.read) {
@@ -5285,21 +5316,15 @@ function renderStatusFolders() {
                         nameRow.append($('<span>').addClass('unread-badge').text('Ny'));
                     }
                     titleDiv.append(nameRow);
-                    titleDiv.append($('<div>').addClass('form-type-line').text(formType));
-                    if (item.submitted_via === 'ai_chatbot') {
-                        titleDiv.append($('<div>').addClass('ai-source-badge').text('AI'));
-                    }
                     if (formType === 'Kontakt') {
                         const subject = getSubmissionField(item.fields, 'subject', 'ämne', 'amne');
                         if (subject) {
                             titleDiv.append($('<div>').addClass('contact-subject').text(subject));
                         }
                     }
-                    if (manufacturer || model) {
-                        const boatInfo = [manufacturer, model].filter(Boolean).join(' ');
-                        if (boatInfo) {
-                            titleDiv.append($('<div>').addClass('boat-model-line').text(boatInfo));
-                        }
+                    const boatInfo = [manufacturer, model].filter(Boolean).join(' ');
+                    if (boatInfo) {
+                        titleDiv.append($('<div>').addClass('boat-model-line').text(boatInfo));
                     }
                     const messageText = getSubmissionField(item.fields, 'message', 'meddelande', 'beskrivning', 'description', 'ovrigt');
                     if (messageText) {
@@ -5308,20 +5333,21 @@ function renderStatusFolders() {
                             titleDiv.append($('<div>').addClass('message-snippet').text(snippet.length > 140 ? snippet.slice(0, 140) + '\u2026' : snippet));
                         }
                     }
-                    if (Array.isArray(item.attachments) && item.attachments.length > 0) {
-                        titleDiv.append(
-                            $('<div>').addClass('attachment-badge').css({
-                                fontSize: '0.78rem',
-                                color: '#8b6f18',
-                                marginTop: '0.2rem',
-                                fontWeight: '600'
-                            }).text(`Bilagor: ${item.attachments.length}`)
-                        );
+
+                    footerRow = $('<div>').addClass('folder-item-footer');
+                    const metaLeft = $('<div>').addClass('meta-left');
+                    metaLeft.append($('<span>').addClass('form-type-line').text(formType));
+                    if (item.submitted_via === 'ai_chatbot') {
+                        metaLeft.append($('<span>').addClass('ai-source-badge').text('AI'));
                     }
+                    if (Array.isArray(item.attachments) && item.attachments.length > 0) {
+                        metaLeft.append($('<span>').addClass('attachment-badge').text(`\ud83d\udcce ${item.attachments.length}`));
+                    }
+                    footerRow.append(metaLeft);
                     if (item.date || item.timestamp) {
                         const date = parseSubmissionDateValue(item.date || item.timestamp);
                         if (date) {
-                            itemDiv.append($('<div>').addClass('folder-item-content').text(formatSubmissionDateShortLabel(item.date || item.timestamp)));
+                            footerRow.append($('<span>').addClass('item-date').text(formatSubmissionDateShortLabel(item.date || item.timestamp)));
                         }
                     }
                 } else {
@@ -5346,6 +5372,9 @@ function renderStatusFolders() {
                     renderStatusFolders();
                 }));
                 itemDiv.append(header);
+                if (footerRow) {
+                    itemDiv.append(footerRow);
+                }
 
                 if (!item.is_form_submission) {
                     if (item.description) {
