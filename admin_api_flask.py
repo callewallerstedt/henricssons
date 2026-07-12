@@ -3219,8 +3219,11 @@ def build_notification_html(
         if lookup == "email" and is_valid_email_address(val):
             reply_href = build_customer_reply_mailto(form_type, val)
             value_html = (
+                f"<span>{html.escape(val)}</span> "
                 f"<a href='{html.escape(reply_href)}' "
-                f"style='color:#0b3b65;text-decoration:underline;'>{html.escape(val)}</a>"
+                "style='display:inline-block;margin-left:6px;padding:2px 10px;"
+                "font-size:12px;font-weight:700;color:#ffffff;background:#b28a4c;"
+                "text-decoration:none;border-radius:3px;white-space:nowrap;'>Svara</a>"
             )
         elif lookup == "phone":
             tel_digits = re.sub(r"[^+\d]", "", val)
