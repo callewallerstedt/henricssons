@@ -3776,31 +3776,48 @@ function renderAiResponsePanel(responseColumn, item, status, index, modal) {
         }));
     }
 
-    const nextStatus = getNextStatus(status);
-    if (nextStatus) {
-        actionButtons.append($('<button>').addClass('btn btn-secondary').css('margin-left', '0.5rem').text(`Flytta till ${getStatusDisplayName(nextStatus)}`).on('click', async function() {
+    const moveTargets = [...getWorkflowStatuses(), ARCHIVE_STATUS].filter(s => s.id !== status);
+    if (moveTargets.length) {
+        const moveWrap = $('<span>').addClass('move-target-wrap');
+        const moveSelect = $('<select>').addClass('move-target-select');
+        moveTargets.forEach(s => {
+            moveSelect.append($('<option>').val(s.id).text(s.name));
+        });
+        const defaultTarget = getNextStatus(status);
+        if (defaultTarget && moveTargets.some(s => s.id === defaultTarget)) {
+            moveSelect.val(defaultTarget);
+        }
+        const moveButton = $('<button>').addClass('btn btn-secondary').text('Flytta').on('click', async function() {
+            const targetStatus = String(moveSelect.val() || '');
+            if (!targetStatus || targetStatus === status) return;
+            const button = $(this);
+            button.prop('disabled', true).text('Flyttar...');
+
             const previousRead = Boolean(item.read);
             statusItems[status].splice(index, 1);
-            if (!statusItems[nextStatus]) statusItems[nextStatus] = [];
-            statusItems[nextStatus].push(item);
+            if (!statusItems[targetStatus]) statusItems[targetStatus] = [];
+            statusItems[targetStatus].push(item);
             item.read = true;
             saveStatusItems();
             renderStatusFolders();
-            showStatusMessage(`Objekt flyttat till "${getStatusDisplayName(nextStatus)}"`);
+            showStatusMessage(`Objekt flyttat till "${getStatusDisplayName(targetStatus)}"`);
 
-            const updated = await updateSubmissionStatusOnServer(item, nextStatus, true);
+            const updated = await updateSubmissionStatusOnServer(item, targetStatus, true);
             if (!updated) {
-                statusItems[nextStatus] = (statusItems[nextStatus] || []).filter(candidate => candidate !== item);
+                statusItems[targetStatus] = (statusItems[targetStatus] || []).filter(candidate => candidate !== item);
                 if (!statusItems[status]) statusItems[status] = [];
                 statusItems[status].splice(Math.min(index, statusItems[status].length), 0, item);
                 item.read = previousRead;
                 saveStatusItems();
                 renderStatusFolders();
                 showStatusMessage('Kunde inte spara statusändringen');
+                button.prop('disabled', false).text('Flytta');
                 return;
             }
             modal.removeClass('active');
-        }));
+        });
+        moveWrap.append(moveSelect, moveButton);
+        actionButtons.append(moveWrap);
     }
     responseSection.append(actionButtons);
     responseColumn.append(responseSection);
