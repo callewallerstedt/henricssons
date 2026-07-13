@@ -2076,7 +2076,7 @@
 <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 <div class="app">
     <aside class="sidebar" id="sidebar">
-        <div class="sidebar-brand">
+        <div class="sidebar-brand" id="admin-secret-brand">
             <img src="logo.png" alt="Henricssons Båtkapell" decoding="async" />
             <div class="sidebar-brand-text">
                 Henricssons
@@ -2586,12 +2586,35 @@
     </div>
 </div>
 
+<script>
+(function() {
+    const secretBrand = document.getElementById('admin-secret-brand');
+    if (!secretBrand) return;
+    let lastTouchAt = 0;
+    let openingAiLab = false;
+    function openAiLab() {
+        if (openingAiLab) return;
+        openingAiLab = true;
+        window.location.assign('/admin/ai-lab');
+    }
+    secretBrand.addEventListener('dblclick', openAiLab);
+    secretBrand.addEventListener('pointerup', function(event) {
+        if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+        const now = Date.now();
+        if (now - lastTouchAt > 40 && now - lastTouchAt < 520) {
+            event.preventDefault();
+            openAiLab();
+        }
+        lastTouchAt = now;
+    });
+})();
+</script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js" defer></script>
 <script src="https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260712c" defer></script>
+<script src="admin.js?v=20260713a" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle

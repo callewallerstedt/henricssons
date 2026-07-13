@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <title>AI Lab | Henricssons</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/ai_lab.css?v=20260713a">
+</head>
+<body>
+<div class="lab-noise" aria-hidden="true"></div>
+<div class="lab-shell">
+    <aside class="lab-sidebar">
+        <a class="lab-brand" href="/admin" aria-label="Tillbaka till admin">
+            <span class="lab-brand-mark"><img src="/logo.png" alt=""></span>
+            <span class="lab-brand-copy">
+                <strong>Henricssons</strong>
+                <small>Intelligence Lab</small>
+            </span>
+        </a>
+
+        <div class="lab-environment">
+            <span class="pulse-dot"></span>
+            <span>Skyddad testmiljö</span>
+        </div>
+
+        <nav class="lab-nav" aria-label="AI Lab">
+            <button class="lab-nav-button is-active" type="button" data-view="inbox">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 14h4l2 3h4l2-3h4"/></svg>
+                <span>Inkommande</span>
+                <span class="nav-count" id="nav-inbox-count">0</span>
+            </button>
+            <button class="lab-nav-button" type="button" data-view="workspace">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3zM5 15l.9 2.1L8 18l-2.1.9L5 21l-.9-2.1L2 18l2.1-.9L5 15zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/></svg>
+                <span>Agentstudio</span>
+            </button>
+            <button class="lab-nav-button" type="button" data-view="settings">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+                <span>Inställningar</span>
+            </button>
+        </nav>
+
+        <div class="lab-sidebar-footer">
+            <div class="safety-mini">
+                <span class="safety-lock">L</span>
+                <div><strong>Sändning låst</strong><small>Endast utkast kan skapas</small></div>
+            </div>
+            <a href="/admin">Tillbaka till admin</a>
+        </div>
+    </aside>
+
+    <main class="lab-main">
+        <header class="lab-topbar">
+            <button class="mobile-nav-toggle" id="mobile-nav-toggle" type="button" aria-label="Öppna meny">Meny</button>
+            <div>
+                <p class="eyebrow" id="page-eyebrow">AI OPERATIONS</p>
+                <h1 id="page-title">Inkommande förfrågningar</h1>
+            </div>
+            <div class="topbar-actions">
+                <div class="runtime-pill" id="runtime-pill"><span></span><b>Kontrollerar OpenAI</b></div>
+                <button class="ghost-button" id="refresh-lab" type="button">Uppdatera</button>
+            </div>
+        </header>
+
+        <section class="lab-view is-active" id="view-inbox" data-view-panel="inbox">
+            <div class="hero-panel">
+                <div>
+                    <span class="hero-kicker">OFFERTFLÖDE 01</span>
+                    <h2>Från förfrågan till ett granskningsklart utkast.</h2>
+                    <p>Analysera inkommande ärenden, se exakt vad agenten gör och bygg mejl samt offert utan att något skickas.</p>
+                </div>
+                <button class="primary-button primary-button-light" id="open-manual-test" type="button">
+                    <span class="button-spark">+</span> Testa egen förfrågan
+                </button>
+            </div>
+
+            <div class="metric-grid">
+                <article class="metric-card">
+                    <span class="metric-label">INKOMMANDE</span>
+                    <strong id="metric-total">0</strong>
+                    <small>Live från admin</small>
+                </article>
+                <article class="metric-card">
+                    <span class="metric-label">NYA</span>
+                    <strong id="metric-new">0</strong>
+                    <small>Väntar på hantering</small>
+                </article>
+                <article class="metric-card">
+                    <span class="metric-label">PIPELINE</span>
+                    <strong>7</strong>
+                    <small>Kontrollerade steg</small>
+                </article>
+                <article class="metric-card metric-card-safe">
+                    <span class="metric-label">SÄKERHET</span>
+                    <strong>100%</strong>
+                    <small>Sändning blockerad</small>
+                </article>
+            </div>
+
+            <div class="inbox-shell">
+                <section class="inbox-list-panel">
+                    <div class="panel-heading panel-heading-search">
+                        <div><span class="section-index">01</span><h3>Förfrågningar</h3></div>
+                        <label class="search-field">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                            <input type="search" id="inbox-search" placeholder="Sök kund eller båt">
+                        </label>
+                    </div>
+                    <div class="filter-row" id="inbox-filters">
+                        <button class="filter-chip is-active" data-filter="all" type="button">Alla</button>
+                        <button class="filter-chip" data-filter="Kapell" type="button">Kapell</button>
+                        <button class="filter-chip" data-filter="Dynsats" type="button">Dynsats</button>
+                        <button class="filter-chip" data-filter="Kontakt" type="button">Kontakt</button>
+                    </div>
+                    <div class="request-list" id="request-list">
+                        <div class="list-loading"><span class="lab-spinner"></span><p>Laddar förfrågningar</p></div>
+                    </div>
+                </section>
+
+                <section class="request-detail-panel" id="request-detail-panel">
+                    <div class="empty-detail" id="empty-detail">
+                        <div class="empty-orbit"><span></span><i></i></div>
+                        <h3>Välj en förfrågan</h3>
+                        <p>Du får hela kundunderlaget och kan starta agenten med ett klick.</p>
+                    </div>
+                    <div class="request-detail is-hidden" id="request-detail">
+                        <div class="detail-header">
+                            <div>
+                                <div class="detail-tags" id="detail-tags"></div>
+                                <h2 id="detail-customer">Kund</h2>
+                                <p id="detail-meta"></p>
+                            </div>
+                            <button class="primary-button" id="run-selected-agent" type="button"><span class="button-spark">+</span> Kör agent</button>
+                        </div>
+                        <div class="detail-grid">
+                            <div class="detail-block"><span>Båt</span><strong id="detail-boat">Saknas</strong></div>
+                            <div class="detail-block"><span>Kontakt</span><strong id="detail-contact">Saknas</strong></div>
+                            <div class="detail-block"><span>Status</span><strong id="detail-status">Nytt</strong></div>
+                        </div>
+                        <div class="message-card">
+                            <span class="message-label">KUNDENS FÖRFRÅGAN</span>
+                            <p id="detail-message"></p>
+                        </div>
+                        <div class="detail-field-list" id="detail-field-list"></div>
+                        <div class="read-only-note"><span>L</span> Agenten läser detta ärende utan att ändra originalet.</div>
+                    </div>
+                </section>
+            </div>
+        </section>
+
+        <section class="lab-view" id="view-workspace" data-view-panel="workspace">
+            <div class="workspace-header">
+                <div>
+                    <span class="hero-kicker hero-kicker-dark">AGENTSTUDIO</span>
+                    <h2>Testa hela offertpipen.</h2>
+                    <p>Klistra in ett mejl eller kör ett valt ärende från inkorgen. Resultatet stannar i labbet.</p>
+                </div>
+                <div class="dry-run-seal"><span>L</span><div><strong>DRY RUN</strong><small>Ingen extern åtgärd</small></div></div>
+            </div>
+
+            <div class="studio-input-card" id="studio-input-card">
+                <div class="studio-input-head">
+                    <div><span class="section-index">01</span><h3>Testförfrågan</h3></div>
+                    <div class="source-toggle">
+                        <button class="is-active" data-source="manual" type="button">Eget mejl</button>
+                        <button data-source="selected" id="selected-source-tab" type="button">Valt ärende</button>
+                    </div>
+                </div>
+                <div id="manual-source-fields">
+                    <div class="compact-fields">
+                        <label><span>Från</span><input id="manual-from" type="text" placeholder="kund@example.se"></label>
+                        <label><span>Ämne</span><input id="manual-subject" type="text" placeholder="Kapell till Buster Magnum"></label>
+                    </div>
+                    <label class="large-field"><span>Inkommande mejl</span><textarea id="manual-body" rows="8" placeholder="Hej, jag behöver ett nytt kapell till min båt..."></textarea></label>
+                </div>
+                <div class="selected-source-summary is-hidden" id="selected-source-summary">
+                    <span id="selected-source-type">FÖRFRÅGAN</span>
+                    <strong id="selected-source-title">Inget ärende valt</strong>
+                    <p id="selected-source-copy">Välj ett ärende från Inkommande först.</p>
+                </div>
+                <div class="studio-actions">
+                    <p><span>L</span> Alla integrationer som kan skriva eller skicka är serverlåsta.</p>
+                    <button class="primary-button" id="run-agent" type="button"><span class="button-spark">+</span> Starta agent</button>
+                </div>
+            </div>
+
+            <div class="agent-run-card is-hidden" id="agent-run-card">
+                <div class="agent-run-head">
+                    <div>
+                        <span class="section-index">02</span>
+                        <div><h3>Agentaktivitet</h3><p id="agent-run-caption">Bearbetar förfrågan</p></div>
+                    </div>
+                    <span class="run-status" id="run-status"><i></i> Arbetar</span>
+                </div>
+                <div class="agent-progress-line"><span id="agent-progress-fill"></span></div>
+                <div class="trace-grid" id="trace-grid"></div>
+            </div>
+
+            <div class="run-error is-hidden" id="run-error"></div>
+
+            <div class="agent-results is-hidden" id="agent-results">
+                <section class="result-overview-card">
+                    <div class="result-summary">
+                        <span class="section-index">03</span>
+                        <div><p class="eyebrow">AGENTENS BEDÖMNING</p><h3 id="result-summary">Sammanfattning</h3></div>
+                    </div>
+                    <div class="result-facts">
+                        <div><span>Ärende</span><strong id="result-intent">Förfrågan</strong></div>
+                        <div><span>Prioritet</span><strong id="result-priority">Normal</strong></div>
+                        <div><span>Säkerhet</span><strong id="result-confidence">0%</strong></div>
+                    </div>
+                    <div class="blocker-strip" id="blocker-strip"></div>
+                </section>
+
+                <div class="output-grid">
+                    <section class="email-output-card">
+                        <div class="output-card-head">
+                            <div><span class="section-index">04</span><div><h3>Mejlutkast</h3><p>Redigerbart och inte skickat</p></div></div>
+                            <span class="draft-badge">UTKAST</span>
+                        </div>
+                        <label class="output-field"><span>Ämne</span><input id="email-subject-output" type="text"></label>
+                        <label class="output-field output-field-body"><span>Mejl</span><textarea id="email-body-output"></textarea></label>
+                        <div class="output-actions">
+                            <button class="secondary-button" id="copy-email" type="button">Kopiera text</button>
+                            <button class="disabled-button" type="button" disabled><span>L</span> Skicka avstängt</button>
+                        </div>
+                    </section>
+
+                    <section class="quote-output-card">
+                        <div class="output-card-head">
+                            <div><span class="section-index">05</span><div><h3>Offertutkast</h3><p>Bygger på er befintliga offertmall</p></div></div>
+                            <button class="secondary-button" id="print-quote" type="button">Spara som PDF</button>
+                        </div>
+                        <div class="quote-stage">
+                            <article class="quote-paper" id="quote-paper">
+                                <div class="quote-watermark">UTKAST</div>
+                                <div class="quote-paper-topline">Sida 1 av 1</div>
+                                <header class="quote-header">
+                                    <div><img src="/logo.png" alt="Henricssons Båtkapell" class="quote-logo"></div>
+                                    <div class="quote-title"><h2>Offert</h2><p>Offertnummer <strong id="quote-number">UTKAST</strong></p></div>
+                                </header>
+                                <div class="quote-parties">
+                                    <dl class="quote-meta">
+                                        <div><dt>Kundnr</dt><dd id="quote-customer-number">Ej tilldelat</dd></div>
+                                        <div><dt>Offertdatum</dt><dd id="quote-date"></dd></div>
+                                        <div><dt>Er referens</dt><dd id="quote-customer-reference"></dd></div>
+                                        <div><dt>Vår referens</dt><dd>Niclas Henricsson</dd></div>
+                                        <div><dt>Leveransvillkor</dt><dd id="quote-delivery-terms"></dd></div>
+                                        <div><dt>Leveranssätt</dt><dd id="quote-delivery-method"></dd></div>
+                                        <div><dt>Bet villkor</dt><dd id="quote-payment-terms"></dd></div>
+                                    </dl>
+                                    <address id="quote-address">Kunduppgifter saknas</address>
+                                </div>
+                                <table class="quote-table">
+                                    <thead><tr><th>Art.nr</th><th>Beskrivning</th><th>Antal</th><th>Enhet</th><th>À-pris</th><th>Rabatt</th><th>Summa</th></tr></thead>
+                                    <tbody id="quote-lines"></tbody>
+                                </table>
+                                <div class="quote-blocker-note" id="quote-blocker-note">Artikelnummer, pris och lager måste verifieras innan offerten kan färdigställas.</div>
+                                <footer class="quote-total-area">
+                                    <div class="quote-totals"><div><span>Exkl. moms</span><b>Ej beräknat</b></div><div><span>Moms</span><b>Ej beräknat</b></div><div><span>Avrundning</span><b>Ej beräknat</b></div></div>
+                                    <div class="quote-final"><p>Giltig t o m <span id="quote-valid-until"></span></p><p>Planerat leveransdatum <span>Ej verifierat</span></p><h3>Totalbelopp <strong>Väntar på prisdata</strong></h3></div>
+                                </footer>
+                                <div class="quote-company-footer">
+                                    <div><b>Adress</b><span>Henricssons Båtkapell AB<br>Energigatan 17E<br>434 37 KUNGSBACKA</span></div>
+                                    <div><b>Telefon</b><span>+46 31471820</span><b>E-post/Webbplats</b><span>info@henricssonsbatkapell.se<br>henricssonsbåtkapell.se</span></div>
+                                    <div><b>Säte</b><span>Göteborg</span><b>Organisationsnr</b><span>556799-2192<br>Godkänd för F-skatt</span></div>
+                                    <div><b>Momsreg.nr</b><span>SE556799219201</span></div>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </section>
+
+        <section class="lab-view" id="view-settings" data-view-panel="settings">
+            <div class="settings-header">
+                <div><span class="hero-kicker hero-kicker-dark">KONTROLLCENTER</span><h2>Agentens regler och integrationer.</h2><p>Inställningarna sparas i samma beständiga datalager som resten av adminpanelen.</p></div>
+                <button class="primary-button" id="save-lab-settings" type="button">Spara inställningar</button>
+            </div>
+            <div class="settings-notice is-hidden" id="settings-notice"></div>
+
+            <div class="integration-grid">
+                <article class="integration-card"><span class="integration-icon integration-icon-live">AI</span><div><small>OPENAI</small><h3 id="settings-model">Kontrollerar</h3><p>Strukturerad analys och textgenerering</p></div><b class="integration-state" id="openai-state">...</b></article>
+                <article class="integration-card"><span class="integration-icon">AR</span><div><small>ARTIKELREGISTER</small><h3>Ej anslutet</h3><p>Artikelnummer och produktmatchning</p></div><b class="integration-state is-waiting">VÄNTAR</b></article>
+                <article class="integration-card"><span class="integration-icon">LS</span><div><small>LAGER</small><h3>Ej anslutet</h3><p>Saldo och leveransprognos</p></div><b class="integration-state is-waiting">VÄNTAR</b></article>
+                <article class="integration-card"><span class="integration-icon integration-icon-lock">L</span><div><small>UTGÅENDE</small><h3>Serverlåst</h3><p>Mejl, order och statusändringar</p></div><b class="integration-state is-locked">LÅST</b></article>
+            </div>
+
+            <div class="settings-grid">
+                <section class="settings-card settings-card-wide">
+                    <div class="settings-card-head"><span class="section-index">01</span><div><h3>Agentinstruktion</h3><p>Hur agenten analyserar och vilka gränser som gäller.</p></div></div>
+                    <textarea id="setting-agent-prompt" rows="14"></textarea>
+                </section>
+                <section class="settings-card settings-card-wide">
+                    <div class="settings-card-head"><span class="section-index">02</span><div><h3>Henricssons mejlstil</h3><p>Stilguiden är byggd från de skickade exempelmejlen.</p></div></div>
+                    <textarea id="setting-email-style" rows="14"></textarea>
+                </section>
+                <section class="settings-card">
+                    <div class="settings-card-head"><span class="section-index">03</span><div><h3>Offertstandarder</h3><p>Grundvärden för utkastet.</p></div></div>
+                    <div class="settings-fields">
+                        <label><span>Giltighet, dagar</span><input id="setting-validity" type="number" min="1" max="365"></label>
+                        <label><span>Standardfrakt, SEK</span><input id="setting-shipping" type="number" min="0" step="1"></label>
+                        <label><span>Moms, procent</span><input id="setting-tax" type="number" min="0" max="100" step="0.1"></label>
+                        <label><span>Leveransvillkor</span><input id="setting-delivery-terms" type="text"></label>
+                        <label><span>Leveranssätt</span><input id="setting-delivery-method" type="text"></label>
+                        <label><span>Betalningsvillkor</span><input id="setting-payment-terms" type="text"></label>
+                    </div>
+                </section>
+                <section class="settings-card safety-card">
+                    <div class="settings-card-head"><span class="section-index">04</span><div><h3>Säkerhetslås</h3><p>Dessa regler kan inte stängas av i gränssnittet.</p></div></div>
+                    <div class="lock-list">
+                        <div><span class="lock-check">OK</span><p><strong>Endast utkast</strong><small>Alla agentkörningar är märkta dry run.</small></p></div>
+                        <div><span class="lock-check">OK</span><p><strong>Mänsklig granskning</strong><small>Offert och mejl kräver ett framtida godkännandesteg.</small></p></div>
+                        <div><span class="lock-check">OK</span><p><strong>Ingen skrivning</strong><small>Originalärenden och statusar lämnas orörda.</small></p></div>
+                        <div><span class="lock-check">OK</span><p><strong>Ingen sändning</strong><small>Mailgun och externa åtgärder används aldrig här.</small></p></div>
+                    </div>
+                </section>
+            </div>
+        </section>
+    </main>
+</div>
+<div class="mobile-nav-backdrop" id="mobile-nav-backdrop"></div>
+<div class="toast" id="lab-toast" role="status"></div>
+<script src="/ai_lab.js?v=20260713a" defer></script>
+</body>
+</html>
