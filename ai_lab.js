@@ -15,6 +15,7 @@
 
     const viewMeta = {
         inbox: { eyebrow: "AI OPERATIONS", title: "Inkommande förfrågningar" },
+        tv: { eyebrow: "FACTORY BROADCAST", title: "Live Order TV" },
         workspace: { eyebrow: "DRY RUN WORKSPACE", title: "Agentstudio" },
         settings: { eyebrow: "SYSTEM CONTROL", title: "AI Lab inställningar" },
     };
@@ -122,6 +123,7 @@
         $("page-title").textContent = meta.title;
         closeMobileNav();
         window.scrollTo({ top: 0, behavior: "smooth" });
+        if (view === "tv") startTv(); else stopTv();
     }
 
     function closeMobileNav() {
@@ -352,11 +354,20 @@
         return new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value));
     }
 
+    function formatKr(value) {
+        if (value == null || Number.isNaN(Number(value))) return "-";
+        return `${new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Number(value))} kr`;
+    }
+
     function renderResults(result) {
         $("result-summary").textContent = result.summary || "Förfrågan analyserad";
         $("result-intent").textContent = result.intent || "Förfrågan";
         $("result-priority").textContent = result.priority || "normal";
         $("result-confidence").textContent = `${Math.round(Number(result.confidence || 0) * 100)}%`;
+        const cost = result.cost_estimate || {};
+        $("result-profit").textContent = cost.estimated_profit_sek != null
+            ? `${formatKr(cost.estimated_profit_sek)} · ${cost.margin_percent ?? "-"}%`
+            : "-";
         const blockers = Array.isArray(result.internal_blockers) ? result.internal_blockers : [];
         $("blocker-strip").innerHTML = blockers.map(item => `<span class="blocker-chip">${escapeHtml(item)}</span>`).join("");
 
@@ -371,6 +382,7 @@
         $("quote-customer-number").textContent = quote.customer_number || "Ej tilldelat";
         $("quote-date").textContent = quote.quote_date || "";
         $("quote-valid-until").textContent = quote.valid_until || "";
+        $("quote-planned-delivery").textContent = quote.planned_delivery || "-";
         $("quote-delivery-terms").textContent = quote.delivery_terms || "";
         $("quote-delivery-method").textContent = quote.delivery_method || "";
         $("quote-payment-terms").textContent = quote.payment_terms || "";
@@ -380,15 +392,19 @@
         $("quote-lines").innerHTML = lines.map(line => `
             <tr>
                 <td>${escapeHtml(line.article_number || "Saknas")}</td>
-                <td>${escapeHtml(line.description || "Offertunderlag")}<span class="quote-verification">${escapeHtml(line.verification || "Ej verifierad")}</span></td>
+                <td>${escapeHtml(line.description || "Offertunderlag")}<span class="quote-verification">${escapeHtml(line.verification || "Estimerad")}</span></td>
                 <td>${escapeHtml(String(line.quantity ?? 1).replace(".", ","))}</td>
                 <td>${escapeHtml(line.unit || "st")}</td>
                 <td>${formatMoney(line.unit_price_sek)}</td>
                 <td>${line.discount_percent == null ? "-" : `${formatMoney(line.discount_percent)}%`}</td>
                 <td>${formatMoney(line.sum_sek)}</td>
             </tr>`).join("");
+        $("quote-subtotal").textContent = quote.subtotal_ex_vat_sek != null ? formatMoney(quote.subtotal_ex_vat_sek) : "-";
+        $("quote-vat").textContent = quote.vat_sek != null ? formatMoney(quote.vat_sek) : "-";
+        $("quote-rounding").textContent = quote.rounding_sek != null ? formatMoney(quote.rounding_sek) : "-";
+        $("quote-total").textContent = quote.total_sek != null ? `${formatMoney(quote.total_sek)} kr` : "-";
         const boatName = [boat.manufacturer, boat.model, boat.year].filter(Boolean).join(" ");
-        $("quote-blocker-note").textContent = `${boatName ? `${boatName}: ` : ""}Artikelnummer, produktpris och lager måste verifieras innan offerten kan färdigställas.`;
+        $("quote-blocker-note").textContent = `${boatName ? `${boatName}: ` : ""}Priser, artikelnummer och lager är AI-estimat från simulerad prisdata och verifieras innan offerten skickas till kund.`;
     }
 
     async function copyEmail() {
@@ -488,6 +504,263 @@
         }
     }
 
+    // ---------- Live Order TV ----------
+    const tvState = {
+        active: false,
+        pollTimer: null,
+        clockTimer: null,
+        knownIds: null,
+        soundOn: true,
+        audioCtx: null,
+    };
+
+    const TV_POLL_MS = 30000;
+    const tvWeatherIcons = { "01": "☀️", "02": "⛅", "03": "☁️", "04": "🌫️", "05": "🌧️", "06": "🌨️", "07": "⛈️" };
+
+    function tvTypeInfo(formType) {
+        const lowered = String(formType || "").toLowerCase();
+        if (lowered.includes("kapell")) return { label: "KAPELL", cls: "type-kapell" };
+        if (lowered.includes("dyn")) return { label: "DYNSATS", cls: "type-dynsats" };
+        if (lowered.includes("fender")) return { label: "FENDER", cls: "type-fender" };
+        return { label: "KONTAKT", cls: "type-kontakt" };
+    }
+
+    function ensureTvAudio() {
+        if (!tvState.audioCtx) {
+            try {
+                tvState.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (_) {
+                return null;
+            }
+        }
+        if (tvState.audioCtx.state === "suspended") tvState.audioCtx.resume().catch(() => {});
+        return tvState.audioCtx;
+    }
+
+    function playTvChime() {
+        if (!tvState.soundOn) return;
+        const ctx = ensureTvAudio();
+        if (!ctx) return;
+        const now = ctx.currentTime + 0.02;
+        [[987.77, 0], [1318.51, 0.18]].forEach(([frequency, delay]) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.value = frequency;
+            gain.gain.setValueAtTime(0.0001, now + delay);
+            gain.gain.exponentialRampToValueAtTime(0.2, now + delay + 0.025);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 1.2);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + delay);
+            osc.stop(now + delay + 1.3);
+        });
+    }
+
+    function tickTvClock() {
+        const now = new Date();
+        $("tv-clock").textContent = new Intl.DateTimeFormat("sv-SE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(now);
+        const dateText = new Intl.DateTimeFormat("sv-SE", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(now);
+        $("tv-date").textContent = dateText.charAt(0).toUpperCase() + dateText.slice(1);
+    }
+
+    function tvTimeLabel(value) {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        const now = new Date();
+        const clock = new Intl.DateTimeFormat("sv-SE", { hour: "2-digit", minute: "2-digit" }).format(date);
+        if (date.toDateString() === now.toDateString()) return `${clock} · idag`;
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        if (date.toDateString() === yesterday.toDateString()) return `${clock} · igår`;
+        return new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "short" }).format(date);
+    }
+
+    function renderTvWeather(weather) {
+        if (!weather || weather.temperature_c == null) {
+            $("tv-temp").textContent = "--°";
+            $("tv-weather-desc").textContent = "Kungsbacka";
+            return;
+        }
+        $("tv-weather-icon").textContent = tvWeatherIcons[weather.icon] || "☁️";
+        $("tv-temp").textContent = `${Math.round(Number(weather.temperature_c))}°C`;
+        $("tv-weather-desc").textContent = `${weather.description || "Väder"} · ${weather.location || "Kungsbacka"}`;
+    }
+
+    function renderTvFeed(feed, freshIds) {
+        const container = $("tv-feed");
+        if (!feed.length) {
+            container.innerHTML = '<div class="tv-empty"><p>Inga förfrågningar ännu.<br>Flödet uppdateras automatiskt.</p></div>';
+            return;
+        }
+        const cutoff = Date.now() - 60 * 60 * 1000;
+        container.innerHTML = feed.map(item => {
+            const type = tvTypeInfo(item.form_type);
+            const estimate = item.estimate || {};
+            const stamp = new Date(item.timestamp).getTime();
+            const fresh = freshIds.has(String(item.id)) || (Number.isFinite(stamp) && stamp > cutoff);
+            const city = item.city ? `<span> · ${escapeHtml(item.city)}</span>` : "";
+            const wants = item.wants ? `<p class="tv-order-wants">”${escapeHtml(item.wants)}”</p>` : "";
+            const boatRow = item.boat ? `<p class="tv-order-boat">⚓ ${escapeHtml(item.boat)}</p>` : "";
+            return `
+                <article class="tv-order ${fresh ? "is-fresh" : ""}">
+                    <div class="tv-order-top">
+                        <span class="tv-order-type ${type.cls}">${type.label}</span>
+                        <span class="tv-order-time">${escapeHtml(tvTimeLabel(item.timestamp))}</span>
+                    </div>
+                    <h4>${escapeHtml(item.customer || "Okänd kund")}${city}</h4>
+                    ${boatRow}
+                    ${wants}
+                    <div class="tv-order-est">
+                        <div><span>EST. PRIS</span><b class="est-price">${formatKr(estimate.price_sek)}</b></div>
+                        <div><span>EST. VINST</span><b class="est-profit">${estimate.profit_sek != null ? `+${formatKr(estimate.profit_sek)}` : "-"}</b></div>
+                        <div><span>LAGER</span><b title="${escapeHtml(estimate.stock || "")}">${escapeHtml(estimate.stock || "-")}</b></div>
+                        <div><span>LEVERANS</span><b>${escapeHtml(estimate.delivery || "-")}</b></div>
+                    </div>
+                </article>`;
+        }).join("");
+    }
+
+    function renderTvSidePanels(feed) {
+        const today = new Date().toDateString();
+        const todayItems = feed.filter(item => {
+            const date = new Date(item.timestamp);
+            return !Number.isNaN(date.getTime()) && date.toDateString() === today;
+        });
+        $("tv-today-count").textContent = todayItems.length ? `${todayItems.length} st` : "";
+        $("tv-today-list").innerHTML = todayItems.length
+            ? todayItems.map(item => {
+                const clock = new Intl.DateTimeFormat("sv-SE", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.timestamp));
+                const estimate = item.estimate || {};
+                return `
+                    <div class="tv-today-row">
+                        <span class="tv-today-time">${clock}</span>
+                        <div class="tv-today-copy"><strong>${escapeHtml(item.customer || "Okänd kund")}</strong><small>${escapeHtml(item.boat || estimate.product || item.form_type || "")}</small></div>
+                        <span class="tv-today-value">${formatKr(estimate.price_sek)}</span>
+                    </div>`;
+            }).join("")
+            : '<p class="tv-side-empty">Inga förfrågningar ännu idag.</p>';
+
+        const groups = new Map();
+        feed.forEach(item => {
+            const estimate = item.estimate || {};
+            const type = tvTypeInfo(item.form_type);
+            const group = groups.get(type.label) || { label: type.label, count: 0, value: 0, profit: 0 };
+            group.count += 1;
+            group.value += Number(estimate.price_sek || 0);
+            group.profit += Number(estimate.profit_sek || 0);
+            groups.set(type.label, group);
+        });
+        const rows = [...groups.values()].sort((a, b) => b.profit - a.profit);
+        const maxProfit = Math.max(...rows.map(row => row.profit), 1);
+        $("tv-profit-list").innerHTML = rows.length
+            ? rows.map(row => `
+                <div class="tv-profit-row">
+                    <div class="tv-profit-row-top"><span>${escapeHtml(row.label)}</span><b>+${formatKr(row.profit)}</b></div>
+                    <div class="tv-profit-meta"><span>${row.count} förfrågningar</span><span>värde ${formatKr(row.value)}</span></div>
+                    <div class="tv-profit-bar"><span style="width:${Math.max(6, Math.round(row.profit / maxProfit * 100))}%"></span></div>
+                </div>`).join("")
+            : '<p class="tv-side-empty">Väntar på data…</p>';
+    }
+
+    function renderTvTicker(data) {
+        const stats = data.stats || {};
+        const weather = data.weather || {};
+        const latest = (data.feed || [])[0];
+        const parts = [
+            `Idag: ${stats.today ?? 0} nya förfrågningar`,
+            `Estimerat ordervärde idag: ${formatKr(stats.today_value_sek)}`,
+            `Estimerad vinst idag: ${formatKr(stats.today_profit_sek)}`,
+            `${stats.new ?? 0} ärenden väntar på hantering`,
+        ];
+        if (latest) parts.push(`Senast in: ${latest.customer || "Okänd kund"}${latest.boat ? ` – ${latest.boat}` : ""} (${(latest.estimate || {}).product || latest.form_type})`);
+        if (weather.temperature_c != null) parts.push(`${weather.location || "Kungsbacka"} just nu: ${Math.round(weather.temperature_c)}°C, ${(weather.description || "").toLowerCase()}`);
+        parts.push("Alla belopp är AI-estimat exkl. moms");
+        const text = parts.map(escapeHtml).join('<i class="tv-ticker-sep">◆</i>');
+        $("tv-ticker").innerHTML = `${text}<i class="tv-ticker-sep">◆</i>${text}`;
+    }
+
+    function renderTvStats(stats) {
+        $("tv-stat-today").textContent = String(stats.today ?? 0);
+        $("tv-stat-new").textContent = String(stats.new ?? 0);
+        $("tv-stat-week").textContent = String(stats.week ?? 0);
+        $("tv-stat-total").textContent = String(stats.total ?? 0);
+        $("tv-stat-value").textContent = formatKr(stats.today_value_sek ?? 0);
+        $("tv-stat-profit").textContent = formatKr(stats.today_profit_sek ?? 0);
+    }
+
+    async function refreshTv() {
+        try {
+            const response = await adminFetch("/api/ai_lab/tv");
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+            const feed = Array.isArray(data.feed) ? data.feed : [];
+            const ids = new Set(feed.map(item => String(item.id)));
+            const freshIds = new Set();
+            if (tvState.knownIds) {
+                ids.forEach(id => { if (!tvState.knownIds.has(id)) freshIds.add(id); });
+            }
+            tvState.knownIds = ids;
+            renderTvStats(data.stats || {});
+            renderTvWeather(data.weather);
+            renderTvFeed(feed, freshIds);
+            renderTvSidePanels(feed);
+            renderTvTicker(data);
+            if (freshIds.size) {
+                playTvChime();
+                showToast(freshIds.size === 1 ? "Ny förfrågan inkommen!" : `${freshIds.size} nya förfrågningar!`);
+            }
+            const clock = new Intl.DateTimeFormat("sv-SE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date());
+            $("tv-feed-status").textContent = `Uppdaterad ${clock}`;
+        } catch (error) {
+            $("tv-feed-status").textContent = "Kunde inte uppdatera flödet";
+        }
+    }
+
+    function startTv() {
+        if (tvState.active) return;
+        tvState.active = true;
+        ensureTvAudio();
+        tickTvClock();
+        tvState.clockTimer = setInterval(tickTvClock, 1000);
+        refreshTv();
+        tvState.pollTimer = setInterval(refreshTv, TV_POLL_MS);
+    }
+
+    function stopTv() {
+        if (!tvState.active) return;
+        tvState.active = false;
+        clearInterval(tvState.pollTimer);
+        clearInterval(tvState.clockTimer);
+        tvState.pollTimer = null;
+        tvState.clockTimer = null;
+    }
+
+    function toggleTvSound() {
+        tvState.soundOn = !tvState.soundOn;
+        const button = $("tv-sound-toggle");
+        button.textContent = tvState.soundOn ? "Ljud: På" : "Ljud: Av";
+        button.setAttribute("aria-pressed", String(tvState.soundOn));
+        if (tvState.soundOn) {
+            ensureTvAudio();
+            playTvChime();
+        }
+    }
+
+    async function toggleTvFullscreen() {
+        const stage = $("tv-stage");
+        try {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+            } else {
+                await stage.requestFullscreen();
+                ensureTvAudio();
+            }
+        } catch (_) {
+            showToast("Helskärm stöds inte i den här webbläsaren");
+        }
+    }
+
     function bindEvents() {
         document.querySelectorAll(".lab-nav-button").forEach(button => button.addEventListener("click", () => switchView(button.dataset.view)));
         document.querySelectorAll("[data-source]").forEach(button => button.addEventListener("click", () => setSourceMode(button.dataset.source)));
@@ -503,7 +776,9 @@
         $("copy-email").addEventListener("click", copyEmail);
         $("print-quote").addEventListener("click", () => window.print());
         $("save-lab-settings").addEventListener("click", saveSettings);
-        $("refresh-lab").addEventListener("click", async () => { await Promise.all([loadInbox(), loadSettings()]); showToast("AI Lab är uppdaterat"); });
+        $("tv-sound-toggle").addEventListener("click", toggleTvSound);
+        $("tv-fullscreen").addEventListener("click", toggleTvFullscreen);
+        $("refresh-lab").addEventListener("click", async () => { await Promise.all([loadInbox(), loadSettings()]); if (tvState.active) refreshTv(); showToast("AI Lab är uppdaterat"); });
         $("mobile-nav-toggle").addEventListener("click", () => {
             document.querySelector(".lab-sidebar")?.classList.add("is-open");
             $("mobile-nav-backdrop").classList.add("is-open");
