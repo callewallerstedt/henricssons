@@ -26,6 +26,27 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 app = Flask(__name__)
 
+# Gzip/deflate for text responses (HTML/CSS/JS/JSON). The large catalog JSON
+# files shrink ~10x, which matters for outbound bandwidth on Render.
+try:
+    from flask_compress import Compress
+
+    app.config["COMPRESS_MIN_SIZE"] = 1024
+    app.config["COMPRESS_MIMETYPES"] = [
+        "text/html",
+        "text/css",
+        "text/plain",
+        "text/xml",
+        "application/xml",
+        "application/json",
+        "application/javascript",
+        "text/javascript",
+        "image/svg+xml",
+    ]
+    Compress(app)
+except Exception as _compress_exc:
+    print(f"flask-compress unavailable, responses served uncompressed: {_compress_exc}")
+
 BASE_DIR = Path(__file__).resolve().parent
 IMAGE_VARIANT_CACHE_DIR = BASE_DIR / ".image_cache"
 
@@ -5667,6 +5688,26 @@ def add_cors_headers(response):
     }:
         response.headers["Content-Type"] = f"{response.mimetype}; charset=utf-8"
 
+    # Static text files are served as streamed file responses, which limits
+    # flask-compress to its streaming algorithms (no gzip). Buffer them so
+    # every negotiated encoding works; images stay streamed and uncompressed.
+    if response.direct_passthrough and mimetype in {
+        "text/html",
+        "text/css",
+        "application/javascript",
+        "text/javascript",
+        "application/json",
+        "image/svg+xml",
+        "text/plain",
+        "text/xml",
+        "application/xml",
+    }:
+        try:
+            response.direct_passthrough = False
+            response.make_sequence()
+        except Exception:
+            pass
+
     path_lower = (request.path or "").lower()
     existing_cache_control = response.headers.get("Cache-Control", "").lower().strip()
     has_explicit_cache_control = existing_cache_control and existing_cache_control != "no-cache"
@@ -7731,11 +7772,14 @@ def example_page(slug: str):
     page_title = f"{full_title} - Henricssons Båtkapell"
     page_description = str(item.get("description", "") or "").strip() or GENERIC_EXAMPLE_DESCRIPTION
     raw_image_paths = item.get("images") or []
-    image_urls = [image_path_to_site_url(image) for image in raw_image_paths]
+    # Serve resized WebP variants everywhere; the full-size originals are
+    # multi-MB each and must never be sent to browsers or crawlers.
+    image_urls = [image_variant_url(image, 1400, 82) for image in raw_image_paths]
     if not image_urls:
         image_urls = ["/logo.png"]
-    main_image_url = image_variant_url(raw_image_paths[0], 1400, 82) if raw_image_paths else "/logo.png"
-    lightbox_image_url = image_variant_url(raw_image_paths[0], 1800, 84) if raw_image_paths else "/logo.png"
+    lightbox_image_urls = [image_variant_url(image, 1800, 84) for image in raw_image_paths] or ["/logo.png"]
+    main_image_url = image_urls[0]
+    lightbox_image_url = lightbox_image_urls[0]
 
     has_multiple = len(image_urls) > 1
     gallery_images = "".join(
@@ -7763,7 +7807,7 @@ def example_page(slug: str):
             <button type="button" class="seo-lightbox-close" aria-label="Stäng">&times;</button>
             <button type="button" class="seo-lightbox-nav seo-lightbox-prev" aria-label="Föregående bild"{nav_style}>&#8249;</button>
             <div class="seo-lightbox-stage">
-                <img id="seoLightboxImage" src="{html.escape(lightbox_image_url)}" alt="{html.escape(full_title)}" loading="lazy" decoding="async"/>
+                <img id="seoLightboxImage" src="" data-src="{html.escape(lightbox_image_url)}" alt="{html.escape(full_title)}" loading="lazy" decoding="async"/>
             </div>
             <button type="button" class="seo-lightbox-nav seo-lightbox-next" aria-label="Nästa bild"{nav_style}>&#8250;</button>
             <div class="seo-lightbox-actions">
@@ -7861,6 +7905,7 @@ def example_page(slug: str):
     <script>
         (function () {{
             const images = {json.dumps(image_urls[:8])};
+            const lightboxImages = {json.dumps(lightbox_image_urls[:8])};
             const mainImage = document.getElementById('seoGalleryMainImage');
             const thumbs = Array.from(document.querySelectorAll('.seo-thumb'));
             const prevButton = document.querySelector('.seo-gallery-prev');
@@ -7881,8 +7926,8 @@ def example_page(slug: str):
                     mainImage.src = images[currentIndex];
                     mainImage.alt = imageAlt;
                 }}
-                if (lightboxImage) {{
-                    lightboxImage.src = images[currentIndex];
+                if (lightboxImage && lightbox && lightbox.classList.contains('is-open')) {{
+                    lightboxImage.src = lightboxImages[currentIndex];
                     lightboxImage.alt = imageAlt;
                 }}
                 thumbs.forEach((thumb, i) => thumb.classList.toggle('is-active', i === currentIndex));
@@ -7890,8 +7935,8 @@ def example_page(slug: str):
 
             function openLightbox(index) {{
                 if (!lightbox) return;
-                render(typeof index === 'number' ? index : currentIndex);
                 lightbox.classList.add('is-open');
+                render(typeof index === 'number' ? index : currentIndex);
                 lightbox.setAttribute('aria-hidden', 'false');
                 document.body.style.overflow = 'hidden';
             }}
