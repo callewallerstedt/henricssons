@@ -992,13 +992,6 @@ def slugify_example(value: Any, fallback: str = "exempel") -> str:
     return slug or fallback_slug or "exempel"
 
 
-def legacy_redirect_target_slug(slug: str) -> str:
-    target = LEGACY_EXAMPLE_REDIRECTS.get(str(slug or "").strip(), "")
-    if not target.startswith("/exempel/"):
-        return ""
-    return target.strip("/").split("/", 1)[1].strip()
-
-
 def build_generated_example_slug(record: Dict[str, Any], fallback_slug: str = "") -> str:
     seed = " ".join(
         part for part in [
@@ -1017,10 +1010,11 @@ def resolve_public_example_slug(
     used_generated_slugs: Optional[set] = None,
 ) -> str:
     raw_slug = str(source_slug or fallback_slug or "").strip()
-    redirect_target = legacy_redirect_target_slug(raw_slug)
-    if redirect_target:
-        return redirect_target
-
+    # A slug that belongs to a real example keeps its own page. The legacy map
+    # collides on bare model numbers, so folding these into the redirect target
+    # sent whole boats to another manufacturer (Ryds 620 DC -> Bella 620 DC).
+    # Legacy redirects now only apply to slugs without an example of their own,
+    # which is handled in example_page().
     if raw_slug and LEGACY_EXAMPLE_REDIRECTS.get(raw_slug) != "/bilder-och-exempel":
         return raw_slug
 
@@ -1564,10 +1558,6 @@ def list_canonical_examples() -> List[Dict[str, Any]]:
     for slug, record in build_example_registry().items():
         canonical_slug = str(record.get("canonical_slug", "") or "").strip()
         if not canonical_slug:
-            continue
-        # Slugs shadowed by a legacy redirect never resolve to a page of their
-        # own, so they must not appear in sitemaps, search or related links.
-        if canonical_slug in LEGACY_EXAMPLE_REDIRECTS:
             continue
         record_with_slug = dict(record)
         record_with_slug["canonical_slug"] = canonical_slug
@@ -7754,12 +7744,14 @@ def example_page(slug: str):
     clean_slug = slug.strip().rstrip("/")
     if clean_slug.endswith(".html"):
         return redirect(f"/exempel/{clean_slug[:-5]}", code=301)
-    if clean_slug in LEGACY_EXAMPLE_REDIRECTS:
-        return redirect(LEGACY_EXAMPLE_REDIRECTS[clean_slug], code=301)
 
     registry = build_example_registry()
     item = registry.get(clean_slug)
     if not item:
+        # Legacy redirects are a fallback for slugs that no longer have an
+        # example of their own. A real example always wins over the map.
+        if clean_slug in LEGACY_EXAMPLE_REDIRECTS:
+            return redirect(LEGACY_EXAMPLE_REDIRECTS[clean_slug], code=301)
         abort(404)
 
     canonical_slug = str(item.get("canonical_slug", "") or clean_slug).strip()
