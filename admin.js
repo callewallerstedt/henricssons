@@ -1519,6 +1519,20 @@ function showExtrasEdit() {
     bindSetThumbnail();
 }
 
+// Listan visar bilderna som absoluta URL:er (http://.../henricssons_bilder/x.jpg).
+// Utan att skala av origin igen sparades hela URL:en tillbaka - och alla "/"
+// byttes mot "\", vilket gav sökvägar som "http:\\host\henricssons_bilder\x.jpg".
+// Servern städade bort det vid utläsning, men datan i databasen blev fel.
+function normalizeStoredImagePath(value) {
+    const raw = String(value || '').trim();
+    if (!raw || raw.startsWith('data:')) return raw;
+    let clean = raw.replace(/\\/g, '/');
+    clean = clean.replace(/^https?:\/\/[^/]+\//i, '');
+    clean = clean.replace(/^\/+/, '');
+    clean = clean.replace(/^henricssons_bilder\//i, '');
+    return clean;
+}
+
 function saveExtras(cb){
     // Konvertera till models_meta-format
     const catReverse = {
@@ -1533,12 +1547,20 @@ function saveExtras(cb){
     // Bygg nytt meta-objekt
     const newMeta = {};
     Object.entries(extrasData).forEach(([key, arr]) => {
+        // "all" är bara en hopslagen vy av kategorierna och innehåller samma
+        // objekt igen - tas den med hamnar varje post två gånger.
+        if (key === 'all' || !Array.isArray(arr)) return;
         arr.forEach(obj => {
-            const slug = obj.slug || (obj.name||'').toLowerCase().replace(/[^a-z0-9]+/gi,'-').replace(/(^-|-$)/g,'');
-            const relImgs = (obj.images||[]).map(p => {
-                if(p.startsWith('data:')) return p;
-                return p.replace(/^henricssons_bilder\//,'').replace(/\//g,'\\');
-            });
+            let slug = obj.slug || (obj.name||'').toLowerCase().replace(/[^a-z0-9]+/gi,'-').replace(/(^-|-$)/g,'');
+            if (!slug) slug = 'post';
+            // Två poster med samma namn gav samma slug och skrev över varandra
+            // - en av dem försvann tyst vid sparning.
+            if (Object.prototype.hasOwnProperty.call(newMeta, slug)) {
+                let n = 2;
+                while (Object.prototype.hasOwnProperty.call(newMeta, `${slug}-${n}`)) n++;
+                slug = `${slug}-${n}`;
+            }
+            const relImgs = (obj.images||[]).map(p => normalizeStoredImagePath(p));
             newMeta[slug] = {
                 manufacturer: obj.manufacturer || '',
                 model: obj.name || obj.model || '',

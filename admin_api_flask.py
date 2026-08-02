@@ -1272,7 +1272,7 @@ def normalize_example_record(raw: Any, fallback_slug: str = "") -> Dict[str, Any
     images = raw.get("images") or []
     if not isinstance(images, list):
         images = []
-    return {
+    record = {
         "manufacturer": str(raw.get("manufacturer", "") or "").strip(),
         "model": str(raw.get("model", "") or "").strip(),
         "description": str(raw.get("description", "") or "").strip(),
@@ -1284,6 +1284,11 @@ def normalize_example_record(raw: Any, fallback_slug: str = "") -> Dict[str, Any
         "fallback_slug": fallback_slug.strip(),
         "canonical_slug": str(raw.get("canonical_slug", "") or "").strip(),
     }
+    # Utan detta föll Publicerad-flaggan bort här, innan den ens nådde
+    # sammanslagningen - och avpublicerade exempel låg kvar publikt.
+    if "published" in raw:
+        record["published"] = raw.get("published") is not False
+    return record
 
 
 def normalize_example_payload(data: Any) -> Dict[str, Dict[str, Any]]:
@@ -1374,6 +1379,11 @@ def merge_example_records(base_record: Dict[str, Any], override_record: Dict[str
         override_value = str(override_record.get(field, "") or "").strip()
         if override_value:
             merged[field] = override_value
+    # "published" is a boolean, so the string loop above silently dropped it.
+    # That made the Publicerad-toggle a no-op: the flag never reached the
+    # gallery, which is the only thing that filters on it.
+    if isinstance(override_record, dict) and "published" in override_record:
+        merged["published"] = override_record.get("published") is not False
     base_images = list(base_record.get("images") or [])
     override_images = list(override_record.get("images") or [])
     if override_images and (not base_images or len(override_images) >= len(base_images)):
@@ -1381,6 +1391,10 @@ def merge_example_records(base_record: Dict[str, Any], override_record: Dict[str
     else:
         merged["images"] = base_images
     return merged
+
+
+def is_example_published(record: Any) -> bool:
+    return not (isinstance(record, dict) and record.get("published") is False)
 
 
 def example_identity_key(record: Dict[str, Any]) -> Tuple[str, str]:
@@ -1562,7 +1576,9 @@ def list_canonical_examples() -> List[Dict[str, Any]]:
         record_with_slug = dict(record)
         record_with_slug["canonical_slug"] = canonical_slug
         canonical_examples[canonical_slug] = merge_example_records(canonical_examples.get(canonical_slug, {}), record_with_slug)
-    items = list(canonical_examples.values())
+    # Avpublicerade exempel ska varken hamna i sitemap eller bland relaterade
+    # länkar - annars gör Publicerad-reglaget ingen skillnad utåt.
+    items = [item for item in canonical_examples.values() if is_example_published(item)]
     items.sort(key=lambda item: (str(item.get("manufacturer", "")).lower(), str(item.get("model", "")).lower(), str(item.get("canonical_slug", "")).lower()))
     return items
 
@@ -7752,6 +7768,8 @@ def example_page(slug: str):
         # example of their own. A real example always wins over the map.
         if clean_slug in LEGACY_EXAMPLE_REDIRECTS:
             return redirect(LEGACY_EXAMPLE_REDIRECTS[clean_slug], code=301)
+        abort(404)
+    if not is_example_published(item):
         abort(404)
 
     canonical_slug = str(item.get("canonical_slug", "") or clean_slug).strip()
