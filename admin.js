@@ -761,6 +761,32 @@ function buildModels() {
         grid2.append(item);
     });
     bindGridEvents(); // bind click on new model buttons
+    scrollSelectedModelIntoView();
+}
+
+// Listan sorteras alfabetiskt, så en nyss tillagd modell kan hamna långt ned.
+// Rulla bara listans egen scroll - sidan i övrigt står still.
+function scrollSelectedModelIntoView() {
+    const grid = document.querySelector('.grid2');
+    const el = grid ? grid.querySelector('.grid2-item.selected-m') : null;
+    if (!grid || !el) return;
+    const gridRect = grid.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    if (elRect.top < gridRect.top || elRect.bottom > gridRect.bottom) {
+        grid.scrollTop += (elRect.top - gridRect.top) - (gridRect.height - elRect.height) / 2;
+    }
+}
+
+// På mobil ligger Modeller-kortet långt under Tillverkare-listan. Utan detta
+// ser det ut som att ingenting händer när man väljer en tillverkare.
+function revealModelsPanel() {
+    if (window.innerWidth > 900) return;
+    const wrapper = document.querySelector('.models-wrapper');
+    const card = wrapper ? wrapper.closest('.card') : null;
+    if (!card) return;
+    if (card.getBoundingClientRect().top > window.innerHeight * 0.5) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
 function refreshManufacturerListLayout(showEditor = false) {
@@ -783,6 +809,7 @@ function bindGridEvents() {
         selectedModelIndex = null;
         buildModels();
         showEditSection();
+        revealModelsPanel();
     });
     // Modell
     $('.grid2-item').off('click').on('click', function(e) {
@@ -3961,6 +3988,7 @@ $(document).ready(function() {
             // Bygg bara modellistan (inte tillverkare) för att undvika layout-hopp
             buildModels();
             showEditSection();
+            revealModelsPanel();
         });
     });
 
@@ -4486,16 +4514,16 @@ function buildManufacturerRow(mfr) {
         clearTimeout(tmSaveTimers.get(row));
         status.textContent = 'Sparar...';
         status.classList.remove('is-saved', 'is-error');
-        tmSaveTimers.set(row, setTimeout(() => saveManufacturer(mfr, nameInput.value, status), 600));
+        tmSaveTimers.set(row, setTimeout(() => saveDynManufacturer(mfr, nameInput.value, status), 600));
     });
     row.querySelector('.tm-upload').addEventListener('click', () => row.querySelector('.tm-file').click());
     row.querySelector('.tm-file').addEventListener('change', event => uploadManufacturerImage(mfr, event.target.files && event.target.files[0], row));
     row.querySelector('.tm-reset-image').addEventListener('click', () => resetManufacturerImage(mfr, row));
-    row.querySelector('.tm-del').addEventListener('click', () => deleteManufacturer(mfr));
+    row.querySelector('.tm-del').addEventListener('click', () => deleteDynManufacturer(mfr));
     return row;
 }
 
-async function saveManufacturer(mfr, name, status, extra = {}) {
+async function saveDynManufacturer(mfr, name, status, extra = {}) {
     try {
         const res = await adminFetch(`${API_BASE}/api/dyn_manufacturers/${mfr.id}`, {
             method: 'PUT',
@@ -4558,7 +4586,7 @@ async function uploadManufacturerImage(mfr, file, row) {
         const payload = await res.json().catch(() => ({}));
         if (!res.ok || !payload.success) throw new Error(payload.error || ('HTTP ' + res.status));
         const savedPath = String(payload.saved_path || '').replace(/^henricssons_bilder[\\/]/, '').replace(/\\/g, '/');
-        await saveManufacturer(mfr, mfr.name || '', status, { image_url: `/henricssons_bilder/${savedPath}` });
+        await saveDynManufacturer(mfr, mfr.name || '', status, { image_url: `/henricssons_bilder/${savedPath}` });
         updateManufacturerImagePreview(mfr, row);
     } catch (err) {
         status.textContent = 'Fel';
@@ -4571,11 +4599,11 @@ async function uploadManufacturerImage(mfr, file, row) {
 
 async function resetManufacturerImage(mfr, row) {
     const status = row.querySelector('.tm-status');
-    await saveManufacturer(mfr, mfr.name || '', status, { image_url: '' });
+    await saveDynManufacturer(mfr, mfr.name || '', status, { image_url: '' });
     updateManufacturerImagePreview(mfr, row);
 }
 
-async function deleteManufacturer(mfr) {
+async function deleteDynManufacturer(mfr) {
     if (!confirm(`Ta bort tillverkaren "${mfr.name || 'utan namn'}"? Dynsatser under den blir okopplade (raderas inte).`)) return;
     try {
         const res = await adminFetch(`${API_BASE}/api/dyn_manufacturers/${mfr.id}`, { method: 'DELETE' });
