@@ -476,7 +476,18 @@
             { key: 'specials\u00f6mnadskr\u00e4ddarsytt', label: 'Specials\u00f6mnad & Skr\u00e4ddarsytt' },
             { key: 'sunbrella', label: 'Sunbrella Plus Kollektion v\u00e4vprover' }
         ];
-        let bilderexCurrentFilter = 'all';
+
+        function bilderexFilterFromHash() {
+            let hash = window.location.hash.replace(/^#/, '').trim().toLowerCase();
+            try {
+                hash = decodeURIComponent(hash);
+            } catch (_) {
+                return 'all';
+            }
+            return bilderexKategorier.some(cat => cat.key === hash) ? hash : 'all';
+        }
+
+        let bilderexCurrentFilter = bilderexFilterFromHash();
 
         function bilderexRememberSelection(item) {
             if (!item) return;
@@ -617,7 +628,14 @@
                 const btn = document.createElement('button');
                 btn.className = 'hb-filter-btn' + (bilderexCurrentFilter === cat.key ? ' active' : '');
                 btn.textContent = cat.label;
-                btn.onclick = () => { bilderexCurrentFilter = cat.key; bilderexApplyFilter(); };
+                btn.onclick = () => {
+                    bilderexCurrentFilter = cat.key;
+                    const nextHash = cat.key === 'all' ? '' : `#${encodeURIComponent(cat.key)}`;
+                    if (window.location.hash !== nextHash) {
+                        history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
+                    }
+                    bilderexApplyFilter();
+                };
                 filters.appendChild(btn);
             });
         }
@@ -637,6 +655,13 @@
             bilderexRenderGallery(items);
             bilderexRenderFilters();
         }
+
+        window.addEventListener('hashchange', () => {
+            const nextFilter = bilderexFilterFromHash();
+            if (nextFilter === bilderexCurrentFilter) return;
+            bilderexCurrentFilter = nextFilter;
+            bilderexApplyFilter();
+        });
         function bilderexRenderGallery(items) {
             const grid = document.getElementById('bilderex-gallery');
             grid.innerHTML = '';
