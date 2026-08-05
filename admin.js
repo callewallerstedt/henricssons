@@ -6,6 +6,8 @@ let selectedManufacturerKey = null;
 let selectedModelIndex = null;
 let $grid1, $grid2;
 let analyticsRangeDays = 30;
+const LOCAL_DEMO_MODE = ['localhost', '127.0.0.1'].includes(location.hostname)
+    && new URLSearchParams(location.search).get('demo') === '1';
 let customerConfirmationDefaultTemplate = '';
 let customerConfirmationPreviewFormType = 'Kontakt';
 let customerConfirmationPreviewTimer = null;
@@ -38,8 +40,11 @@ function resolveApiBase() {
         return sameOrigin;
     }
 
-    if ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') && location.port !== '25565') {
-        return `${location.protocol}//${location.hostname}:25565`;
+    // When the admin page is served locally, keep API calls on the same
+    // port. This makes local testing work on any available port and avoids
+    // colliding with unrelated services that may use the legacy 25565 port.
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        return sameOrigin;
     }
 
     return sameOrigin;
@@ -2765,31 +2770,131 @@ function renderStatusFolders() {
     updateSortButton();
 }
 
-function updateStatusSummaryCards() {
+let dashboardStatsSignature = '';
+
+function getFormSubmissionItemsForStats() {
+    const seen = new Set();
+    const items = [];
+    getStatusBuckets().forEach(statusId => {
+        (statusItems[statusId] || []).forEach(item => {
+            if (!item || !item.is_form_submission) return;
+            const identity = String(item.form_id || item.id || `${statusId}:${item.timestamp || item.date || items.length}`);
+            if (seen.has(identity)) return;
+            seen.add(identity);
+            items.push(item);
+        });
+    });
+    return items;
+}
+
+function getDashboardStats() {
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const yesterdayStart = new Date(todayStart);
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - 6);
+    const items = getFormSubmissionItemsForStats();
+    const dated = items
+        .map(item => ({ item, date: parseSubmissionDateValue(item.date || item.timestamp) }))
+        .filter(entry => entry.date);
+    const today = dated.filter(entry => entry.date >= todayStart && entry.date <= now);
+    const yesterday = dated.filter(entry => entry.date >= yesterdayStart && entry.date < todayStart);
+    const lastSevenDays = dated.filter(entry => entry.date >= weekStart && entry.date <= now);
+    const unread = items.filter(item => !item.read).length;
+    const weekdayCounts = {};
+    lastSevenDays.forEach(entry => {
+        const weekday = entry.date.toLocaleDateString('sv-SE', { weekday: 'long' });
+        weekdayCounts[weekday] = (weekdayCounts[weekday] || 0) + 1;
+    });
+    const busiestDay = Object.entries(weekdayCounts).sort((a, b) => b[1] - a[1])[0];
+    const busiestDayName = busiestDay
+        ? busiestDay[0].charAt(0).toUpperCase() + busiestDay[0].slice(1)
+        : '—';
+    const todayDelta = today.length - yesterday.length;
+    let todayHint = 'Samma som igår';
+    if (todayDelta > 0) todayHint = `${todayDelta} fler än igår`;
+    if (todayDelta < 0) todayHint = `${Math.abs(todayDelta)} färre än igår`;
+
+    return {
+        today: today.length,
+        lastSevenDays: lastSevenDays.length,
+        average: (lastSevenDays.length / 7).toLocaleString('sv-SE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+        unread,
+        busiestDay: busiestDayName,
+        busiestDayCount: busiestDay ? busiestDay[1] : 0,
+        todayHint,
+        dateKey: todayStart.toISOString().slice(0, 10)
+    };
+}
+
+function renderDashboardStats() {
     const row = $('#status-summary-row');
     if (!row.length) return;
+    const stats = getDashboardStats();
+    const signature = JSON.stringify(stats);
+    $('#dashboard-demo-banner').toggleClass('active', LOCAL_DEMO_MODE);
+    if (signature === dashboardStatsSignature) return;
+    dashboardStatsSignature = signature;
     row.empty();
-
-    getWorkflowStatuses().slice(0, 4).forEach((status, index) => {
+    const cards = [
+        { label: 'Nya inskick idag', value: stats.today, hint: stats.todayHint, className: '' },
+        { label: 'Senaste 7 dagar', value: stats.lastSevenDays, hint: 'Alla statusmappar', className: 'is-warning' },
+        { label: 'Snitt per dag', value: stats.average, hint: 'Senaste 7 dagarna', className: 'is-info' },
+        { label: 'Olästa inskick', value: stats.unread, hint: 'Behöver uppmärksamhet', className: 'is-success' },
+        { label: 'Veckans toppdag', value: stats.busiestDay, hint: `${stats.busiestDayCount} nya senaste 7 dagarna`, className: '', text: true }
+    ];
+    cards.forEach(cardData => {
         const card = $('<div>').addClass('stat-card');
-        if (STATUS_SUMMARY_CARD_CLASSES[index]) {
-            card.addClass(STATUS_SUMMARY_CARD_CLASSES[index]);
-        }
+        if (cardData.className) card.addClass(cardData.className);
+        const value = $('<div>').addClass('stat-value').text(cardData.value);
+        if (cardData.text) value.addClass('stat-value-text');
         card.append(
-            $('<div>').addClass('stat-label').text(status.name),
-            $('<div>').addClass('stat-value').attr('id', `stat-${status.id}`).text('0'),
-            $('<div>').addClass('stat-hint').text(STATUS_SUMMARY_HINTS[index] || 'Överblick')
+            $('<div>').addClass('stat-label').text(cardData.label),
+            value,
+            $('<div>').addClass('stat-hint').text(cardData.hint)
         );
         row.append(card);
     });
 }
 
-function updateStatusSummaryCounts() {
-    getWorkflowStatuses().slice(0, 4).forEach(status => {
-        const target = document.getElementById(`stat-${status.id}`);
-        if (!target) return;
-        target.textContent = String((statusItems[status.id] || []).length);
+function applyLocalDemoSubmissions() {
+    if (!LOCAL_DEMO_MODE) return;
+    const demoStatuses = getWorkflowStatuses().map(status => status.id);
+    if (!demoStatuses.length) return;
+    const dayOffsets = [0, 0, 0, 1, 1, 2, 2, 2, 3, 4, 4, 5, 6, 6, 9, 14];
+    const demoNames = ['Anna Demo', 'Björn Test', 'Cecilia Lokal', 'David Prov', 'Elin Exempel', 'Fredrik Demo'];
+    const now = Date.now();
+    dayOffsets.forEach((offset, index) => {
+        const date = new Date(now - offset * 24 * 60 * 60 * 1000 - (index % 5) * 75 * 60 * 1000);
+        const statusId = demoStatuses[index % demoStatuses.length];
+        statusItems[statusId].push({
+            form_id: `demo-form-${index + 1}`,
+            title: `[DEMO] ${demoNames[index % demoNames.length]}`,
+            description: 'Lokalt testärende för dashboard-statistik',
+            date: date.toISOString(),
+            timestamp: date.toISOString(),
+            category: 'demo',
+            form_type: index % 4 === 0 ? 'Kapellförfrågan' : (index % 4 === 1 ? 'Kontakt' : 'Dynsatsförfrågan'),
+            fields: { name: `[DEMO] ${demoNames[index % demoNames.length]}`, email: 'demo@example.local' },
+            proposed_response: '',
+            notes: '',
+            read: index % 3 === 0,
+            submitted_via: 'local_demo',
+            attachments: [],
+            is_form_submission: true,
+            is_demo_submission: true
+        });
     });
+}
+
+function updateStatusSummaryCounts() {
+    getStatusBuckets().forEach(statusId => {
+        const target = document.getElementById(`status-count-${statusId}`);
+        if (target) target.textContent = String((statusItems[statusId] || []).length);
+    });
+    renderDashboardStats();
 }
 
 function renderStatusBoardLayout() {
@@ -2805,7 +2910,12 @@ function renderStatusBoardLayout() {
 
         const header = $('<div>').addClass('status-folder-top');
         const titleWrap = $('<div>').addClass('status-folder-title-wrap');
-        titleWrap.append($('<h3>').text(status.name));
+        const heading = $('<div>').addClass('status-folder-heading');
+        heading.append(
+            $('<h3>').text(status.name),
+            $('<span>').addClass('status-folder-count').attr('id', `status-count-${status.id}`).text('0')
+        );
+        titleWrap.append(heading);
         if (status.id === 'nya-inskick') {
             titleWrap.append(
                 $('<button>')
@@ -4937,30 +5047,15 @@ async function addBoatBrand() {
 $(document).on('click', '#bb-add-btn', addBoatBrand);
 
 function updateStatusSummaryCards() {
-    const row = $('#status-summary-row');
-    if (!row.length) return;
-    row.empty();
-
-    getWorkflowStatuses().slice(0, 4).forEach((status, index) => {
-        const card = $('<div>').addClass('stat-card');
-        if (STATUS_SUMMARY_CARD_CLASSES[index]) {
-            card.addClass(STATUS_SUMMARY_CARD_CLASSES[index]);
-        }
-        card.append(
-            $('<div>').addClass('stat-label').text(status.name),
-            $('<div>').addClass('stat-value').attr('id', `stat-${status.id}`).text('0'),
-            $('<div>').addClass('stat-hint').text(STATUS_SUMMARY_HINTS[index] || 'Överblick')
-        );
-        row.append(card);
-    });
+    renderDashboardStats();
 }
 
 function updateStatusSummaryCounts() {
-    getWorkflowStatuses().slice(0, 4).forEach(status => {
-        const target = document.getElementById(`stat-${status.id}`);
-        if (!target) return;
-        target.textContent = String((statusItems[status.id] || []).length);
+    getStatusBuckets().forEach(statusId => {
+        const target = document.getElementById(`status-count-${statusId}`);
+        if (target) target.textContent = String((statusItems[statusId] || []).length);
     });
+    renderDashboardStats();
 
     let unreadCount = 0;
     getStatusBuckets().forEach(statusId => {
@@ -4986,7 +5081,12 @@ function renderStatusBoardLayout() {
 
         const header = $('<div>').addClass('status-folder-top');
         const titleWrap = $('<div>').addClass('status-folder-title-wrap');
-        titleWrap.append($('<h3>').text(status.name));
+        const heading = $('<div>').addClass('status-folder-heading');
+        heading.append(
+            $('<h3>').text(status.name),
+            $('<span>').addClass('status-folder-count').attr('id', `status-count-${status.id}`).text('0')
+        );
+        titleWrap.append(heading);
 
         if (status.id === 'nya-inskick') {
             titleWrap.append(
@@ -5288,6 +5388,7 @@ function loadStatusItems() {
             getStatusBuckets().forEach(statusId => {
                 statusItems[statusId] = [...(formItemsByStatus[statusId] || []), ...(localNonFormByStatus[statusId] || [])];
             });
+            applyLocalDemoSubmissions();
 
             sortNyaInskick();
             saveStatusItems();

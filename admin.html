@@ -297,6 +297,25 @@
             color: var(--text-muted);
             margin-top: 0.25rem;
         }
+        .stat-value.stat-value-text {
+            font-size: 1.15rem;
+            line-height: 1.25;
+            min-height: 2.15rem;
+            display: flex;
+            align-items: center;
+        }
+        .dashboard-demo-banner {
+            display: none;
+            margin: -0.45rem 0 1.15rem;
+            padding: 0.55rem 0.75rem;
+            border: 1px dashed #d97706;
+            border-radius: 8px;
+            background: #fffbeb;
+            color: #92400e;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        .dashboard-demo-banner.active { display: block; }
 
         /* ================ BUTTONS ================ */
         .btn, .btn-secondary, .add-btn, .add-item-btn, .tab-btn, .form-filter-btn {
@@ -682,6 +701,25 @@
             justify-content: space-between;
             gap: 0.5rem;
             width: 100%;
+        }
+        .status-folder-heading {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            min-width: 0;
+        }
+        .status-folder-heading h3 { margin-bottom: 0; }
+        .status-folder-count {
+            flex: 0 0 auto;
+            min-width: 22px;
+            padding: 0.12rem 0.4rem;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            line-height: 1.2;
+            text-align: center;
         }
         .status-sort-btn {
             font-size: 0.72rem;
@@ -2175,6 +2213,7 @@
             <!-- DASHBOARD -->
             <div id="dashboard-section" class="dashboard-container active">
                 <div class="stats-row" id="status-summary-row"></div>
+                <div id="dashboard-demo-banner" class="dashboard-demo-banner">Lokalt testläge: fejkade inskick visas här. De sparas inte till servern.</div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card status-folders-card">
@@ -2201,9 +2240,16 @@
                         </div>
                         <div style="margin-top:1rem;">
                             <h2 class="statusmappar-title" style="margin-bottom:0.75rem;">To-do</h2>
-                            <div class="status-folders" style="grid-template-columns:minmax(220px, 1fr);">
+                                <div class="status-folders" style="grid-template-columns:minmax(220px, 1fr);">
                                 <div class="status-folder droppable-folder" data-status="todo" id="status-folder-todo">
-                                    <h3>To-do</h3>
+                                    <div class="status-folder-top">
+                                        <div class="status-folder-title-wrap">
+                                            <div class="status-folder-heading">
+                                                <h3>To-do</h3>
+                                                <span id="status-count-todo" class="status-folder-count">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div class="folder-items" id="folder-todo"></div>
                                     <button class="add-item-btn" data-status="todo">+ Lägg till</button>
                                 </div>
