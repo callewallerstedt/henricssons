@@ -10,8 +10,10 @@ import ipaddress
 import json
 import os
 import re
+import threading
 import time
 import unicodedata
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
@@ -462,6 +464,12 @@ def is_env_flag_enabled(name: str, default: str = "0") -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
+# Writing one analytics row for every public page view kept Neon awake around
+# the clock. Collection is therefore opt-in; historical rows and the admin
+# summary remain available without causing writes on public requests.
+DATABASE_ANALYTICS_ENABLED = is_env_flag_enabled("DATABASE_ANALYTICS_ENABLED", "0")
+
+
 def enqueue_form_background_task(label: str, func: Any, *args: Any, **kwargs: Any) -> None:
     def runner() -> None:
         try:
@@ -704,6 +712,9 @@ class SiteImage(Base):
 
 engine = None
 SessionLocal = None
+SITE_CONTENT_CACHE: Dict[str, Any] = {}
+SITE_CONTENT_CACHE_LOCK = threading.RLock()
+SITE_CONTENT_MISSING = object()
 
 
 def _migrate_boat_brand_columns() -> None:
@@ -1179,6 +1190,8 @@ def enforce_public_host() -> Optional[Any]:
 
 @app.after_request
 def capture_public_analytics(response: Response) -> Response:
+    if not DATABASE_ANALYTICS_ENABLED:
+        return response
     try:
         if should_track_analytics_response(response):
             path = normalize_tracked_path(request.path)
@@ -2253,6 +2266,8 @@ def set_site_content(key: str, data: Any) -> None:
         else:
             db.add(SiteContent(key=key, data=data))
         db.commit()
+        with SITE_CONTENT_CACHE_LOCK:
+            SITE_CONTENT_CACHE[key] = deepcopy(data)
     except Exception:
         db.rollback()
     finally:
@@ -2260,12 +2275,20 @@ def set_site_content(key: str, data: Any) -> None:
 
 
 def get_site_content(key: str) -> Optional[Any]:
+    with SITE_CONTENT_CACHE_LOCK:
+        if key in SITE_CONTENT_CACHE:
+            cached = SITE_CONTENT_CACHE[key]
+            return None if cached is SITE_CONTENT_MISSING else deepcopy(cached)
+
     db = get_db()
     if not db:
         return None
     try:
         row = db.query(SiteContent).filter_by(key=key).first()
-        return row.data if row else None
+        value = row.data if row else None
+        with SITE_CONTENT_CACHE_LOCK:
+            SITE_CONTENT_CACHE[key] = SITE_CONTENT_MISSING if value is None else deepcopy(value)
+        return deepcopy(value)
     except Exception:
         return None
     finally:

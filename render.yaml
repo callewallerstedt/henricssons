@@ -38,5 +38,7 @@ services:
         value: minimal
       - key: enable_chatbot
         value: "0"
+      - key: DATABASE_ANALYTICS_ENABLED
+        value: "0"
       - key: ALLOWED_ORIGINS
         value: https://henricssonsbatkapell.se,https://www.henricssonsbatkapell.se,https://henricssonsbatkapell.onrender.com

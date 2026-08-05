@@ -56,6 +56,7 @@ python admin_api_flask.py   # lyssnar på http://localhost:25565
 | Namn | Beskrivning |
 |---|---|
 | `DATABASE_URL` | Postgres (sätts av Render), annars SQLite lokalt |
+| `DATABASE_ANALYTICS_ENABLED` | `0` som standard; databasbaserad sidvisningsloggning hålls avstängd för att Neon ska kunna skala till noll |
 | `ADMIN_PANEL_PASSWORD` | Lösenord för admin-inloggning |
 | `ADMIN_API_KEY` | Nyckel för API-anrop (`X-Admin-Key`) |
 | `MAILGUN_DOMAIN/API_KEY/FROM/TO` | Mailnotiser för formulär |
