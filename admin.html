@@ -3,9 +3,20 @@
 <head>
     <meta charset="utf-8" />
     <title>Admin · Henricssons Båtkapell</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex,nofollow" />
     <link rel="icon" href="logo.png">
+
+    <!-- PWA: installerbar app på hemskärmen, körs i fullskärm utan webbläsarens UI -->
+    <link rel="manifest" href="/admin.webmanifest" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="color-scheme" content="light" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Admin" />
+    <meta name="application-name" content="Henricssons Admin" />
+    <link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -2115,6 +2126,66 @@
         .mb-2 { margin-bottom: 1rem; }
         .text-muted { color: var(--text-muted); }
         .empty-state { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.9rem; }
+
+        /* ================ PWA / MOBIL FULLSKÄRM ================
+           Panelen körs som app från hemskärmen (display: standalone).
+           Här hanteras "safe areas" (notch/hemknappsindikator), riktig
+           viewport-höjd på mobil och små touch-detaljer. */
+        html {
+            -webkit-text-size-adjust: 100%;
+            background: var(--bg);
+        }
+        body {
+            overscroll-behavior-y: none;
+            -webkit-tap-highlight-color: rgba(37, 99, 235, 0.12);
+        }
+        .app { min-height: 100dvh; }
+        .sidebar {
+            height: 100dvh;
+            padding-top: calc(1.25rem + env(safe-area-inset-top));
+            padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+            padding-left: calc(0.85rem + env(safe-area-inset-left));
+        }
+        .topbar {
+            padding-top: calc(0.9rem + env(safe-area-inset-top));
+            padding-left: calc(1.5rem + env(safe-area-inset-left));
+            padding-right: calc(1.5rem + env(safe-area-inset-right));
+        }
+        .content {
+            padding-left: calc(1.5rem + env(safe-area-inset-left));
+            padding-right: calc(1.5rem + env(safe-area-inset-right));
+            padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+        }
+
+        @media (max-width: 960px) {
+            .sidebar { height: 100dvh; }
+        }
+
+        @media (max-width: 600px) {
+            .topbar {
+                padding-top: calc(0.7rem + env(safe-area-inset-top));
+                padding-left: calc(1rem + env(safe-area-inset-left));
+                padding-right: calc(1rem + env(safe-area-inset-right));
+            }
+            .content {
+                padding-left: calc(0.85rem + env(safe-area-inset-left));
+                padding-right: calc(0.85rem + env(safe-area-inset-right));
+                padding-bottom: calc(0.85rem + env(safe-area-inset-bottom));
+            }
+            .form-submission-modal-content {
+                width: 100vw !important;
+                height: 100dvh !important;
+                padding-top: env(safe-area-inset-top);
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+        }
+
+        /* När appen är installerad finns ingen webbläsarrad – ta bort
+           studsande scroll och text-markering som avslöjar att det är en sida. */
+        @media (display-mode: standalone), (display-mode: minimal-ui) {
+            body { overscroll-behavior: none; }
+            .primary-tab-btn, .topbar-btn { -webkit-user-select: none; user-select: none; }
+        }
     </style>
 </head>
 <body>
@@ -2728,6 +2799,17 @@
     // Refresh button
     const refreshBtn = document.getElementById('refresh-btn');
     if (refreshBtn) refreshBtn.addEventListener('click', () => location.reload());
+})();
+</script>
+
+<!-- PWA: registrera service worker så panelen går att installera på hemskärmen -->
+<script>
+(function () {
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/admin-sw.js', { scope: '/admin' })
+            .catch(function (err) { console.warn('Service worker kunde inte registreras:', err); });
+    });
 })();
 </script>
 </body>

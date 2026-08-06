@@ -1129,10 +1129,20 @@ def render_admin_login(error: str = "") -> Response:
 <html lang="sv">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Admin - Henricssons</title>
+  <link rel="manifest" href="/admin.webmanifest">
+  <meta name="theme-color" content="#0c1a2b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Admin">
+  <link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
   <style>
-    body {{ margin:0; min-height:100vh; display:grid; place-items:center; background:#0c1a2b; font-family:Arial,sans-serif; color:#17212f; }}
+    html {{ -webkit-text-size-adjust:100%; background:#0c1a2b; }}
+    body {{ margin:0; min-height:100dvh; display:grid; place-items:center; background:#0c1a2b; font-family:Arial,sans-serif; color:#17212f;
+            padding:calc(1rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
+            box-sizing:border-box; overscroll-behavior-y:none; }}
     form {{ width:min(92vw,380px); background:#f5f0e6; padding:32px; border:1px solid #d9cfbe; box-shadow:0 24px 80px rgba(0,0,0,.28); }}
     img {{ display:block; height:54px; width:auto; margin:0 0 24px; }}
     h1 {{ margin:0 0 8px; font-size:24px; }}
@@ -8493,6 +8503,29 @@ def chat_widget_script():
         return response
     response = send_from_directory(str(BASE_DIR), "chat_widget.js")
     response.headers["Cache-Control"] = "public, max-age=300"
+    return response
+
+
+@app.route("/admin.webmanifest", methods=["GET"])
+def admin_manifest():
+    """PWA-manifest för adminpanelen. Måste vara publikt – webbläsaren hämtar
+    manifestet utan cookies när appen installeras."""
+    response = send_from_directory(
+        str(BASE_DIR), "admin.webmanifest", mimetype="application/manifest+json"
+    )
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
+@app.route("/admin-sw.js", methods=["GET"])
+def admin_service_worker():
+    """Service worker för adminpanelen (krävs för att appen ska gå att
+    installera). Serveras utan cache så uppdateringar slår igenom direkt."""
+    response = send_from_directory(
+        str(BASE_DIR), "admin-sw.js", mimetype="application/javascript; charset=utf-8"
+    )
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Service-Worker-Allowed"] = "/admin"
     return response
 
 
