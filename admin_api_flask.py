@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
@@ -4080,21 +4080,23 @@ def build_submission_status_actions_text(submission_id: str, current_status: str
     return "\n\n" + "\n".join(lines) + "\n"
 
 
-def build_copy_friendly_email_value_html(email: str) -> str:
-    """Render an address for reliable manual copying in restrictive email clients."""
+def build_customer_reply_mailto(form_type: str, email: str) -> str:
+    """Build the customer reply link used by the main email action."""
+    form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
+    if form_type == "Kontakt":
+        topic = "ditt meddelande till oss"
+    else:
+        topic = f"din {form_label.lower()}"
+    subject = f"Ang. {topic} \u2013 Henricssons B\u00e5tkapell"
+    return f"mailto:{quote(str(email or '').strip(), safe='@')}?subject={quote(subject)}"
+
+
+def build_selectable_email_value_html(email: str) -> str:
+    """Render the address as plain, copy-friendly text without an inline control."""
     safe_email = html.escape(str(email or "").strip())
     return (
-        "<div style='width:100%;'>"
-        "<div style='line-height:1.5;padding-right:8px;'>"
+        "<div style='width:100%;line-height:1.5;padding-right:8px;'>"
         f"<span style='-webkit-user-select:all;user-select:all;'>{safe_email}</span>"
-        "</div>"
-        "<div style='margin-top:9px;padding-right:2px;text-align:right;'>"
-        "<span aria-hidden='true' style='display:inline-block;padding:4px 9px;"
-        "border:1px solid #d1d5db;border-radius:4px;background:#f3f4f6;color:#4b5563;"
-        "font-size:11px;font-weight:600;line-height:1.2;white-space:nowrap;"
-        "-webkit-user-select:none;user-select:none;pointer-events:none;cursor:default;'>"
-        "Kopiera e-post</span>"
-        "</div>"
         "</div>"
     )
 
@@ -4125,7 +4127,7 @@ def build_notification_html(
         lookup = field_lookup_key(str(key))
         value_html = html.escape(val)
         if lookup == "email" and is_valid_email_address(val):
-            value_html = build_copy_friendly_email_value_html(val)
+            value_html = build_selectable_email_value_html(val)
         elif lookup == "phone":
             tel_digits = re.sub(r"[^+\d]", "", val)
             if len(tel_digits) >= 5:
@@ -4207,6 +4209,19 @@ def build_notification_html(
             + "</div>"
         )
 
+    reply_block = ""
+    customer_email = get_field_value(fields, "email", "e-post", "e-postadress")
+    if is_valid_email_address(customer_email):
+        reply_href = build_customer_reply_mailto(form_type, customer_email)
+        reply_block = (
+            "<div style='margin-top:20px;'>"
+            f"<a href='{html.escape(reply_href)}' "
+            "style='display:inline-block;background:#b28a4c;color:#ffffff;text-decoration:none;"
+            "padding:11px 22px;font-size:14px;font-weight:700;'>"
+            "Svara kunden via e-post</a>"
+            "</div>"
+        )
+
     meta_block = (
         "<div style='margin-top:18px;padding:12px 14px;background:#fafafa;border:1px solid #e5e7eb;'>"
         f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Tid (svensk tid): {local_str}</div>"
@@ -4230,6 +4245,7 @@ def build_notification_html(
       </table>
       {attachments_block}
       {ai_reply_block}
+      {reply_block}
       {status_actions_html}
       {meta_block}
     </td>
