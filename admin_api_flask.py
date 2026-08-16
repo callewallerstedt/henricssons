@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import quote, urlencode, urlparse
+from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
@@ -4080,17 +4080,6 @@ def build_submission_status_actions_text(submission_id: str, current_status: str
     return "\n\n" + "\n".join(lines) + "\n"
 
 
-def build_customer_reply_mailto(form_type: str, email: str) -> str:
-    """Mailto link that pre-fills the reply address and subject for the admin."""
-    form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
-    if form_type == "Kontakt":
-        topic = "ditt meddelande till oss"
-    else:
-        topic = f"din {form_label.lower()}"
-    subject = f"Ang. {topic} \u2013 Henricssons B\u00e5tkapell"
-    return f"mailto:{quote(str(email or '').strip(), safe='@')}?subject={quote(subject)}"
-
-
 def build_copy_friendly_email_value_html(email: str) -> str:
     """Render an address for reliable manual copying in restrictive email clients."""
     safe_email = html.escape(str(email or "").strip())
@@ -4218,19 +4207,6 @@ def build_notification_html(
             + "</div>"
         )
 
-    reply_block = ""
-    customer_email = get_field_value(fields, "email", "e-post", "e-postadress")
-    if is_valid_email_address(customer_email):
-        reply_href = build_customer_reply_mailto(form_type, customer_email)
-        reply_block = (
-            "<div style='margin-top:20px;'>"
-            f"<a href='{html.escape(reply_href)}' "
-            "style='display:inline-block;background:#b28a4c;color:#ffffff;text-decoration:none;"
-            "padding:11px 22px;font-size:14px;font-weight:700;'>"
-            "Svara kunden via e-post</a>"
-            "</div>"
-        )
-
     meta_block = (
         "<div style='margin-top:18px;padding:12px 14px;background:#fafafa;border:1px solid #e5e7eb;'>"
         f"<div style='font-size:12px;color:#6b7280;line-height:1.6;'>Tid (svensk tid): {local_str}</div>"
@@ -4254,7 +4230,6 @@ def build_notification_html(
       </table>
       {attachments_block}
       {ai_reply_block}
-      {reply_block}
       {status_actions_html}
       {meta_block}
     </td>
