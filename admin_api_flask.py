@@ -4091,6 +4091,25 @@ def build_customer_reply_mailto(form_type: str, email: str) -> str:
     return f"mailto:{quote(str(email or '').strip(), safe='@')}?subject={quote(subject)}"
 
 
+def build_copy_friendly_email_value_html(email: str) -> str:
+    """Render an address for reliable manual copying in restrictive email clients."""
+    safe_email = html.escape(str(email or "").strip())
+    return (
+        "<div style='width:100%;'>"
+        "<div style='line-height:1.5;padding-right:8px;'>"
+        f"<span style='-webkit-user-select:all;user-select:all;'>{safe_email}</span>"
+        "</div>"
+        "<div style='margin-top:9px;padding-right:2px;text-align:right;'>"
+        "<span aria-hidden='true' style='display:inline-block;padding:4px 9px;"
+        "border:1px solid #d1d5db;border-radius:4px;background:#f3f4f6;color:#4b5563;"
+        "font-size:11px;font-weight:600;line-height:1.2;white-space:nowrap;"
+        "-webkit-user-select:none;user-select:none;pointer-events:none;cursor:default;'>"
+        "Kopiera e-post</span>"
+        "</div>"
+        "</div>"
+    )
+
+
 def build_notification_html(
     form_type: str,
     fields: Dict[str, Any],
@@ -4117,14 +4136,7 @@ def build_notification_html(
         lookup = field_lookup_key(str(key))
         value_html = html.escape(val)
         if lookup == "email" and is_valid_email_address(val):
-            reply_href = build_customer_reply_mailto(form_type, val)
-            value_html = (
-                f"<span>{html.escape(val)}</span> "
-                f"<a href='{html.escape(reply_href)}' "
-                "style='display:inline-block;margin-left:6px;padding:2px 10px;"
-                "font-size:12px;font-weight:700;color:#ffffff;background:#b28a4c;"
-                "text-decoration:none;border-radius:3px;white-space:nowrap;'>Svara</a>"
-            )
+            value_html = build_copy_friendly_email_value_html(val)
         elif lookup == "phone":
             tel_digits = re.sub(r"[^+\d]", "", val)
             if len(tel_digits) >= 5:
