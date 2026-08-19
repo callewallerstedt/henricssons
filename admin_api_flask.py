@@ -5448,6 +5448,54 @@ def secure_image_destination(rel_path: str, ext: str) -> Tuple[Path, str]:
     return abs_path, rel
 
 
+def stored_image_bytes(rel: str, abs_path: Path, db: Any) -> Optional[bytes]:
+    """Bytes already stored at rel/abs_path, or None when the slot is free.
+    Unreadable slots come back as b"" so they still count as occupied."""
+    if abs_path.exists() and abs_path.is_file():
+        try:
+            return abs_path.read_bytes()
+        except Exception:
+            return b""
+    if db is not None:
+        try:
+            row = db.query(SiteImage).filter_by(rel_path=rel.replace("\\", "/")).first()
+            if row is not None:
+                return row.data or b""
+        except Exception:
+            return b""
+    return None
+
+
+def allocate_free_image_destination(abs_path: Path, rel: str, raw: bytes, db: Any) -> Tuple[Path, str]:
+    """Two examples added from the admin panel both start out named "Ny post",
+    so their uploads targeted the very same rel_path and the second one
+    silently replaced the first one's photo. Never overwrite a different
+    image: step to the next free name and let the caller store that instead.
+    Re-uploading identical bytes keeps the existing path."""
+    rel = rel.replace("\\", "/")
+    suffix = Path(rel).suffix
+    stem = rel[: len(rel) - len(suffix)] if suffix else rel
+
+    def candidate_paths(candidate_rel: str) -> Optional[Tuple[Path, str]]:
+        candidate_abs = (IMAGES_ROOT / candidate_rel).resolve()
+        if IMAGES_ROOT not in candidate_abs.parents:
+            return None
+        existing = stored_image_bytes(candidate_rel, candidate_abs, db)
+        if existing is None or existing == raw:
+            return candidate_abs, candidate_rel
+        return None
+
+    for attempt in range(1, 60):
+        candidate_rel = rel if attempt == 1 else f"{stem}-{attempt}{suffix}"
+        resolved = candidate_paths(candidate_rel)
+        if resolved:
+            return resolved
+
+    unique_rel = f"{stem}-{hashlib.sha1(raw).hexdigest()[:10]}{suffix}"
+    resolved = candidate_paths(unique_rel)
+    return resolved or (abs_path, rel)
+
+
 REQUIRED_DRAFT_FIELDS: Dict[str, List[str]] = {
     "Kapellforfragan": ["name", "phone", "email", "manufacturer", "model", "boat_year", "home_port"],
     "Fenderforfragan": ["name", "phone", "email", "quantity", "size"],
@@ -6344,28 +6392,35 @@ def upload_image():
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
 
-    abs_path.parent.mkdir(parents=True, exist_ok=True)
-    with abs_path.open("wb") as handle:
-        handle.write(raw)
-
-    # Persist in the database as well; the disk copy does not survive a
-    # redeploy on Render.
     mime = f"image/{'jpeg' if ext == '.jpg' else ext.lstrip('.')}"
     db = get_db()
-    if db:
-        try:
-            normalized_rel = safe_rel_path.replace("\\", "/")
-            row = db.query(SiteImage).filter_by(rel_path=normalized_rel).first()
-            if row:
-                row.data = raw
-                row.mime = mime
-            else:
-                db.add(SiteImage(rel_path=normalized_rel, mime=mime, data=raw))
-            db.commit()
-        except Exception as exc:
-            db.rollback()
-            print(f"SiteImage save failed for {safe_rel_path}: {exc}")
-        finally:
+    try:
+        # The client picks the name from the post title, which is identical
+        # ("Ny post") for every freshly created example. Move to a free name
+        # rather than overwriting somebody else's photo.
+        abs_path, safe_rel_path = allocate_free_image_destination(abs_path, safe_rel_path, raw, db)
+
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        with abs_path.open("wb") as handle:
+            handle.write(raw)
+
+        # Persist in the database as well; the disk copy does not survive a
+        # redeploy on Render.
+        if db:
+            try:
+                normalized_rel = safe_rel_path.replace("\\", "/")
+                row = db.query(SiteImage).filter_by(rel_path=normalized_rel).first()
+                if row:
+                    row.data = raw
+                    row.mime = mime
+                else:
+                    db.add(SiteImage(rel_path=normalized_rel, mime=mime, data=raw))
+                db.commit()
+            except Exception as exc:
+                db.rollback()
+                print(f"SiteImage save failed for {safe_rel_path}: {exc}")
+    finally:
+        if db:
             db.close()
 
     return jsonify(success=True, saved_path=safe_rel_path.replace("/", "\\"))

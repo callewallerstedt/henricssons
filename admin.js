@@ -1381,6 +1381,34 @@ function buildExtrasList(){
     });
 }
 
+function slugifyExtraPart(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/(^-|-$)/g, '');
+}
+
+// Bildernas sokvag byggdes av postens namn. En nyskapad post heter alltid
+// "Ny post", sa tva nya poster fick exakt samma sokvag och den andra
+// uppladdningen skrev over den forstas bilder. Namnge efter tillverkare +
+// modell nar namnet fortfarande ar platshallaren, annars unikt per post.
+function extraUploadSlug(obj) {
+    if (obj.slug) return obj.slug;
+    const nameSlug = slugifyExtraPart(obj.name);
+    if (nameSlug && nameSlug !== 'ny-post' && nameSlug !== 'post') return nameSlug;
+    const identitySlug = slugifyExtraPart(`${obj.manufacturer || ''} ${obj.model || ''}`);
+    if (identitySlug) return identitySlug;
+    if (!obj._uploadSlug) obj._uploadSlug = `post-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    return obj._uploadSlug;
+}
+
+// Numret togs fran antalet bilder, sa efter en borttagning atervandes ett
+// redan anvant filnamn. Rakna fran hogsta befintliga numret i stallet.
+function nextExtraImageIndex(obj) {
+    const used = (obj.images || []).map(img => {
+        const match = String(img || '').match(/_(\d+)\.[a-z0-9]+$/i);
+        return match ? parseInt(match[1], 10) : 0;
+    });
+    return Math.max(0, (obj.images || []).length, ...used) + 1;
+}
+
 function showExtrasEdit() {
     $('#extras-edit-section').show();
     $('#extras-edit-section').addClass('editing');
@@ -1478,7 +1506,7 @@ function showExtrasEdit() {
         const reader = new FileReader();
         reader.onload=function(e){
             // Ladda upp till servern
-            const slug = obj.slug || (obj.name||'').toLowerCase().replace(/[^a-z0-9]+/gi,'-').replace(/(^-|-$)/g,'');
+            const slug = extraUploadSlug(obj);
             const catFolderMap = {
                 motorboats: 'motorbatar',
                 sailboats: 'segelbatar',
@@ -1489,7 +1517,7 @@ function showExtrasEdit() {
             };
             const folder = catFolderMap[catKey] || 'motorbatar';
             const fileExt = file.name.split('.').pop();
-            const nextIdx = (obj.images||[]).length + 1;
+            const nextIdx = nextExtraImageIndex(obj);
             const fileName = `${slug}_${String(nextIdx).padStart(2,'0')}.${fileExt}`;
             const relPath = `${folder}/${slug}/${fileName}`;
 
