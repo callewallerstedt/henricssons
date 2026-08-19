@@ -37,14 +37,19 @@ MIME_EXTS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "
 
 def load_database_url() -> str:
     url = os.environ.get("DATABASE_URL", "").strip()
-    if url:
-        return url
-    env_file = BASE_DIR / ".env"
-    if env_file.exists():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            if line.strip().startswith("DATABASE_URL"):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
-    raise SystemExit("DATABASE_URL is not set (environment or .env)")
+    if not url:
+        env_file = BASE_DIR / ".env"
+        if env_file.exists():
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                if line.strip().startswith("DATABASE_URL"):
+                    url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+    if not url:
+        raise SystemExit("DATABASE_URL is not set (environment or .env)")
+    # Bypass Neon's connection pooler. This script marks its session read
+    # only, and a pooled session carries that flag over to whoever gets it
+    # next - which means the live site cannot save while a backup runs.
+    return url.replace("-pooler.", ".")
 
 
 def json_default(value):

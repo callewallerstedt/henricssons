@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, send_from_directory, has_request_context
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON as SQLJSON, LargeBinary, String, Text, create_engine, inspect as sa_inspect, text as sa_text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON as SQLJSON, LargeBinary, String, Text, create_engine, event as sa_event, inspect as sa_inspect, text as sa_text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 app = Flask(__name__)
@@ -767,6 +767,22 @@ def _migrate_dyn_manufacturer_columns() -> None:
         print(f"Warning: dyn_manufacturers column migration failed: {exc}")
 
 
+def _clear_read_only_on_connect(target_engine: Any) -> None:
+    """Neon's connection pooler reuses server sessions between clients. A
+    client that set default_transaction_read_only leaves it on for whoever
+    gets that session next, and every write then dies with
+    ReadOnlySqlTransaction. Reset it on each new connection."""
+
+    @sa_event.listens_for(target_engine, "connect")
+    def _reset_read_only(dbapi_connection, _connection_record):  # noqa: ANN001
+        try:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("SET SESSION default_transaction_read_only = off")
+            cursor.close()
+        except Exception as exc:
+            print(f"Warning: could not clear read-only session flag: {exc}")
+
+
 def init_db() -> None:
     global engine, SessionLocal, _db_last_init_attempt
     with DB_INIT_LOCK:
@@ -778,6 +794,8 @@ def init_db() -> None:
             else:
                 kwargs["pool_pre_ping"] = True
             engine = create_engine(DATABASE_URL, **kwargs)
+            if not DATABASE_URL.startswith("sqlite"):
+                _clear_read_only_on_connect(engine)
             Base.metadata.create_all(engine)
             _migrate_boat_brand_columns()
             _migrate_dyn_manufacturer_columns()
