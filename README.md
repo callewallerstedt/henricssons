@@ -32,6 +32,15 @@ flowchart TD
 | Formulärinskick + bilagor | – | `form_submissions`, `submission_attachments` |
 | Tillfälliga produkter & varumärken | – | `temp_products`, `boat_brands` (+ bildtabeller) |
 
+### Backup
+
+Adminuppladdade bilder finns bara i databasen — diskkopian försvinner vid varje
+deploy och de ligger inte i git. Kör `python backup_data.py` (läser
+`DATABASE_URL`, skriver inget till databasen) före större innehållsändringar och
+regelbundet. Backupen hamnar i `../henricssons-backups/backup-<tidsstämpel>/`
+med varje tabell som JSON och varje bild som riktig fil, redo att laddas upp
+igen. Ange en annan mapp med `python backup_data.py <sökväg>`.
+
 ## Admin-panelen
 
 - Öppna `/admin` på sajten → lösenordsinloggning (`ADMIN_PANEL_PASSWORD`), sessionscookie.
