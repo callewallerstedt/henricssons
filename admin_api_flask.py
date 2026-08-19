@@ -712,6 +712,9 @@ class SiteImage(Base):
 
 engine = None
 SessionLocal = None
+DB_INIT_LOCK = threading.RLock()
+DB_RETRY_INTERVAL_SECONDS = 20.0
+_db_last_init_attempt = 0.0
 SITE_CONTENT_CACHE: Dict[str, Any] = {}
 SITE_CONTENT_CACHE_LOCK = threading.RLock()
 SITE_CONTENT_MISSING = object()
@@ -765,28 +768,38 @@ def _migrate_dyn_manufacturer_columns() -> None:
 
 
 def init_db() -> None:
-    global engine, SessionLocal
-    try:
-        kwargs: Dict[str, Any] = {"future": True}
-        if DATABASE_URL.startswith("sqlite"):
-            kwargs["connect_args"] = {"check_same_thread": False}
-        else:
-            kwargs["pool_pre_ping"] = True
-        engine = create_engine(DATABASE_URL, **kwargs)
-        Base.metadata.create_all(engine)
-        _migrate_boat_brand_columns()
-        _migrate_dyn_manufacturer_columns()
-        SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-        print("Database connected.")
-    except Exception as exc:
-        print(f"Warning: database init failed, file fallback will be used: {exc}")
-        engine = None
-        SessionLocal = None
+    global engine, SessionLocal, _db_last_init_attempt
+    with DB_INIT_LOCK:
+        _db_last_init_attempt = time.time()
+        try:
+            kwargs: Dict[str, Any] = {"future": True}
+            if DATABASE_URL.startswith("sqlite"):
+                kwargs["connect_args"] = {"check_same_thread": False}
+            else:
+                kwargs["pool_pre_ping"] = True
+            engine = create_engine(DATABASE_URL, **kwargs)
+            Base.metadata.create_all(engine)
+            _migrate_boat_brand_columns()
+            _migrate_dyn_manufacturer_columns()
+            SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+            print("Database connected.")
+        except Exception as exc:
+            print(f"Warning: database init failed, file fallback will be used: {exc}")
+            engine = None
+            SessionLocal = None
 
 
 def get_db() -> Optional[Session]:
+    # A database that was unreachable at boot (a suspended Neon compute is
+    # enough) used to leave SessionLocal empty for the whole process life, and
+    # every save after that went to the disk only - which Render wipes on the
+    # next deploy. Keep retrying instead of silently losing writes.
     if SessionLocal is None:
-        return None
+        if not DATABASE_URL or time.time() - _db_last_init_attempt < DB_RETRY_INTERVAL_SECONDS:
+            return None
+        init_db()
+        if SessionLocal is None:
+            return None
     try:
         return SessionLocal()
     except Exception:
@@ -2264,10 +2277,13 @@ def auto_repair_static_text_files() -> List[Path]:
     return repaired
 
 
-def set_site_content(key: str, data: Any) -> None:
+def set_site_content(key: str, data: Any) -> bool:
+    """True when the content reached the database. The disk copy alone does
+    not survive a deploy, so callers that can report a failure should."""
     db = get_db()
     if not db:
-        return
+        print(f"site_content '{key}' not persisted: no database connection")
+        return False
     try:
         row = db.query(SiteContent).filter_by(key=key).first()
         if row:
@@ -2278,8 +2294,11 @@ def set_site_content(key: str, data: Any) -> None:
         db.commit()
         with SITE_CONTENT_CACHE_LOCK:
             SITE_CONTENT_CACHE[key] = deepcopy(data)
-    except Exception:
+        return True
+    except Exception as exc:
         db.rollback()
+        print(f"site_content '{key}' save failed: {exc}")
+        return False
     finally:
         db.close()
 
@@ -5822,6 +5841,17 @@ def options(path: str):
     return "", 200
 
 
+def content_save_response(key: str, saved: bool):
+    """A save that only reached the disk is lost on the next deploy, so tell
+    the admin panel instead of reporting success."""
+    if saved or not DATABASE_URL:
+        return jsonify(success=True)
+    return jsonify(
+        error="Sparades inte i databasen (ingen anslutning) - andringen forsvinner vid nasta deploy. Forsok igen.",
+        key=key,
+    ), 503
+
+
 @app.route("/api/save_boatdata", methods=["POST"])
 @admin_required
 def save_boatdata():
@@ -5829,8 +5859,7 @@ def save_boatdata():
     if not isinstance(data, dict):
         return jsonify(error="Invalid payload"), 400
     write_json_file(BOAT_DATA_FILE, data)
-    set_site_content("boat_data", data)
-    return jsonify(success=True)
+    return content_save_response("boat_data", set_site_content("boat_data", data))
 
 
 @app.route("/api/save_models_meta", methods=["POST"])
@@ -5840,8 +5869,7 @@ def save_models_meta():
     if not isinstance(data, dict):
         return jsonify(error="Invalid payload"), 400
     write_json_file(MODELS_META_FILE, data)
-    set_site_content("models_meta", data)
-    return jsonify(success=True)
+    return content_save_response("models_meta", set_site_content("models_meta", data))
 
 
 @app.route("/api/submit_form", methods=["POST", "OPTIONS"])
@@ -6291,8 +6319,7 @@ def page_texts():
     if not isinstance(data, dict):
         return jsonify(error="Invalid payload"), 400
     write_json_file(PAGE_TEXTS_FILE, data)
-    set_site_content("page_texts", data)
-    return jsonify(success=True)
+    return content_save_response("page_texts", set_site_content("page_texts", data))
 
 
 @app.route("/api/mailgun_settings", methods=["GET", "POST"])
@@ -6393,6 +6420,7 @@ def upload_image():
         return jsonify(error=str(exc)), 400
 
     mime = f"image/{'jpeg' if ext == '.jpg' else ext.lstrip('.')}"
+    stored_in_db = False
     db = get_db()
     try:
         # The client picks the name from the post title, which is identical
@@ -6416,12 +6444,21 @@ def upload_image():
                 else:
                     db.add(SiteImage(rel_path=normalized_rel, mime=mime, data=raw))
                 db.commit()
+                stored_in_db = True
             except Exception as exc:
                 db.rollback()
                 print(f"SiteImage save failed for {safe_rel_path}: {exc}")
     finally:
         if db:
             db.close()
+
+    # An image that only made it to disk is gone at the next deploy. Saying
+    # "success" there put the path into models_meta and left a dead link.
+    if not stored_in_db and DATABASE_URL:
+        print(f"Upload not persisted to database: {safe_rel_path}")
+        return jsonify(
+            error="Bilden kunde inte sparas i databasen (ingen anslutning) - den skulle forsvinna vid nasta deploy. Forsok igen om en stund.",
+        ), 503
 
     return jsonify(success=True, saved_path=safe_rel_path.replace("/", "\\"))
 
@@ -8488,7 +8525,19 @@ def analytics_summary():
 
 @app.route("/healthz", methods=["GET"])
 def healthz():
-    return jsonify(status="ok"), 200
+    # Report the database separately: the site still serves pages without it,
+    # but nothing that is saved would survive a deploy.
+    db = get_db()
+    db_ok = False
+    if db:
+        try:
+            db.execute(sa_text("SELECT 1"))
+            db_ok = True
+        except Exception as exc:
+            print(f"healthz database check failed: {exc}")
+        finally:
+            db.close()
+    return jsonify(status="ok", database=("ok" if db_ok else ("down" if DATABASE_URL else "not_configured"))), 200
 
 
 @app.route("/admin", methods=["GET"])
