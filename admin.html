@@ -2365,6 +2365,22 @@
                 font-size: 1.05rem;
                 flex: 0 0 auto;
             }
+            /* Bara de senaste inskicken syns; resten fälls ut med knappen. */
+            .folder-item-collapsed { display: none; }
+            .folder-show-more {
+                width: 100%;
+                margin-top: 0.15rem;
+                padding: 0.5rem;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background: var(--surface);
+                color: var(--primary);
+                font: inherit;
+                font-size: 0.78rem;
+                font-weight: 600;
+                min-height: 38px;
+            }
+            .folder-show-more:active { background: var(--surface-2); }
             .add-item-btn { min-height: 36px; font-size: 0.8rem; }
             .archive-drop-zone { margin-top: 0.6rem; }
 

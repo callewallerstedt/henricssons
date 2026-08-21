@@ -5773,11 +5773,70 @@ function renderStatusFolders() {
         }
 
         folderDiv.off('dragover dragleave drop').on('dragover', handleDragOver).on('dragleave', handleDragLeave).on('drop', handleDrop);
+        applyMobileFolderLimit(statusId, folderDiv);
     });
 
     updateSortButton();
     updateStatusSummaryCounts();
 }
+
+/* ---------- Kortare listor på telefon ----------
+   På en telefon tar en full statusmapp över hela skärmen och man måste
+   skrolla förbi allt för att nå nästa mapp. Därför visas bara de senaste
+   inskicken, med en knapp som fäller ut fler. */
+
+const MOBILE_FOLDER_PAGE_SIZE = 5;
+const mobileFolderVisibleCounts = {};
+
+function isMobileFolderLayout() {
+    return window.matchMedia('(max-width: 600px)').matches;
+}
+
+function applyMobileFolderLimit(statusId, folderDiv) {
+    const container = folderDiv && folderDiv.length ? folderDiv : $(`#folder-${statusId}`);
+    if (!container.length) return;
+
+    container.find('.folder-show-more').remove();
+    const items = container.children('.folder-item').not('.folder-item-empty');
+    if (!isMobileFolderLayout()) {
+        items.removeClass('folder-item-collapsed');
+        return;
+    }
+
+    const visible = mobileFolderVisibleCounts[statusId] || MOBILE_FOLDER_PAGE_SIZE;
+    items.each(function(index) {
+        $(this).toggleClass('folder-item-collapsed', index >= visible);
+    });
+
+    const remaining = items.length - visible;
+    if (remaining <= 0) return;
+
+    const nextChunk = Math.min(remaining, MOBILE_FOLDER_PAGE_SIZE);
+    const showMore = $('<button>')
+        .addClass('folder-show-more')
+        .attr('type', 'button')
+        .text(`Visa ${nextChunk} till (${remaining} kvar)`)
+        .on('click', function(e) {
+            e.stopPropagation();
+            mobileFolderVisibleCounts[statusId] = visible + MOBILE_FOLDER_PAGE_SIZE;
+            applyMobileFolderLimit(statusId, container);
+        });
+    container.append(showMore);
+}
+
+function refreshMobileFolderLimits() {
+    getStatusBuckets().forEach(statusId => applyMobileFolderLimit(statusId, $(`#folder-${statusId}`)));
+}
+
+// Vid rotation eller byte mellan telefon- och datorbredd ska listorna
+// räknas om.
+window.addEventListener('resize', (function() {
+    let timer = null;
+    return function() {
+        clearTimeout(timer);
+        timer = setTimeout(refreshMobileFolderLimits, 200);
+    };
+})());
 
 function getStatusDisplayName(statusId) {
     if (statusId === TODO_STATUS.id) return TODO_STATUS.name;
