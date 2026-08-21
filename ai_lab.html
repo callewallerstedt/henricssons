@@ -2,9 +2,14 @@
 <html lang="sv">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="robots" content="noindex,nofollow,noarchive">
     <title>AI Lab | Henricssons</title>
+    <link rel="manifest" href="/admin.webmanifest">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Admin">
+    <link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -41,6 +46,10 @@
             <button class="lab-nav-button" type="button" data-view="workspace">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3zM5 15l.9 2.1L8 18l-2.1.9L5 21l-.9-2.1L2 18l2.1-.9L5 15zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/></svg>
                 <span>Agentstudio</span>
+            </button>
+            <button class="lab-nav-button" type="button" data-view="notifications">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                <span>Notiser</span>
             </button>
             <button class="lab-nav-button" type="button" data-view="settings">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -355,6 +364,44 @@
             </div>
         </section>
 
+        <section class="lab-view" id="view-notifications" data-view-panel="notifications">
+            <div class="settings-header">
+                <div>
+                    <span class="hero-kicker hero-kicker-dark">FÖRSÖKSFUNKTION</span>
+                    <h2>Notiser när nya inskick kommer in.</h2>
+                    <p>Panelen sparad på hemskärmen kan ta emot notiser. Tryck på notisen så öppnas inskicket direkt, med bilder, meddelande och svarsknapp.</p>
+                </div>
+            </div>
+            <div class="settings-notice is-hidden" id="push-notice"></div>
+
+            <div id="push-panel" class="settings-grid">
+                <section class="settings-card settings-card-wide">
+                    <div class="settings-card-head"><span class="section-index">01</span><div><h3>Status</h3><p>Vad som krävs för att notiserna ska fungera.</p></div></div>
+                    <div class="push-status" id="push-status"></div>
+                    <div class="push-actions">
+                        <button class="primary-button" id="push-enable-btn" type="button">Aktivera på den här enheten</button>
+                        <button class="ghost-button" id="push-test-btn" type="button" disabled>Skicka testnotis</button>
+                        <button class="ghost-button" id="push-disable-btn" type="button" hidden>Stäng av här</button>
+                    </div>
+                    <p class="push-hint">På iPhone: öppna panelen i Safari, välj Dela → Lägg till på hemskärmen, och aktivera notiserna inifrån appen.</p>
+                </section>
+
+                <section class="settings-card">
+                    <div class="settings-card-head"><span class="section-index">02</span><div><h3>Vad som skickas</h3><p>Gäller alla registrerade enheter.</p></div></div>
+                    <label class="push-toggle">
+                        <input type="checkbox" id="push-enabled-toggle">
+                        <span>Skicka notis vid nya inskick</span>
+                    </label>
+                    <div class="push-types" id="push-form-types"></div>
+                </section>
+
+                <section class="settings-card">
+                    <div class="settings-card-head"><span class="section-index">03</span><div><h3>Registrerade enheter</h3><p>Enheter som får notiser just nu.</p></div></div>
+                    <div class="push-devices" id="push-device-list"></div>
+                </section>
+            </div>
+        </section>
+
         <section class="lab-view" id="view-settings" data-view-panel="settings">
             <div class="settings-header">
                 <div><span class="hero-kicker hero-kicker-dark">KONTROLLCENTER</span><h2>Agentens regler och integrationer.</h2><p>Inställningarna sparas i samma beständiga datalager som resten av adminpanelen.</p></div>
@@ -405,5 +452,15 @@
 <div class="mobile-nav-backdrop" id="mobile-nav-backdrop"></div>
 <div class="toast" id="lab-toast" role="status"></div>
 <script src="/ai_lab.js?v=20260716a" defer></script>
+<script src="/push_client.js?v=20260821a" defer></script>
+<script>
+(function () {
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/admin-sw.js', { scope: '/admin' })
+            .catch(function (err) { console.warn('Service worker kunde inte registreras:', err); });
+    });
+})();
+</script>
 </body>
 </html>

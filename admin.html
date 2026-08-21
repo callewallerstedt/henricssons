@@ -1756,6 +1756,9 @@
         .form-submission-modal-content .modal-header h2 { color: #fff; font-size: 1.1rem; }
         .form-submission-modal-content .modal-close { background: rgba(255,255,255,0.12); color: #fff; }
         .form-submission-modal-content .modal-close:hover { background: rgba(255,255,255,0.24); }
+        /* Åtgärdsraden hör till telefonvyn – på dator finns knapparna redan
+           i AI-kolumnen. */
+        .form-modal-mobile-actions { display: none; }
         .form-submission-modal-content .modal-body {
             flex: 1;
             overflow: hidden;
@@ -1789,6 +1792,34 @@
             border-radius: 14px;
             box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
             background: rgba(255,255,255,0.04);
+        }
+        /* Bläddring mellan bilderna i ett ärende. */
+        .attachment-lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 64px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.55);
+            color: #fff;
+            font-size: 30px;
+            line-height: 1;
+            cursor: pointer;
+            z-index: 2;
+        }
+        .attachment-lightbox-nav.is-visible { display: flex; }
+        .attachment-lightbox-nav:hover { background: rgba(15, 23, 42, 0.8); }
+        .attachment-lightbox-prev { left: -8px; }
+        .attachment-lightbox-next { right: -8px; }
+        .attachment-lightbox-counter {
+            color: rgba(255,255,255,0.75);
+            font-size: 0.8rem;
+            letter-spacing: 0.06em;
         }
         .attachment-lightbox-caption {
             color: rgba(255,255,255,0.86);
@@ -2350,17 +2381,69 @@
             }
             .form-submission-modal-content .modal-header h2 { font-size: 0.98rem; }
             .form-submission-modal-content .modal-close { width: 38px; height: 38px; font-size: 22px; }
-            .form-submission-modal-content .modal-body { overflow-y: auto; }
+            /* Flexboxen ersätts av vanlig blockflödeslayout, annars blir
+               kolumnen så bred som innehållet och sidan glider i sidled. */
+            .form-submission-modal-content .modal-body {
+                display: block;
+                overflow-y: auto;
+                min-width: 0;
+            }
             .form-modal-columns {
                 display: block;
                 overflow: visible;
                 flex: none;
+                width: 100%;
+                min-width: 0;
             }
+            .form-info-column, .ai-response-column { width: 100%; }
+            .form-fields { padding: 0.7rem 0.75rem; }
+            /* Etiketten tar ingen egen rad och ingen fast bredd – långa
+               värden som meddelandet får hela bredden och radbryts. */
+            .form-field {
+                font-size: 0.85rem;
+                overflow-wrap: anywhere;
+                margin-bottom: 0.4rem;
+                padding-bottom: 0.4rem;
+            }
+            .form-field strong { display: inline; min-width: 0; margin-right: 0.15rem; color: var(--text-muted); }
             .form-info-column,
             .ai-response-column {
                 max-height: none;
                 overflow: visible;
                 padding: 0.9rem 1rem;
+            }
+            /* Bilderna är det viktigaste i ett inskick – två stora rutor i
+               bredd i stället för fyra små. Inline-stilarna i admin.js måste
+               övertrumfas här. */
+            .attachment-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 0.5rem !important;
+            }
+            .attachment-thumb,
+            .attachment-thumb-loading { height: 140px !important; }
+            .attachment-tile { border-radius: 10px !important; }
+            .attachment-lightbox { padding: 0.5rem; }
+            .attachment-lightbox-nav { width: 40px; height: 56px; font-size: 26px; }
+            .attachment-lightbox-prev { left: 2px; }
+            .attachment-lightbox-next { right: 2px; }
+
+            /* Svarsknappen ska alltid vara inom räckhåll. */
+            .form-modal-mobile-actions {
+                display: flex;
+                gap: 0.5rem;
+                padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
+                border-top: 1px solid var(--border);
+                background: var(--surface);
+            }
+            .form-modal-mobile-actions .btn { flex: 1 1 auto; min-height: 44px; }
+            .form-modal-mobile-actions .form-modal-call-btn {
+                flex: 0 0 auto;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding-left: 1.1rem;
+                padding-right: 1.1rem;
+                text-decoration: none;
             }
         }
 
@@ -2892,8 +2975,11 @@
 <div id="attachment-lightbox" class="attachment-lightbox" aria-hidden="true">
     <div class="attachment-lightbox-dialog">
         <button type="button" class="attachment-lightbox-close" id="attachment-lightbox-close" aria-label="Stäng bild">×</button>
+        <button type="button" class="attachment-lightbox-nav attachment-lightbox-prev" id="attachment-lightbox-prev" aria-label="Föregående bild">‹</button>
+        <button type="button" class="attachment-lightbox-nav attachment-lightbox-next" id="attachment-lightbox-next" aria-label="Nästa bild">›</button>
         <img id="attachment-lightbox-image" class="attachment-lightbox-image" alt="" />
         <div id="attachment-lightbox-caption" class="attachment-lightbox-caption"></div>
+        <div id="attachment-lightbox-counter" class="attachment-lightbox-counter"></div>
     </div>
 </div>
 
@@ -2925,7 +3011,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260802a" defer></script>
+<script src="admin.js?v=20260821a" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle

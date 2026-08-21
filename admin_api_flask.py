@@ -111,6 +111,9 @@ PUBLIC_ATTACHMENT_BASE_URL = os.getenv(
     os.getenv("PUBLIC_API_BASE_URL", PUBLIC_BASE_URL),
 ).rstrip("/")
 STATUS_ACTION_BASE_URL = os.getenv("STATUS_ACTION_BASE_URL", "").strip().rstrip("/")
+# Hemlig kopia på alla kundsvar som skickas via "Svara"-knapparna. Tom sträng
+# stänger av det.
+REPLY_BCC_EMAIL = os.getenv("REPLY_BCC_EMAIL", "calle.wallerstedt@gmail.com").strip()
 SWEDEN_TZ = ZoneInfo("Europe/Stockholm")
 GENERIC_EXAMPLE_DESCRIPTION = (
     "Vi tillverkar kapell till många typer av båtar. Med vårat mallregister med egen tillverkning "
@@ -4125,7 +4128,10 @@ def build_customer_reply_mailto(form_type: str, email: str) -> str:
     else:
         topic = f"din {form_label.lower()}"
     subject = f"Ang. {topic} \u2013 Henricssons B\u00e5tkapell"
-    return f"mailto:{quote(str(email or '').strip(), safe='@')}?subject={quote(subject)}"
+    url = f"mailto:{quote(str(email or '').strip(), safe='@')}?subject={quote(subject)}"
+    if REPLY_BCC_EMAIL:
+        url += f"&bcc={quote(REPLY_BCC_EMAIL, safe='@')}"
+    return url
 
 
 def build_selectable_email_value_html(email: str) -> str:
@@ -5143,6 +5149,12 @@ def process_form_submission(
         send_mailgun_customer_confirmation,
         submission,
     )
+    enqueue_form_background_task(
+        "Web push submission notification",
+        send_submission_push_notification,
+        submission,
+        saved_attachments,
+    )
     return submission_id
 
 
@@ -5980,6 +5992,486 @@ def submission_attachments_route():
     if not submission_id:
         return jsonify(error="submission_id required"), 400
     return jsonify(get_submission_attachments_meta(submission_id))
+
+
+# ================= WEBBPUSH (NOTISER TILL HEMSKÄRMS-APPEN) =================
+# Notiserna är en försöksfunktion och styrs från AI Lab ("Notiser").
+# De är avstängda tills någon slår på dem där, och skickas bara till
+# enheter som uttryckligen registrerat sig.
+
+PUSH_SETTINGS_KEY = "push_notification_settings"
+PUSH_SUBSCRIPTIONS_KEY = "push_subscriptions"
+PUSH_VAPID_KEYS_KEY = "push_vapid_keys"
+PUSH_CONTACT_EMAIL = os.getenv("PUSH_CONTACT_EMAIL", "info@henricssonsbatkapell.se").strip()
+PUSH_MAX_SUBSCRIPTIONS = 25
+PUSH_LOCK = threading.Lock()
+DEFAULT_PUSH_SETTINGS: Dict[str, Any] = {
+    "enabled": False,
+    "form_types": [],  # tom lista = alla formulärtyper
+}
+
+
+def push_b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def push_b64url_decode(value: str) -> bytes:
+    text = str(value or "").strip().replace("-", "+").replace("_", "/")
+    padding = "=" * (-len(text) % 4)
+    return base64.b64decode(text + padding)
+
+
+def push_is_available() -> bool:
+    """Notiserna kräver cryptography (finns i requirements.txt)."""
+    try:
+        import cryptography  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+def push_hkdf(salt: bytes, ikm: bytes, info: bytes, length: int) -> bytes:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    return HKDF(algorithm=hashes.SHA256(), length=length, salt=salt, info=info).derive(ikm)
+
+
+def encrypt_web_push_payload(payload: bytes, p256dh: str, auth: str) -> bytes:
+    """Kryptera nyttolasten enligt RFC 8291 (aes128gcm).
+
+    Implementerat direkt mot cryptography i stället för pywebpush, som drar
+    in ett paket som måste byggas från källkod vid varje deploy.
+    """
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives import serialization
+
+    client_public_bytes = push_b64url_decode(p256dh)
+    auth_secret = push_b64url_decode(auth)
+    client_public = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), client_public_bytes)
+
+    server_private = ec.generate_private_key(ec.SECP256R1())
+    server_public_bytes = server_private.public_key().public_bytes(
+        serialization.Encoding.X962,
+        serialization.PublicFormat.UncompressedPoint,
+    )
+    shared_secret = server_private.exchange(ec.ECDH(), client_public)
+
+    ikm = push_hkdf(
+        auth_secret,
+        shared_secret,
+        b"WebPush: info\x00" + client_public_bytes + server_public_bytes,
+        32,
+    )
+    salt = os.urandom(16)
+    content_key = push_hkdf(salt, ikm, b"Content-Encoding: aes128gcm\x00", 16)
+    nonce = push_hkdf(salt, ikm, b"Content-Encoding: nonce\x00", 12)
+
+    ciphertext = AESGCM(content_key).encrypt(nonce, payload + b"\x02", None)
+    record_size = (4096).to_bytes(4, "big")
+    return salt + record_size + bytes([len(server_public_bytes)]) + server_public_bytes + ciphertext
+
+
+def build_vapid_headers(endpoint: str, keys: Dict[str, str]) -> Dict[str, str]:
+    """Authorization-huvudet som bevisar att notisen kommer från oss."""
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+
+    parsed = urlparse(endpoint)
+    audience = f"{parsed.scheme}://{parsed.netloc}"
+    header = push_b64url(json.dumps({"typ": "JWT", "alg": "ES256"}, separators=(",", ":")).encode("utf-8"))
+    claims = push_b64url(json.dumps(
+        {
+            "aud": audience,
+            "exp": int(time.time()) + 12 * 60 * 60,
+            "sub": f"mailto:{PUSH_CONTACT_EMAIL}",
+        },
+        separators=(",", ":"),
+    ).encode("utf-8"))
+    signing_input = f"{header}.{claims}".encode("ascii")
+
+    private_value = int.from_bytes(push_b64url_decode(keys["private_key"]), "big")
+    private_key = ec.derive_private_key(private_value, ec.SECP256R1())
+    der_signature = private_key.sign(signing_input, ec.ECDSA(hashes.SHA256()))
+    r, s = decode_dss_signature(der_signature)
+    raw_signature = r.to_bytes(32, "big") + s.to_bytes(32, "big")
+
+    token = f"{header}.{claims}.{push_b64url(raw_signature)}"
+    return {"Authorization": f"vapid t={token}, k={keys['public_key']}"}
+
+
+class PushDeliveryError(Exception):
+    def __init__(self, message: str, status_code: int = 0):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def deliver_web_push(subscription: Dict[str, Any], payload: str, keys: Dict[str, str], ttl: int = 43200) -> None:
+    endpoint = str(subscription.get("endpoint", ""))
+    sub_keys = subscription.get("keys") or {}
+    body = encrypt_web_push_payload(
+        payload.encode("utf-8"),
+        str(sub_keys.get("p256dh", "")),
+        str(sub_keys.get("auth", "")),
+    )
+    headers = {
+        "Content-Encoding": "aes128gcm",
+        "Content-Type": "application/octet-stream",
+        "TTL": str(ttl),
+        "Urgency": "high",
+    }
+    headers.update(build_vapid_headers(endpoint, keys))
+    try:
+        response = requests.post(endpoint, data=body, headers=headers, timeout=15)
+    except Exception as exc:
+        raise PushDeliveryError(f"Nätverksfel: {exc}") from exc
+    if response.status_code not in (200, 201, 202, 204):
+        raise PushDeliveryError(
+            f"HTTP {response.status_code}: {response.text[:160]}",
+            status_code=response.status_code,
+        )
+
+
+def get_vapid_keys(create: bool = True) -> Optional[Dict[str, str]]:
+    """VAPID-nyckelparet som identifierar servern mot push-tjänsterna.
+
+    Miljövariabler vinner om de är satta. Annars genereras ett par en gång
+    och sparas i databasen, så att prenumerationer överlever omstarter.
+    """
+    env_private = os.getenv("VAPID_PRIVATE_KEY", "").strip()
+    env_public = os.getenv("VAPID_PUBLIC_KEY", "").strip()
+    if env_private and env_public:
+        return {"private_key": env_private, "public_key": env_public}
+
+    stored = get_site_content(PUSH_VAPID_KEYS_KEY)
+    if isinstance(stored, dict) and stored.get("private_key") and stored.get("public_key"):
+        return {"private_key": str(stored["private_key"]), "public_key": str(stored["public_key"])}
+
+    if not create:
+        return None
+
+    try:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+    except Exception as exc:
+        print(f"VAPID key generation unavailable: {exc}")
+        return None
+
+    with PUSH_LOCK:
+        stored = get_site_content(PUSH_VAPID_KEYS_KEY)
+        if isinstance(stored, dict) and stored.get("private_key") and stored.get("public_key"):
+            return {"private_key": str(stored["private_key"]), "public_key": str(stored["public_key"])}
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        raw_private = private_key.private_numbers().private_value.to_bytes(32, "big")
+        raw_public = private_key.public_key().public_bytes(
+            serialization.Encoding.X962,
+            serialization.PublicFormat.UncompressedPoint,
+        )
+        keys = {"private_key": push_b64url(raw_private), "public_key": push_b64url(raw_public)}
+        if not set_site_content(PUSH_VAPID_KEYS_KEY, keys):
+            print("VAPID keys could not be stored: no database connection")
+            return None
+        return keys
+
+
+def get_push_settings() -> Dict[str, Any]:
+    with SITE_CONTENT_CACHE_LOCK:
+        SITE_CONTENT_CACHE.pop(PUSH_SETTINGS_KEY, None)
+    stored = get_site_content(PUSH_SETTINGS_KEY)
+    settings = dict(DEFAULT_PUSH_SETTINGS)
+    if isinstance(stored, dict):
+        settings["enabled"] = bool(stored.get("enabled", False))
+        form_types = stored.get("form_types")
+        if isinstance(form_types, list):
+            settings["form_types"] = [str(value) for value in form_types if str(value).strip()]
+    return settings
+
+
+def save_push_settings(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
+    settings = get_push_settings()
+    if "enabled" in payload:
+        settings["enabled"] = bool(payload.get("enabled"))
+    if isinstance(payload.get("form_types"), list):
+        valid = set(FORM_TYPE_LABELS_SV.keys())
+        chosen = {normalize_form_type(str(value)) for value in payload["form_types"] if str(value).strip()}
+        settings["form_types"] = sorted(key for key in chosen if key in valid)
+    return settings, set_site_content(PUSH_SETTINGS_KEY, settings)
+
+
+def load_push_subscriptions() -> List[Dict[str, Any]]:
+    # Läs förbi cachen: en enhet som registrerats i en annan process ska
+    # få notiser direkt, inte först efter en omstart.
+    with SITE_CONTENT_CACHE_LOCK:
+        SITE_CONTENT_CACHE.pop(PUSH_SUBSCRIPTIONS_KEY, None)
+    stored = get_site_content(PUSH_SUBSCRIPTIONS_KEY)
+    if not isinstance(stored, list):
+        return []
+    return [row for row in stored if isinstance(row, dict) and row.get("endpoint")]
+
+
+def save_push_subscriptions(subscriptions: List[Dict[str, Any]]) -> bool:
+    return set_site_content(PUSH_SUBSCRIPTIONS_KEY, subscriptions[:PUSH_MAX_SUBSCRIPTIONS])
+
+
+def push_subscription_id(endpoint: str) -> str:
+    return hashlib.sha256(str(endpoint or "").encode("utf-8")).hexdigest()[:16]
+
+
+def push_subscription_public(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Prenumerationen utan endpoint/nycklar – det som får visas i gränssnittet."""
+    return {
+        "id": push_subscription_id(str(row.get("endpoint", ""))),
+        "label": str(row.get("label", "") or "Enhet"),
+        "created_at": str(row.get("created_at", "")),
+        "last_sent_at": str(row.get("last_sent_at", "")),
+        "last_error": str(row.get("last_error", "")),
+    }
+
+
+def add_push_subscription(subscription: Dict[str, Any], label: str) -> Tuple[bool, str]:
+    endpoint = str(subscription.get("endpoint", "")).strip()
+    keys = subscription.get("keys")
+    if not endpoint.startswith("https://") or not isinstance(keys, dict):
+        return False, "Ogiltig prenumeration"
+    if not keys.get("p256dh") or not keys.get("auth"):
+        return False, "Prenumerationen saknar nycklar"
+
+    with PUSH_LOCK:
+        rows = [row for row in load_push_subscriptions() if str(row.get("endpoint")) != endpoint]
+        rows.insert(0, {
+            "endpoint": endpoint,
+            "keys": {"p256dh": str(keys["p256dh"]), "auth": str(keys["auth"])},
+            "label": str(label or "Enhet")[:60],
+            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "last_sent_at": "",
+            "last_error": "",
+        })
+        if not save_push_subscriptions(rows):
+            return False, "Kunde inte spara prenumerationen (ingen databas)"
+    return True, ""
+
+
+def remove_push_subscription(endpoint: str = "", subscription_id: str = "") -> bool:
+    endpoint = str(endpoint or "").strip()
+    subscription_id = str(subscription_id or "").strip()
+    if not endpoint and not subscription_id:
+        return False
+    with PUSH_LOCK:
+        rows = load_push_subscriptions()
+        remaining = [
+            row for row in rows
+            if str(row.get("endpoint")) != endpoint
+            and push_subscription_id(str(row.get("endpoint", ""))) != subscription_id
+        ]
+        if len(remaining) == len(rows):
+            return False
+        return save_push_subscriptions(remaining)
+
+
+def send_push_to_subscriptions(payload: Dict[str, Any], subscriptions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Skicka en notis till alla registrerade enheter.
+
+    Utgångna prenumerationer (404/410) plockas bort automatiskt.
+    """
+    if not push_is_available():
+        return {"sent": 0, "failed": 0, "error": "cryptography saknas på servern"}
+    keys = get_vapid_keys()
+    if not keys:
+        return {"sent": 0, "failed": 0, "error": "VAPID-nycklar saknas"}
+
+    rows = list(subscriptions if subscriptions is not None else load_push_subscriptions())
+    if not rows:
+        return {"sent": 0, "failed": 0, "error": "Inga registrerade enheter"}
+
+    data = json.dumps(payload, ensure_ascii=False)
+    now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    sent = 0
+    failed = 0
+    expired: List[str] = []
+    errors: List[str] = []
+
+    for row in rows:
+        endpoint = str(row.get("endpoint", ""))
+        try:
+            deliver_web_push(row, data, keys)
+            sent += 1
+            row["last_sent_at"] = now_iso
+            row["last_error"] = ""
+        except PushDeliveryError as exc:
+            failed += 1
+            row["last_error"] = str(exc)[:120]
+            if exc.status_code in (404, 410):
+                expired.append(endpoint)
+            else:
+                errors.append(row["last_error"])
+            print(f"Web push failed: {exc}")
+        except Exception as exc:
+            failed += 1
+            row["last_error"] = str(exc)[:120]
+            errors.append(row["last_error"])
+            print(f"Web push failed: {exc}")
+
+    with PUSH_LOCK:
+        stored = load_push_subscriptions()
+        by_endpoint = {str(row.get("endpoint")): row for row in rows}
+        merged = []
+        for row in stored:
+            endpoint = str(row.get("endpoint"))
+            if endpoint in expired:
+                continue
+            merged.append(by_endpoint.get(endpoint, row))
+        if merged != stored:
+            save_push_subscriptions(merged)
+
+    result: Dict[str, Any] = {"sent": sent, "failed": failed, "removed": len(expired)}
+    if errors:
+        result["error"] = errors[0]
+    return result
+
+
+def build_submission_push_payload(submission: Dict[str, Any], attachments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    fields = submission.get("fields") if isinstance(submission.get("fields"), dict) else {}
+    form_type = str(submission.get("form_type", "Kontakt"))
+    form_key = normalize_form_type(form_type)
+    form_label = NOTIFICATION_FORM_LABELS_SV.get(form_key, display_form_type(form_type))
+    customer = get_field_value(fields, "name", "namn", "kontaktperson") or "Ny kund"
+    preview_title, preview_message = build_submission_notification_preview(fields)
+    body_lines = [line for line in [preview_title, preview_message] if line]
+    submission_id = str(submission.get("id", ""))
+
+    image_url = ""
+    for att in attachments or []:
+        if str(att.get("mime", "")).startswith("image/"):
+            att_id = att.get("id")
+            if isinstance(att_id, int) or (isinstance(att_id, str) and str(att_id).isdigit()):
+                token = sign_attachment_token(int(att_id))
+                image_url = f"{PUBLIC_ATTACHMENT_BASE_URL}/api/attachment/{att_id}?token={token}"
+            break
+
+    return {
+        "type": "submission",
+        "title": f"Ny {form_label.lower()} · {customer}",
+        "body": "\n".join(body_lines) or "Ett nytt inskick har kommit in.",
+        "tag": f"submission-{submission_id}",
+        "url": f"/admin?submission={quote(submission_id)}",
+        "submission_id": submission_id,
+        "form_type": form_type,
+        "form_label": form_label,
+        "customer": customer,
+        "email": get_field_value(fields, "email", "e-post", "e-postadress"),
+        "phone": get_field_value(fields, "phone", "telefon", "telefonnummer"),
+        "attachments": len(attachments or []),
+        "image": image_url,
+        "timestamp": str(submission.get("timestamp", "")),
+    }
+
+
+def send_submission_push_notification(submission: Dict[str, Any], attachments: Optional[List[Dict[str, Any]]] = None) -> None:
+    settings = get_push_settings()
+    if not settings.get("enabled"):
+        return
+    wanted = settings.get("form_types") or []
+    form_type = str(submission.get("form_type", "Kontakt"))
+    if wanted:
+        # Inskicken sparas med visningsnamn ("Kapellförfrågan") medan valen
+        # sparas som nycklar ("Kapellforfragan") – jämför normaliserat.
+        wanted_keys = {normalize_form_type(value) for value in wanted}
+        if normalize_form_type(form_type) not in wanted_keys:
+            return
+    if not load_push_subscriptions():
+        return
+    result = send_push_to_subscriptions(build_submission_push_payload(submission, attachments))
+    if result.get("failed"):
+        print(f"Submission push: {result}")
+
+
+@app.route("/api/push/config", methods=["GET"])
+@admin_required
+def push_config_route():
+    keys = get_vapid_keys(create=push_is_available())
+    return jsonify(
+        available=push_is_available(),
+        public_key=(keys or {}).get("public_key", ""),
+        settings=get_push_settings(),
+        subscriptions=[push_subscription_public(row) for row in load_push_subscriptions()],
+        form_types=[
+            {"id": key, "label": label}
+            for key, label in NOTIFICATION_FORM_LABELS_SV.items()
+        ],
+    )
+
+
+@app.route("/api/push/settings", methods=["POST"])
+@admin_required
+def push_settings_route():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    settings, saved = save_push_settings(payload)
+    if not saved:
+        return jsonify(error="Kunde inte spara inställningarna (ingen databas)"), 503
+    return jsonify(success=True, settings=settings)
+
+
+@app.route("/api/push/subscribe", methods=["POST"])
+@admin_required
+def push_subscribe_route():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    subscription = payload.get("subscription")
+    if not isinstance(subscription, dict):
+        return jsonify(error="Missing subscription"), 400
+    label = str(payload.get("label", "")).strip() or "Enhet"
+    ok, error = add_push_subscription(subscription, label)
+    if not ok:
+        return jsonify(error=error), 400
+    return jsonify(
+        success=True,
+        id=push_subscription_id(str(subscription.get("endpoint", ""))),
+        subscriptions=[push_subscription_public(row) for row in load_push_subscriptions()],
+    )
+
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+@admin_required
+def push_unsubscribe_route():
+    payload = request.get_json(silent=True) or {}
+    removed = remove_push_subscription(
+        endpoint=str(payload.get("endpoint", "")),
+        subscription_id=str(payload.get("id", "")),
+    )
+    return jsonify(
+        success=removed,
+        subscriptions=[push_subscription_public(row) for row in load_push_subscriptions()],
+    )
+
+
+@app.route("/api/push/test", methods=["POST"])
+@admin_required
+def push_test_route():
+    payload = request.get_json(silent=True) or {}
+    endpoint = str(payload.get("endpoint", "")).strip()
+    subscriptions = None
+    if endpoint:
+        subscriptions = [row for row in load_push_subscriptions() if str(row.get("endpoint")) == endpoint]
+        if not subscriptions:
+            return jsonify(error="Enheten är inte registrerad"), 404
+    result = send_push_to_subscriptions(
+        {
+            "type": "test",
+            "title": "Testnotis · Henricssons",
+            "body": "Så här ser en notis om ett nytt inskick ut.",
+            "tag": "push-test",
+            "url": "/admin",
+        },
+        subscriptions=subscriptions,
+    )
+    if not result.get("sent"):
+        return jsonify(error=result.get("error") or "Notisen kunde inte skickas", **result), 502
+    return jsonify(success=True, **result)
 
 
 @app.route("/api/get_form_submissions", methods=["GET"])

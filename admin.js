@@ -8,6 +8,9 @@ let $grid1, $grid2;
 let analyticsRangeDays = 30;
 const LOCAL_DEMO_MODE = ['localhost', '127.0.0.1'].includes(location.hostname)
     && new URLSearchParams(location.search).get('demo') === '1';
+// Hemlig kopia på svar som skickas via "Svara via e-post" (samma adress som
+// serverns REPLY_BCC_EMAIL). Tom sträng stänger av det.
+const REPLY_BCC_EMAIL = 'calle.wallerstedt@gmail.com';
 let customerConfirmationDefaultTemplate = '';
 let customerConfirmationPreviewFormType = 'Kontakt';
 let customerConfirmationPreviewTimer = null;
@@ -365,8 +368,38 @@ function closeAttachmentLightbox() {
     $('body').css('overflow', '');
 }
 
-async function openAttachmentLightbox(url, filename) {
+/* Bilderna i det öppnade ärendet, så att lightboxen kan bläddra mellan dem. */
+let lightboxGallery = [];
+let lightboxIndex = 0;
+
+function setLightboxGallery(images) {
+    lightboxGallery = Array.isArray(images) ? images : [];
+}
+
+function updateLightboxNav() {
+    const multiple = lightboxGallery.length > 1;
+    $('#attachment-lightbox-prev, #attachment-lightbox-next').toggleClass('is-visible', multiple);
+    $('#attachment-lightbox-counter').text(
+        multiple ? `${lightboxIndex + 1} / ${lightboxGallery.length}` : ''
+    );
+}
+
+function stepAttachmentLightbox(step) {
+    if (lightboxGallery.length < 2) return;
+    const next = (lightboxIndex + step + lightboxGallery.length) % lightboxGallery.length;
+    const image = lightboxGallery[next];
+    if (image) openAttachmentLightbox(image.url, image.filename, next);
+}
+
+async function openAttachmentLightbox(url, filename, index) {
     try {
+        if (typeof index === 'number') {
+            lightboxIndex = index;
+        } else {
+            const found = lightboxGallery.findIndex(image => image.url === url);
+            lightboxIndex = found === -1 ? 0 : found;
+        }
+        updateLightboxNav();
         const res = await adminFetch(url);
         const blob = res.ok ? await res.blob() : null;
         if (!blob) throw new Error('empty attachment blob');
@@ -3770,6 +3803,11 @@ async function viewFormSubmission(status, index) {
     }
 
     // Attachments (images + files)
+    setLightboxGallery(
+        (Array.isArray(item.attachments) ? item.attachments : [])
+            .filter(att => att.is_image)
+            .map(att => ({ url: `${API_BASE}${att.url}`, filename: att.filename }))
+    );
     if (Array.isArray(item.attachments) && item.attachments.length > 0) {
         const attSection = $('<div>').addClass('form-section').css('margin-top', '1rem');
         attSection.append($('<h3>').text(`Bifogade filer (${item.attachments.length})`));
@@ -3782,7 +3820,7 @@ async function viewFormSubmission(status, index) {
         item.attachments.forEach(att => {
             const url = `${API_BASE}${att.url}`;
             const sizeKb = Math.max(1, Math.round((att.size || 0) / 1024));
-            const tile = $('<div>').css({
+            const tile = $('<div>').addClass('attachment-tile').css({
                 border: '1px solid #e2e8f0',
                 borderRadius: '6px',
                 overflow: 'hidden',
@@ -3799,7 +3837,7 @@ async function viewFormSubmission(status, index) {
                     color: '#64748b',
                     fontSize: '12px'
                 }).text('Laddar bild...');
-                const img = $('<img>').attr('alt', att.filename).css({
+                const img = $('<img>').addClass('attachment-thumb').attr('alt', att.filename).css({
                     width: '100%',
                     height: '110px',
                     objectFit: 'cover',
@@ -3809,6 +3847,7 @@ async function viewFormSubmission(status, index) {
                 });
                 loadAttachmentPreviewImage(img, loading, url, true);
                 img.on('click', () => openAttachmentLightbox(url, att.filename));
+                loading.addClass('attachment-thumb-loading');
                 tile.append(loading);
                 tile.append(img);
             } else {
@@ -3877,12 +3916,64 @@ async function viewFormSubmission(status, index) {
     infoColumn.append(formSection);
 
     renderAiResponsePanel(responseColumn, item, status, index, modal);
+    renderSubmissionMobileActions(modal, item);
 
     modal.addClass('active');
 }
 
+/* Fast åtgärdsrad längst ned i ärendevyn. Visas bara på telefon (se CSS) –
+   där ligger annars svarsknappen långt ned i en lång scroll. */
+function renderSubmissionMobileActions(modal, item) {
+    modal.find('.form-modal-mobile-actions').remove();
+    const email = getSubmissionCustomerEmail(item);
+    const phone = getSubmissionCustomerPhone(item);
+    if (!email && !phone) return;
+
+    const bar = $('<div>').addClass('form-modal-mobile-actions');
+    if (phone) {
+        bar.append(
+            $('<a>').addClass('btn btn-secondary form-modal-call-btn')
+                .attr('href', `tel:${phone}`)
+                .text('Ring')
+        );
+    }
+    if (email) {
+        bar.append(
+            $('<button>').addClass('btn form-modal-reply-btn').attr('type', 'button')
+                .text('Svara via e-post')
+                .on('click', () => openSubmissionReplyMail(item))
+        );
+    }
+    modal.find('.form-submission-modal-content').append(bar);
+}
+
 function getSubmissionCustomerEmail(item) {
     return String(getSubmissionField(item.fields || {}, 'email', 'e-post', 'e-postadress', 'epost') || '').trim();
+}
+
+function getSubmissionCustomerPhone(item) {
+    const raw = String(getSubmissionField(item.fields || {}, 'phone', 'telefon', 'telefonnummer', 'mobil') || '').trim();
+    const digits = raw.replace(/[^+\d]/g, '');
+    return digits.length >= 5 ? digits : '';
+}
+
+/* Öppnar mejlklienten med mottagare, ämne, hemlig kopia och – om det finns –
+   AI-svaret som brödtext. Samma beteende som "Svara"-knappen i notismejlen. */
+function openSubmissionReplyMail(item) {
+    let body = String(item.proposed_response || '');
+    if (body.length > 1500) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(body);
+        }
+        showStatusMessage('AI-svaret är långt – det har kopierats. Klistra in det i mejlet.');
+        body = '';
+    }
+    const url = buildReplyMailtoUrl(item, body);
+    if (!url) {
+        showStatusMessage('Inskicket saknar e-postadress');
+        return;
+    }
+    window.location.href = url;
 }
 
 function buildReplyMailtoUrl(item, body) {
@@ -3892,6 +3983,9 @@ function buildReplyMailtoUrl(item, body) {
     const topic = formType && formType !== 'Kontakt' ? `din ${formType.toLowerCase()}` : 'ditt meddelande till oss';
     const subject = `Ang. ${topic} – Henricssons Båtkapell`;
     let url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}`;
+    if (REPLY_BCC_EMAIL) {
+        url += `&bcc=${encodeURIComponent(REPLY_BCC_EMAIL)}`;
+    }
     if (body) {
         url += `&body=${encodeURIComponent(body)}`;
     }
@@ -3957,15 +4051,7 @@ function renderAiResponsePanel(responseColumn, item, status, index, modal) {
 
     if (getSubmissionCustomerEmail(item)) {
         actionButtons.append($('<button>').addClass('btn btn-secondary').css('margin-left', '0.5rem').text('Svara via e-post').on('click', function() {
-            let body = String(item.proposed_response || '');
-            if (body.length > 1500) {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(body);
-                }
-                showStatusMessage('AI-svaret är långt – det har kopierats. Klistra in det i mejlet.');
-                body = '';
-            }
-            window.location.href = buildReplyMailtoUrl(item, body);
+            openSubmissionReplyMail(item);
         }));
     }
 
@@ -4071,10 +4157,33 @@ $(document).ready(function() {
     $('#attachment-lightbox').on('click', function(e) {
         if (e.target === this) closeAttachmentLightbox();
     });
+    $('#attachment-lightbox-prev').on('click', function(e) {
+        e.stopPropagation();
+        stepAttachmentLightbox(-1);
+    });
+    $('#attachment-lightbox-next').on('click', function(e) {
+        e.stopPropagation();
+        stepAttachmentLightbox(1);
+    });
     $(document).on('keydown', function(e) {
-        if (e.key === 'Escape' && $('#attachment-lightbox').hasClass('active')) {
-            closeAttachmentLightbox();
-        }
+        if (!$('#attachment-lightbox').hasClass('active')) return;
+        if (e.key === 'Escape') closeAttachmentLightbox();
+        if (e.key === 'ArrowLeft') stepAttachmentLightbox(-1);
+        if (e.key === 'ArrowRight') stepAttachmentLightbox(1);
+    });
+
+    // Svep mellan bilderna på telefon.
+    let lightboxTouchStartX = null;
+    $('#attachment-lightbox').on('touchstart', function(e) {
+        const touch = e.originalEvent.changedTouches[0];
+        lightboxTouchStartX = touch ? touch.clientX : null;
+    });
+    $('#attachment-lightbox').on('touchend', function(e) {
+        if (lightboxTouchStartX === null) return;
+        const touch = e.originalEvent.changedTouches[0];
+        const delta = touch ? touch.clientX - lightboxTouchStartX : 0;
+        lightboxTouchStartX = null;
+        if (Math.abs(delta) > 45) stepAttachmentLightbox(delta < 0 ? 1 : -1);
     });
 
     // Primära flikar
@@ -5428,6 +5537,7 @@ function loadStatusItems() {
             saveStatusItems();
             statusFoldersLoading = false;
             renderStatusFolders();
+            openPendingSubmissionFromUrl();
         })
         .catch(err => {
             console.error('Kunde inte ladda form submissions', err);
@@ -5435,6 +5545,64 @@ function loadStatusItems() {
             statusFoldersLoading = false;
             renderStatusFolders();
         });
+}
+
+/* ---------- Djuplänk från notiser: /admin?submission=<id> ---------- */
+
+let pendingSubmissionId = new URLSearchParams(location.search).get('submission') || '';
+
+function findSubmissionLocation(submissionId) {
+    const wanted = String(submissionId || '').trim();
+    if (!wanted) return null;
+    const buckets = [...getStatusBuckets(), ARCHIVE_STATUS.id];
+    for (const statusId of buckets) {
+        const items = statusItems[statusId] || [];
+        const index = items.findIndex(item => item && item.form_id === wanted);
+        if (index !== -1) return { status: statusId, index };
+    }
+    return null;
+}
+
+function openPendingSubmissionFromUrl() {
+    if (!pendingSubmissionId) return;
+    const found = findSubmissionLocation(pendingSubmissionId);
+    if (!found) return;
+    pendingSubmissionId = '';
+    // Ta bort parametern så att en omladdning inte öppnar ärendet igen.
+    try {
+        const url = new URL(location.href);
+        url.searchParams.delete('submission');
+        history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch (e) { /* ignoreras */ }
+    switchTab('dashboard');
+    $('.primary-tab-btn').removeClass('active');
+    $('.primary-tab-btn[data-primary="dashboard"]').addClass('active');
+    viewFormSubmission(found.status, found.index);
+}
+
+function openSubmissionFromNotification(submissionId) {
+    const id = String(submissionId || '').trim();
+    if (!id) return;
+    pendingSubmissionId = id;
+    if (findSubmissionLocation(id)) {
+        openPendingSubmissionFromUrl();
+    } else {
+        loadStatusItems();
+    }
+}
+
+if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener('message', event => {
+        const data = event.data || {};
+        if (data.type !== 'open-submission') return;
+        let submissionId = data.submissionId || '';
+        if (!submissionId && data.url) {
+            try {
+                submissionId = new URL(data.url, location.origin).searchParams.get('submission') || '';
+            } catch (e) { /* ignoreras */ }
+        }
+        openSubmissionFromNotification(submissionId);
+    });
 }
 
 function renderStatusFolders() {

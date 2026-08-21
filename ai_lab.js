@@ -17,6 +17,7 @@
         inbox: { eyebrow: "AI OPERATIONS", title: "Inkommande förfrågningar" },
         tv: { eyebrow: "FACTORY BROADCAST", title: "Live Order TV" },
         workspace: { eyebrow: "DRY RUN WORKSPACE", title: "Agentstudio" },
+        notifications: { eyebrow: "EXPERIMENT", title: "Notiser" },
         settings: { eyebrow: "SYSTEM CONTROL", title: "AI Lab inställningar" },
     };
 

@@ -525,3 +525,28 @@ button { color: inherit; }
     .quote-watermark { color: rgba(190,50,50,.07) !important; }
     @page { size: A4 portrait; margin: 0; }
 }
+
+/* ================= NOTISER (PWA-PUSH) ================= */
+.push-status { display: grid; gap: 9px; margin-bottom: 16px; }
+.push-status-row { display: grid; grid-template-columns: 30px 1fr; align-items: start; gap: 11px; padding: 12px 13px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(255,255,255,.7); }
+.push-status-mark { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; color: #6a7480; background: #e9edef; font-size: 9px; font-weight: 800; }
+.push-status-row.is-ok .push-status-mark { color: #1d744e; background: var(--green-soft); }
+.push-status-row.is-warn .push-status-mark { color: #74581e; background: var(--gold-soft); }
+.push-status-row strong { display: block; font: 700 12px Manrope, sans-serif; }
+.push-status-row small { display: block; margin-top: 3px; color: #8b969e; font-size: 9px; line-height: 1.5; }
+.push-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.push-hint { margin: 13px 0 0; color: #8b969e; font-size: 9px; line-height: 1.6; }
+.push-toggle { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 11px; font-weight: 700; cursor: pointer; }
+.push-toggle input, .push-checkbox input { width: 18px; height: 18px; accent-color: var(--navy-900); }
+.push-types { display: grid; gap: 8px; }
+.push-checkbox { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.7); font-size: 10px; font-weight: 600; cursor: pointer; }
+.push-devices { display: grid; gap: 8px; }
+.push-device { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.7); }
+.push-device strong { display: block; font: 700 11px Manrope, sans-serif; }
+.push-device small { display: block; margin-top: 2px; color: #8b969e; font-size: 9px; }
+.push-empty { margin: 0; color: #8b969e; font-size: 10px; }
+
+/* Topbarens ghost-knappar döljs på små skärmar – panelens knappar behövs
+   däremot just där, eftersom notiserna används på telefonen. */
+.push-actions .ghost-button:not([hidden]),
+.push-device .ghost-button:not([hidden]) { display: inline-flex !important; align-items: center; }

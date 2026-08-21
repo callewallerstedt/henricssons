@@ -88,3 +88,58 @@ self.addEventListener('fetch', (event) => {
 
     // Allt annat (admin.js, API-anrop, bilder) hanteras av webbläsaren som vanligt.
 });
+
+/* ---------------- Notiser om nya inskick ----------------
+ * Nyttolasten kommer från /api/push/* och innehåller kundens namn,
+ * formulärtyp och en förhandsvisning av meddelandet. url pekar på
+ * inskicket så att en tryckning öppnar rätt ärende direkt.
+ */
+self.addEventListener('push', (event) => {
+    let payload = {};
+    try {
+        payload = event.data ? event.data.json() : {};
+    } catch (err) {
+        payload = { title: 'Nytt inskick', body: event.data ? event.data.text() : '' };
+    }
+
+    const title = payload.title || 'Nytt inskick';
+    const options = {
+        body: payload.body || '',
+        tag: payload.tag || 'henricssons-notis',
+        renotify: true,
+        icon: '/assets/pwa/icon-192.png',
+        badge: '/assets/pwa/icon-192.png',
+        timestamp: Date.parse(payload.timestamp || '') || Date.now(),
+        data: {
+            url: payload.url || '/admin',
+            submissionId: payload.submission_id || '',
+        },
+    };
+    if (payload.image) options.image = payload.image;
+    if (payload.type === 'submission') {
+        options.actions = [{ action: 'open', title: 'Öppna inskicket' }];
+    }
+
+    event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const target = (event.notification.data && event.notification.data.url) || '/admin';
+    const targetUrl = new URL(target, self.location.origin).href;
+
+    event.waitUntil((async () => {
+        const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of clientList) {
+            if (client.url.indexOf('/admin') !== -1 && 'focus' in client) {
+                await client.focus();
+                // Panelen är redan öppen – be den visa rätt inskick utan omladdning.
+                if ('postMessage' in client) {
+                    client.postMessage({ type: 'open-submission', url: targetUrl });
+                }
+                return;
+            }
+        }
+        if (self.clients.openWindow) await self.clients.openWindow(targetUrl);
+    })());
+});
