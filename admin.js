@@ -2866,20 +2866,26 @@ function renderDashboardStats() {
     if (signature === dashboardStatsSignature) return;
     dashboardStatsSignature = signature;
     row.empty();
+    // shortLabel visas i den kompakta mobilvyn (se .stats-row i admin.html).
+    // key styr vilka kort som får plats på telefon – bara today/unread/week.
     const cards = [
-        { label: 'Nya inskick idag', value: stats.today, hint: stats.todayHint, className: '' },
-        { label: 'Senaste 7 dagar', value: stats.lastSevenDays, hint: 'Alla statusmappar', className: 'is-warning' },
-        { label: 'Snitt per dag', value: stats.average, hint: 'Senaste 7 dagarna', className: 'is-info' },
-        { label: 'Olästa inskick', value: stats.unread, hint: 'Behöver uppmärksamhet', className: 'is-success' },
-        { label: 'Veckans toppdag', value: stats.busiestDay, hint: `${stats.busiestDayCount} nya senaste 7 dagarna`, className: '', text: true }
+        { key: 'today', label: 'Nya inskick idag', shortLabel: 'Idag', value: stats.today, hint: stats.todayHint, className: '' },
+        { key: 'week', label: 'Senaste 7 dagar', shortLabel: '7 dagar', value: stats.lastSevenDays, hint: 'Alla statusmappar', className: 'is-warning' },
+        { key: 'average', label: 'Snitt per dag', shortLabel: 'Snitt', value: stats.average, hint: 'Senaste 7 dagarna', className: 'is-info' },
+        { key: 'unread', label: 'Olästa inskick', shortLabel: 'Olästa', value: stats.unread, hint: 'Behöver uppmärksamhet', className: 'is-success' },
+        { key: 'busiest', label: 'Veckans toppdag', shortLabel: 'Toppdag', value: stats.busiestDay, hint: `${stats.busiestDayCount} nya senaste 7 dagarna`, className: '', text: true }
     ];
     cards.forEach(cardData => {
-        const card = $('<div>').addClass('stat-card');
+        const card = $('<div>').addClass('stat-card').attr('data-stat', cardData.key);
         if (cardData.className) card.addClass(cardData.className);
         const value = $('<div>').addClass('stat-value').text(cardData.value);
         if (cardData.text) value.addClass('stat-value-text');
+        const label = $('<div>').addClass('stat-label').append(
+            $('<span>').addClass('stat-label-full').text(cardData.label),
+            $('<span>').addClass('stat-label-short').text(cardData.shortLabel)
+        );
         card.append(
-            $('<div>').addClass('stat-label').text(cardData.label),
+            label,
             value,
             $('<div>').addClass('stat-hint').text(cardData.hint)
         );
