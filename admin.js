@@ -234,6 +234,7 @@ const SUBMISSION_FIELD_LABELS = {
     mobil: 'Mobilnummer',
     boat_year: 'Årsmodell',
     arsmodell: 'Årsmodell',
+    hull_number: 'Skrovnummer',
     home_port: 'Hemmahamn + Ort',
     hemmahamn: 'Hemmahamn + Ort',
     old_canopy: 'Tillverkare av befintligt kapell',
@@ -3771,7 +3772,7 @@ async function viewFormSubmission(status, index) {
                 'e_post', 'e_postadress', 'epost', 'email',
                 'telefon', 'telefonnummer', 'phone', 'mobil',
                 'tillverkare', 'manufacturer', 'modell', 'model', 'batmodell', 'boat_model', 'boat_brand',
-                'arsmodell', 'boat_year', 'hemmahamn', 'home_port'
+                'arsmodell', 'boat_year', 'hull_number', 'hemmahamn', 'home_port'
             ];
             const idx = order.indexOf(nk);
             if (idx >= 0) return idx;

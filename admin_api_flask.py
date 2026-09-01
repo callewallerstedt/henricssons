@@ -3976,6 +3976,7 @@ FIELD_LABELS_SV: Dict[str, str] = {
     "manufacturer": "Tillverkare",
     "model": "Modell",
     "boat_year": "Årsmodell",
+    "hull_number": "Skrovnummer",
     "home_port": "Hemmahamn + Ort",
     "old_canopy": "Tillverkare av befintligt kapell",
     "wants_cover": "Önskar kapell",
@@ -4002,7 +4003,7 @@ NOTIFICATION_FORM_LABELS_SV: Dict[str, str] = {
 
 FIELD_ORDER = [
     "name", "email", "phone", "address", "postal_code", "city",
-    "boat_brand", "boat_model", "boat_year", "home_port",
+    "boat_brand", "boat_model", "boat_year", "hull_number", "home_port",
     "wants_cover", "wants_fender_socks", "size", "quantity",
     "subject", "message",
 ]
@@ -4457,6 +4458,7 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
         "manufacturer",
         "model",
         "boat_year",
+        "hull_number",
         "home_port",
         "old_canopy",
         "quantity",
