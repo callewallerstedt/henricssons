@@ -68,6 +68,16 @@
         .hb-premium .hb-item:hover img.is-placeholder-image {
             transform: none;
         }
+        .hb-premium .hb-filter-btn.is-supplier:not(.active) { border-color: var(--brass); color: var(--brass); }
+        .hb-supplier-intro { margin: -1rem auto 2rem; max-width: 760px; text-align: center; }
+        .hb-supplier-intro h2 { font-size: clamp(1.4rem, 3vw, 2rem); margin: 0 0 0.4rem; }
+        .hb-supplier-intro p { margin: 0 0 1rem; color: var(--muted); line-height: 1.6; }
+        .hb-supplier-brands { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+        .hb-supplier-brands .hb-filter-btn { padding: 0.4rem 0.9rem; font-size: 0.74rem; }
+        .hb-item .caption .hb-item-sub { margin: -0.35rem 0 0.7rem; color: var(--muted); font-size: 0.8rem; line-height: 1.45; }
+        @media (max-width: 600px) {
+            .hb-supplier-intro { margin: -0.5rem auto 1.5rem; }
+        }
         .hb-gallery-loading {
             grid-column: 1 / -1;
             min-height: 220px;
@@ -185,6 +195,7 @@
                 <button type="button" onclick="bilderexClearSearch()">Rensa</button>
             </form>
             <div class="hb-filters" id="bilderex-filters"></div>
+            <div class="hb-supplier-intro" id="bilderex-supplier-intro" hidden></div>
             <div class="hb-item-grid" id="bilderex-gallery">
                 <div class="hb-gallery-loading"><span class="hb-gallery-spinner" aria-hidden="true"></span><span>Laddar exempel...</span></div>
             </div>
@@ -297,6 +308,10 @@
     <script>
         var bilderexData = [];
         var extrasData = {};
+        var supplierData = null;
+        const SUPPLIER_KEY = 'leverantorskapell';
+        const SUPPLIER_TITLE = 'Hamnkapell och stolshuvar direkt fr\u00e5n leverant\u00f6r';
+        let bilderexSupplierBrand = '';
         let bilderexModalIndex = 0;
         let bilderexModalItem = null;
         let bilderexFilteredItems = [];
@@ -425,7 +440,8 @@
                 item.variant,
                 item.leverans,
                 item.beskrivning,
-                item.slug
+                item.slug,
+                item.searchExtra
             ].filter(Boolean).join(' '));
             const compactSearchable = searchable.replace(/\s+/g, '');
             const compactQuery = normalizedQuery.replace(/\s+/g, '');
@@ -464,6 +480,27 @@
                     });
                 });
             }
+            // Leverant\u00f6rsartiklarna ligger i en egen kategori och blandas inte in
+            // under "Visa alla" - de hittas via sin ruta eller via s\u00f6k.
+            const supplierProducts = supplierData && Array.isArray(supplierData.products) ? supplierData.products : [];
+            supplierProducts.forEach(product => {
+                bilderexData.push({
+                    namn: product.model,
+                    tillverkare: product.brand,
+                    brands: product.brands || [product.brand],
+                    kategori: product.product_type,
+                    kategoriKey: SUPPLIER_KEY,
+                    isSupplier: true,
+                    href: `${API_BASE}${product.href}`,
+                    sub: [product.model_year, product.variant].filter(Boolean).join(' \u00b7 '),
+                    slug: product.slug,
+                    images: product.image_url ? [normalizeImageUrl(product.image_url)] : [`${API_BASE}/logo.png`],
+                    variant: product.variant || '',
+                    leverans: product.delivery_time || '',
+                    beskrivning: product.description || '',
+                    searchExtra: [product.article_no, product.model_year, (product.brands || []).join(' '), 'leverant\u00f6r hamnkapell stolshuvar'].join(' ')
+                });
+            });
             bilderexData.forEach((obj, i) => { obj._idx = i; });
         }
 
@@ -474,7 +511,8 @@
             { key: 'b\u00e5tstol', label: 'B\u00e5tstolar & Dynor' },
             { key: 'f\u00e4rgprover', label: 'V\u00e4vprover \u00f6vriga' },
             { key: 'specials\u00f6mnadskr\u00e4ddarsytt', label: 'Specials\u00f6mnad & Skr\u00e4ddarsytt' },
-            { key: 'sunbrella', label: 'Sunbrella Plus Kollektion v\u00e4vprover' }
+            { key: 'sunbrella', label: 'Sunbrella Plus Kollektion v\u00e4vprover' },
+            { key: SUPPLIER_KEY, label: SUPPLIER_TITLE }
         ];
 
         function bilderexFilterFromHash() {
@@ -626,10 +664,11 @@
             filters.innerHTML = '';
             bilderexKategorier.forEach(cat => {
                 const btn = document.createElement('button');
-                btn.className = 'hb-filter-btn' + (bilderexCurrentFilter === cat.key ? ' active' : '');
+                btn.className = 'hb-filter-btn' + (bilderexCurrentFilter === cat.key ? ' active' : '') + (cat.key === SUPPLIER_KEY ? ' is-supplier' : '');
                 btn.textContent = cat.label;
                 btn.onclick = () => {
                     bilderexCurrentFilter = cat.key;
+                    bilderexSupplierBrand = '';
                     const nextHash = cat.key === 'all' ? '' : `#${encodeURIComponent(cat.key)}`;
                     if (window.location.hash !== nextHash) {
                         history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
@@ -648,12 +687,47 @@
             let items = bilderexData;
             if (bilderexCurrentFilter !== 'all') {
                 items = items.filter(item => (item.kategoriKey || '').toLowerCase() === bilderexCurrentFilter);
+            } else if (!search) {
+                items = items.filter(item => !item.isSupplier);
+            }
+            if (bilderexCurrentFilter === SUPPLIER_KEY && bilderexSupplierBrand) {
+                items = items.filter(item => (item.brands || []).includes(bilderexSupplierBrand));
             }
             if (search) {
                 items = items.filter(item => bilderexMatchesSearch(item, search));
             }
+            bilderexRenderSupplierIntro();
             bilderexRenderGallery(items);
             bilderexRenderFilters();
+        }
+
+        function bilderexRenderSupplierIntro() {
+            const intro = document.getElementById('bilderex-supplier-intro');
+            if (!intro) return;
+            if (bilderexCurrentFilter !== SUPPLIER_KEY) {
+                intro.hidden = true;
+                intro.innerHTML = '';
+                return;
+            }
+            const brands = supplierData && Array.isArray(supplierData.brands) ? supplierData.brands : [];
+            intro.hidden = false;
+            intro.innerHTML = `
+                <h2>${escapeHtml(SUPPLIER_TITLE)}</h2>
+                <p>F\u00e4rdiga hamnkapell, konsol\u00f6verdrag och stol\u00f6verdrag till ${escapeHtml(brands.join(', ').replace(/, ([^,]*)$/, ' och $1'))}. V\u00e4lj din modell och skicka en best\u00e4llning, s\u00e5 f\u00e5r du en offert med pris och leveranstid.</p>
+                <div class="hb-supplier-brands"></div>
+            `;
+            const chips = intro.querySelector('.hb-supplier-brands');
+            [''].concat(brands).forEach(brand => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'hb-filter-btn' + (bilderexSupplierBrand === brand ? ' active' : '');
+                chip.textContent = brand || 'Alla m\u00e4rken';
+                chip.onclick = () => {
+                    bilderexSupplierBrand = brand;
+                    bilderexApplyFilter();
+                };
+                chips.appendChild(chip);
+            });
         }
 
         window.addEventListener('hashchange', () => {
@@ -695,8 +769,10 @@
                 const safeNamn = escapeHtml(item.namn);
                 const safeTillverkare = escapeHtml(item.tillverkare);
                 const safeKategori = escapeHtml(item.kategori || '');
-                const examplePath = buildExamplePath(item);
+                const examplePath = item.href || buildExamplePath(item);
                 const safeExamplePath = escapeHtml(examplePath);
+                const safeSub = escapeHtml(item.sub || '');
+                const readMoreLabel = item.isSupplier ? 'Visa &amp; best&auml;ll' : 'L&auml;s exempel';
                 const loading = i === 0 ? 'eager' : 'lazy';
                 const priority = i === 0 ? 'high' : 'low';
                 div.innerHTML = `
@@ -707,8 +783,9 @@
                         <div class="cat">${safeKategori}</div>
                         <h3><a href="${safeExamplePath}">${safeTillverkare}</a></h3>
                         <p class="model"><a href="${safeExamplePath}">${safeNamn}</a></p>
+                        ${safeSub ? `<p class="hb-item-sub">${safeSub}</p>` : ''}
                         <div class="hb-item-actions">
-                            <a href="${safeExamplePath}" class="read-more">L&auml;s exempel</a>
+                            <a href="${safeExamplePath}" class="read-more">${readMoreLabel}</a>
                         </div>
                     </div>
                 `;
@@ -773,7 +850,7 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             bilderexInitModal();
-            loadExtrasData();
+            loadSupplierProducts().finally(loadExtrasData);
             setInterval(() => {
                 if (!document.hidden) loadExtrasData();
             }, 300000);
@@ -800,6 +877,13 @@
                     window.bilderexInitialized = true;
                 }
             });
+        }
+
+        function loadSupplierProducts() {
+            return fetch(`${API_BASE}/api/supplier_products`, { cache: 'no-cache' })
+                .then(r => r.ok ? r.json() : null)
+                .then(json => { supplierData = json && Array.isArray(json.products) ? json : null; })
+                .catch(() => { supplierData = null; });
         }
 
         function debounce(fn, wait) {

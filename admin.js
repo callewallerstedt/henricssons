@@ -235,6 +235,8 @@ const SUBMISSION_FIELD_LABELS = {
     boat_year: 'Årsmodell',
     arsmodell: 'Årsmodell',
     hull_number: 'Skrovnummer',
+    product: 'Artikel',
+    article_no: 'Artikelnummer',
     home_port: 'Hemmahamn + Ort',
     hemmahamn: 'Hemmahamn + Ort',
     old_canopy: 'Tillverkare av befintligt kapell',
@@ -525,6 +527,7 @@ const SUBMISSION_ROUTE_TYPES = [
     { key: 'Kapellforfragan', label: 'Kapellf\u00f6rfr\u00e5gan' },
     { key: 'Fenderforfragan', label: 'Fenderf\u00f6rfr\u00e5gan' },
     { key: 'Dynsatsforfragan', label: 'Dynsatsf\u00f6rfr\u00e5gan' },
+    { key: 'Leverantorsbestallning', label: 'Leverant\u00f6rsbest\u00e4llning' },
     { key: 'Kontakt', label: 'Kontakt' }
 ];
 
@@ -1202,6 +1205,7 @@ async function loadAnalyticsSummary(days = analyticsRangeDays) {
 
 function switchTab(tab){
     activeTab = tab;
+    $('#supplier-section').hide();
     $('.tab-btn').removeClass('active');
     $(`.tab-btn[data-tab="${tab}"]`).addClass('active');
     $('#settings-section').removeClass('active');
@@ -1333,6 +1337,20 @@ function switchTab(tab){
         $('#admin-tabs').hide();
         $('#extras-search').hide();
         loadDynsatser();
+    } else if(tab==='supplier'){
+        $('#dashboard-section').removeClass('active');
+        $('#calendar-section').removeClass('active');
+        $('#texts-section').removeClass('active');
+        $('#advanced-section').removeClass('active');
+        $('#boats-section').hide();
+        $('#extras-section').hide();
+        $('#tempproducts-section').hide();
+        $('#dynsatser-section').hide();
+        $('#supplier-section').show();
+        $('.quicksearch').hide();
+        $('#admin-tabs').hide();
+        $('#extras-search').hide();
+        loadSupplierProducts();
     } else {
         $('#dashboard-section').removeClass('active');
         $('#calendar-section').removeClass('active');
@@ -3803,6 +3821,9 @@ async function viewFormSubmission(status, index) {
         formSection.append(fieldsList);
     }
 
+    const offerPanel = buildSupplierOfferPanel(item);
+    if (offerPanel) formSection.append(offerPanel);
+
     // Attachments (images + files)
     setLightboxGallery(
         (Array.isArray(item.attachments) ? item.attachments : [])
@@ -3991,6 +4012,40 @@ function buildReplyMailtoUrl(item, body) {
         url += `&body=${encodeURIComponent(body)}`;
     }
     return url;
+}
+
+/* Leverant\u00f6rsbest\u00e4llningar: servern har lagt en f\u00e4rdig offert (med pris) i
+   dolda __offert-f\u00e4lt. H\u00e4r kan den justeras och skickas med ett klick. */
+function buildSupplierOfferPanel(item) {
+    const fields = item && item.fields ? item.fields : {};
+    const offerText = String(fields.__offert_text || '');
+    const warning = String(fields.__offert_varning || '');
+    if (!offerText && !warning) return null;
+    const panel = $('<div>').addClass('offer-panel');
+    panel.append($('<h3>').text(fields.__offert_pris ? `F\u00e4rdig offert \u2013 ${fields.__offert_pris}` : 'F\u00e4rdig offert'));
+    if (warning) panel.append($('<div>').addClass('offer-warning').text(warning));
+    const textarea = $('<textarea>').val(offerText);
+    panel.append(textarea);
+    const actions = $('<div>').addClass('offer-actions');
+    const email = getSubmissionCustomerEmail(item);
+    if (email) {
+        actions.append($('<button>').addClass('btn').attr('type', 'button').text('Skicka offert via e-post').on('click', () => {
+            const body = String(textarea.val() || '');
+            const url = buildReplyMailtoUrl(item, body);
+            if (url) window.location.href = url;
+        }));
+    }
+    actions.append($('<button>').addClass('btn btn-secondary').attr('type', 'button').text('Kopiera').on('click', () => {
+        const body = String(textarea.val() || '');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(body).then(() => showStatusMessage('Offerten kopierad'));
+        }
+    }));
+    if (fields.__offert_slug) {
+        actions.append($('<a>').addClass('btn btn-secondary').attr({ href: `${API_BASE}/leverantorskapell/${encodeURIComponent(fields.__offert_slug)}`, target: '_blank', rel: 'noopener' }).text('Visa artikeln'));
+    }
+    panel.append(actions);
+    return panel;
 }
 
 function renderAiResponsePanel(responseColumn, item, status, index, modal) {
@@ -4210,6 +4265,8 @@ $(document).ready(function() {
             switchTab('tempproducts');
         } else if(prim==='dynsatser'){
             switchTab('dynsatser');
+        } else if(prim==='supplier'){
+            switchTab('supplier');
         } else {
             // Byt till "Visa alla" som standard
             const firstCat = activeExtrasKey || 'all';
@@ -4503,6 +4560,127 @@ let tempProductsCache = [];
 const tpSaveTimers = new WeakMap();
 
 function escHtml(s) { return escapeHtml(s); }
+
+let supplierProductsCache = [];
+let supplierDefaultDelivery = '';
+
+async function loadSupplierProducts() {
+    const list = document.getElementById('sp-list');
+    if (!list) return;
+    list.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Laddar...</div>';
+    try {
+        const res = await adminFetch(`${API_BASE}/api/admin/supplier_products`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        supplierProductsCache = Array.isArray(data.products) ? data.products : [];
+        supplierDefaultDelivery = data.default_delivery || '';
+    } catch (err) {
+        list.innerHTML = '<div style="padding:1rem;color:#dc2626;">Kunde inte ladda artiklarna. ' + escapeHtml(err.message || '') + '</div>';
+        return;
+    }
+    const search = document.getElementById('sp-search');
+    if (search && !search.dataset.bound) {
+        search.dataset.bound = 'true';
+        search.addEventListener('input', renderSupplierProducts);
+    }
+    renderSupplierProducts();
+}
+
+function formatSupplierPrice(value) {
+    const kronor = Math.round(Number(value) || 0);
+    return kronor ? `${kronor.toLocaleString('sv-SE')} kr` : 'Pris saknas';
+}
+
+function renderSupplierProducts() {
+    const list = document.getElementById('sp-list');
+    if (!list) return;
+    const query = String((document.getElementById('sp-search') || {}).value || '').trim().toLowerCase();
+    const items = supplierProductsCache.filter(p => !query || [p.article_no, p.model, p.brand, p.product_type, p.model_year, p.variant].join(' ').toLowerCase().includes(query));
+    list.innerHTML = '';
+    if (!items.length) {
+        list.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Inga artiklar.</div>';
+        return;
+    }
+    items.forEach(product => list.appendChild(buildSupplierProductRow(product)));
+}
+
+function buildSupplierProductRow(product) {
+    const row = document.createElement('div');
+    row.className = 'sp-row' + (product.published ? '' : ' is-hidden');
+    const img = product.image_path ? `${API_BASE}/henricssons_bilder/${product.image_path}?w=160&q=65` : `${API_BASE}/logo.png`;
+    const badges = [
+        !product.price_ore ? '<span class="sp-badge">Pris saknas</span>' : '',
+        product.replacement_article_no ? `<span class="sp-badge">Hänvisar till ${escapeHtml(product.replacement_article_no)}</span>` : '',
+        !product.published ? '<span class="sp-badge">Dold</span>' : ''
+    ].join('');
+    row.innerHTML = `
+        <div class="sp-head">
+            <img src="${escapeHtml(img)}" alt="" loading="lazy">
+            <div>
+                <div class="sp-title">${escapeHtml(product.model)} – ${escapeHtml(product.product_type)}${badges}</div>
+                <div class="sp-meta">${escapeHtml(product.article_no)} · ${escapeHtml(product.brand)}${product.model_year ? ' · ' + escapeHtml(product.model_year) : ''}${product.variant ? ' · ' + escapeHtml(product.variant) : ''}</div>
+            </div>
+            <div class="sp-price">${escapeHtml(formatSupplierPrice(product.price_sek))}</div>
+        </div>
+        <div class="sp-edit">
+            <div><label>Pris (kr, visas aldrig publikt)</label><input type="text" data-field="price_sek" inputmode="decimal"></div>
+            <div><label>Leveranstid</label><input type="text" data-field="delivery_time"></div>
+            <div><label>Modell</label><input type="text" data-field="model"></div>
+            <div><label>Produkttyp</label><input type="text" data-field="product_type"></div>
+            <div><label>Årsmodell</label><input type="text" data-field="model_year"></div>
+            <div><label>Utförande</label><input type="text" data-field="variant"></div>
+            <div><label>Artikelnummer</label><input type="text" data-field="article_no"></div>
+            <div><label>Hänvisar till artikel</label><input type="text" data-field="replacement_article_no"></div>
+            <div class="sp-wide"><label>Beskrivning</label><textarea data-field="description"></textarea></div>
+            <div class="sp-wide sp-checks">
+                <label><input type="checkbox" data-field="published"> Visas på webben</label>
+                <label><input type="checkbox" data-field="orderable"> Beställningsbar</label>
+            </div>
+            <div class="sp-wide sp-actions">
+                <button type="button" class="btn sp-save">Spara</button>
+                <a class="btn btn-secondary" href="${API_BASE}/leverantorskapell/${encodeURIComponent(product.slug)}" target="_blank" rel="noopener">Visa på webben</a>
+                <span class="sp-status" style="color:var(--text-muted);font-size:0.85rem;"></span>
+            </div>
+        </div>
+    `;
+    row.querySelectorAll('[data-field]').forEach(input => {
+        const key = input.dataset.field;
+        if (input.type === 'checkbox') input.checked = !!product[key];
+        else input.value = key === 'price_sek' ? (product.price_sek ? String(product.price_sek).replace('.', ',') : '') : (product[key] || '');
+    });
+    const delivery = row.querySelector('[data-field="delivery_time"]');
+    if (delivery) delivery.placeholder = supplierDefaultDelivery;
+    row.querySelector('.sp-head').addEventListener('click', () => row.classList.toggle('is-open'));
+    row.querySelector('.sp-save').addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        const status = row.querySelector('.sp-status');
+        const payload = {};
+        row.querySelectorAll('[data-field]').forEach(input => {
+            payload[input.dataset.field] = input.type === 'checkbox' ? input.checked : input.value;
+        });
+        button.disabled = true;
+        status.textContent = 'Sparar...';
+        try {
+            const res = await adminFetch(`${API_BASE}/api/admin/supplier_products/${product.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+            const index = supplierProductsCache.findIndex(p => p.id === product.id);
+            if (index >= 0) supplierProductsCache[index] = data;
+            const fresh = buildSupplierProductRow(data);
+            fresh.classList.add('is-open');
+            row.replaceWith(fresh);
+            showStatusMessage('Artikeln sparad');
+        } catch (err) {
+            button.disabled = false;
+            status.textContent = 'Kunde inte spara: ' + (err.message || '');
+        }
+    });
+    return row;
+}
 
 async function loadTempProducts() {
     const list = document.getElementById('tp-list');

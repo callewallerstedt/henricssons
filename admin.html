@@ -1345,6 +1345,31 @@
            (mobil) - därför auto-basis där. */
         .extras-wrapper .grid-extras { flex: 1 1 auto; min-width: 0; }
 
+        /* ================ SUPPLIER PRODUCTS ================ */
+        .sp-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+        .sp-row { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+        .sp-row.is-hidden { opacity: 0.6; }
+        .sp-head { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 0.75rem; align-items: center; padding: 0.6rem 0.75rem; cursor: pointer; }
+        .sp-head img { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; background: var(--bg); }
+        .sp-title { font-weight: 600; font-size: 0.95rem; }
+        .sp-meta { color: var(--text-muted); font-size: 0.8rem; }
+        .sp-price { font-weight: 600; white-space: nowrap; font-size: 0.9rem; }
+        .sp-badge { display: inline-block; margin-left: 0.35rem; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; background: var(--warning-soft); color: #92400e; }
+        .sp-edit { display: none; padding: 0.25rem 0.75rem 0.9rem; border-top: 1px solid var(--border); }
+        .sp-row.is-open .sp-edit { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+        .sp-edit label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin: 0.6rem 0 0.3rem; }
+        .sp-edit input[type="text"], .sp-edit textarea { width: 100%; padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.92rem; font-family: inherit; }
+        .sp-edit textarea { min-height: 110px; resize: vertical; }
+        .sp-edit .sp-wide { grid-column: 1 / -1; }
+        .sp-edit .sp-checks { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: center; }
+        .sp-edit .sp-checks label { display: inline-flex; gap: 0.4rem; align-items: center; margin: 0; text-transform: none; letter-spacing: 0; font-size: 0.9rem; color: var(--text); }
+        .sp-edit .sp-actions { display: flex; gap: 0.75rem; align-items: center; }
+        .offer-panel { margin-top: 1rem; padding: 0.9rem 1rem; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 10px; }
+        .offer-panel h3 { margin: 0 0 0.5rem; }
+        .offer-panel .offer-warning { margin-bottom: 0.6rem; padding: 0.5rem 0.7rem; background: var(--warning-soft); color: #92400e; border-radius: 6px; font-weight: 600; font-size: 0.88rem; }
+        .offer-panel textarea { width: 100%; min-height: 220px; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 0.9rem; background: var(--surface); color: var(--text); }
+        .offer-panel .offer-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.6rem; }
+
         /* ================ TEMP PRODUCTS ================ */
         .tp-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
         .tp-card {
@@ -2521,6 +2546,10 @@
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 Dynsatser
             </button>
+            <button class="primary-tab-btn" data-primary="supplier">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M21 3 13 11"/><path d="M11 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/></svg>
+                Leverantörsartiklar
+            </button>
         </div>
 
         <div class="sidebar-label">AI</div>
@@ -2583,6 +2612,7 @@
                                     <button class="form-filter-btn" data-filter="Kapellförfrågan">Kapell</button>
                                     <button class="form-filter-btn" data-filter="Fenderförfrågan">Fender</button>
                                     <button class="form-filter-btn" data-filter="Dynsatsförfrågan">Dynsats</button>
+                                    <button class="form-filter-btn" data-filter="Leverantörsbeställning">Leverantör</button>
                                     <button class="form-filter-btn" data-filter="Kontakt">Kontakt</button>
                                 </div>
                                 <button id="status-config-open-btn" class="btn-ghost" type="button">Anpassa</button>
@@ -2813,6 +2843,7 @@
                             <button type="button" class="btn-secondary customer-confirmation-preview-type" data-form-type="Kapellforfragan">Kapell</button>
                             <button type="button" class="btn-secondary customer-confirmation-preview-type" data-form-type="Fenderforfragan">Fender</button>
                             <button type="button" class="btn-secondary customer-confirmation-preview-type" data-form-type="Dynsatsforfragan">Dynsats</button>
+                            <button type="button" class="btn-secondary customer-confirmation-preview-type" data-form-type="Leverantorsbestallning">Leverant&#246;r</button>
                         </div>
                         <iframe id="customer-confirmation-preview-frame" title="F&#246;rhandsvisning kundmejl" style="width:100%; min-height:720px; border:1px solid var(--border-strong); border-radius:12px; background:#f2ede3;"></iframe>
                     </div>
@@ -2892,6 +2923,20 @@
                         Inga dynsatser ännu. Klicka på <strong>+ Ny dynsats</strong> för att lägga till.
                     </div>
                     <div id="bb-list" class="bb-list"></div>
+                </div>
+            </div>
+
+            <!-- SUPPLIER PRODUCTS -->
+            <div id="supplier-section" style="display:none;">
+                <div class="card">
+                    <h2 style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+                        <span>Hamnkapell och stolshuvar direkt från leverantör</span>
+                        <input type="search" id="sp-search" class="status-board-search" placeholder="Sök modell eller artikelnummer..." style="max-width:280px;" />
+                    </h2>
+                    <p style="color:var(--text-muted);margin-top:-0.5rem;font-size:0.92rem;">
+                        Artiklarna från leverantörens lista (havnekalesje.no). <strong>Priset visas aldrig på webben</strong> &ndash; det hamnar bara i offerten på beställningen. Tom leveranstid visar standardtexten. Texterna kom på norska och kan skrivas om här.
+                    </p>
+                    <div id="sp-list" class="sp-list"></div>
                 </div>
             </div>
 
@@ -3027,7 +3072,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260901a" defer></script>
+<script src="admin.js?v=20260922a" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle
@@ -3062,7 +3107,8 @@
         boats: { t: 'Tillverkare & modeller', s: 'Hantera båtdatabasen' },
         images: { t: 'Bilder & exempel', s: 'Galleri och kategorier' },
         tempproducts: { t: 'Tillfälliga produkter', s: 'Hantera produkter med bilder, pris och beskrivning' },
-        dynsatser: { t: 'Dynsatser', s: 'Hantera tillverkare och dynsatser med bilder på dynsatser-sidan' }
+        dynsatser: { t: 'Dynsatser', s: 'Hantera tillverkare och dynsatser med bilder på dynsatser-sidan' },
+        supplier: { t: 'Leverantörsartiklar', s: 'Hamnkapell och överdrag direkt från leverantör – pris, texter och leveranstid' }
     };
     function syncTitle(primary) {
         const t = titles[primary];

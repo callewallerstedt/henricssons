@@ -647,6 +647,64 @@ class DynManufacturer(Base):
         }
 
 
+class SupplierProduct(Base):
+    """Färdiga hamnkapell och överdrag som köps in direkt från leverantör
+    (havnekalesje.no). Hålls medvetet utanför mallregistret i boat_data.json.
+
+    Priset får aldrig lämna servern publikt: allt publikt går genom
+    to_public_dict(), som inte innehåller något pris."""
+
+    __tablename__ = "supplier_products"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    slug = Column(String, nullable=False, default="", unique=True, index=True)
+    article_no = Column(String, nullable=False, default="", index=True)  # inte unikt i leverantörens fil
+    model = Column(String, nullable=False, default="")
+    brand = Column(String, nullable=False, default="", index=True)
+    also_listed_under = Column(String, nullable=False, default="")
+    product_type = Column(String, nullable=False, default="")
+    model_year = Column(String, nullable=False, default="")
+    variant = Column(String, nullable=False, default="")
+    description = Column(Text, nullable=False, default="")
+    delivery_time = Column(String, nullable=False, default="")
+    source_url = Column(String, nullable=False, default="")
+    source_image_url = Column(String, nullable=False, default="")
+    image_path = Column(String, nullable=False, default="")
+    price_ore = Column(Integer, nullable=False, default=0)
+    orderable = Column(Boolean, nullable=False, default=True)
+    replacement_article_no = Column(String, nullable=False, default="")
+    published = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_public_dict(self) -> Dict[str, Any]:
+        return supplier_product_public_dict(self.to_admin_dict())
+
+    def to_admin_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "slug": self.slug or "",
+            "article_no": self.article_no or "",
+            "model": self.model or "",
+            "brand": self.brand or "",
+            "also_listed_under": self.also_listed_under or "",
+            "product_type": self.product_type or "",
+            "model_year": self.model_year or "",
+            "variant": self.variant or "",
+            "description": self.description or "",
+            "delivery_time": self.delivery_time or "",
+            "source_url": self.source_url or "",
+            "source_image_url": self.source_image_url or "",
+            "image_path": self.image_path or "",
+            "price_ore": int(self.price_ore or 0),
+            "orderable": bool(self.orderable),
+            "replacement_article_no": self.replacement_article_no or "",
+            "published": bool(self.published),
+            "sort_order": int(self.sort_order or 0),
+        }
+
+
 class BoatBrand(Base):
     __tablename__ = "boat_brands"
 
@@ -804,6 +862,7 @@ def init_db() -> None:
             _migrate_dyn_manufacturer_columns()
             SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
             print("Database connected.")
+            _seed_supplier_products_if_empty()
         except Exception as exc:
             print(f"Warning: database init failed, file fallback will be used: {exc}")
             engine = None
@@ -1673,7 +1732,12 @@ def build_kapell_example_href(manufacturer: str, model: str, canonical_slug: str
 def render_public_page(title: str, description: str, canonical_path: str, content_html: str, og_image: str = "/logo.png") -> str:
     canonical_url = absolute_public_url(canonical_path)
     og_image_url = og_image if og_image.startswith("http://") or og_image.startswith("https://") else absolute_public_url(og_image)
-    examples_active = canonical_path == "/bilder-och-exempel" or canonical_path.startswith("/exempel/") or canonical_path.startswith("/search")
+    examples_active = (
+        canonical_path == "/bilder-och-exempel"
+        or canonical_path.startswith("/exempel/")
+        or canonical_path.startswith("/search")
+        or canonical_path.startswith("/leverantorskapell/")
+    )
     temp_products_active = canonical_path == "/tillfalliga-produkter" or canonical_path.startswith("/tillfalliga-produkter/")
     return render_template_string(
         """<!DOCTYPE html>
@@ -2716,6 +2780,7 @@ FORM_ROUTING_TYPES: List[Tuple[str, str]] = [
     ("Kapellforfragan", "Kapellf\u00f6rfr\u00e5gan"),
     ("Fenderforfragan", "Fenderf\u00f6rfr\u00e5gan"),
     ("Dynsatsforfragan", "Dynsatsf\u00f6rfr\u00e5gan"),
+    ("Leverantorsbestallning", "Leverant\u00f6rsbest\u00e4llning"),
     ("Kontakt", "Kontakt"),
 ]
 
@@ -2982,6 +3047,9 @@ def get_openai_response(
 
 def normalize_form_type(value: str) -> str:
     lowered = (value or "").lower()
+    # Före kapell-grenen: leverantörsartiklarna är också kapell.
+    if "leverant" in lowered:
+        return "Leverantorsbestallning"
     if "dyn" in lowered or "dyna" in lowered:
         return "Dynsatsforfragan"
     if "fender" in lowered:
@@ -2993,6 +3061,8 @@ def normalize_form_type(value: str) -> str:
 
 def display_form_type(value: str) -> str:
     key = normalize_form_type(value)
+    if key == "Leverantorsbestallning":
+        return "Leverantörsbeställning"
     if key == "Kapellforfragan":
         return "Kapellförfrågan"
     if key == "Fenderforfragan":
@@ -3977,6 +4047,8 @@ FIELD_LABELS_SV: Dict[str, str] = {
     "model": "Modell",
     "boat_year": "Årsmodell",
     "hull_number": "Skrovnummer",
+    "product": "Artikel",
+    "article_no": "Artikelnummer",
     "home_port": "Hemmahamn + Ort",
     "old_canopy": "Tillverkare av befintligt kapell",
     "wants_cover": "Önskar kapell",
@@ -3991,6 +4063,7 @@ FORM_TYPE_LABELS_SV: Dict[str, str] = {
     "Kapellforfragan": "Kapellförfrågan",
     "Fenderforfragan": "Fenderförfrågan",
     "Dynsatsforfragan": "Dynsatsförfrågan",
+    "Leverantorsbestallning": "Leverantörsbeställning",
     "Kontakt": "Kontaktärende",
 }
 
@@ -3998,11 +4071,12 @@ NOTIFICATION_FORM_LABELS_SV: Dict[str, str] = {
     "Kapellforfragan": "Kapellförfrågan",
     "Fenderforfragan": "Fenderförfrågan",
     "Dynsatsforfragan": "Dynsatsförfrågan",
+    "Leverantorsbestallning": "Leverantörsbeställning",
     "Kontakt": "Kontakt",
 }
 
 FIELD_ORDER = [
-    "name", "email", "phone", "address", "postal_code", "city",
+    "name", "email", "phone", "product", "article_no", "address", "postal_code", "city",
     "boat_brand", "boat_model", "boat_year", "hull_number", "home_port",
     "wants_cover", "wants_fender_socks", "size", "quantity",
     "subject", "message",
@@ -4121,7 +4195,7 @@ def build_submission_status_actions_text(submission_id: str, current_status: str
     return "\n\n" + "\n".join(lines) + "\n"
 
 
-def build_customer_reply_mailto(form_type: str, email: str) -> str:
+def build_customer_reply_mailto(form_type: str, email: str, body: str = "") -> str:
     """Build the customer reply link used by the main email action."""
     form_label = FORM_TYPE_LABELS_SV.get(form_type, form_type)
     if form_type == "Kontakt":
@@ -4132,7 +4206,33 @@ def build_customer_reply_mailto(form_type: str, email: str) -> str:
     url = f"mailto:{quote(str(email or '').strip(), safe='@')}?subject={quote(subject)}"
     if REPLY_BCC_EMAIL:
         url += f"&bcc={quote(REPLY_BCC_EMAIL, safe='@')}"
+    if body:
+        url += f"&body={quote(body)}"
     return url
+
+
+def build_supplier_offer_html(fields: Dict[str, Any]) -> str:
+    """Den färdiga offerten i det interna notismejlet. Syns aldrig för kunden."""
+    offer_text = str(fields.get(f"{SUPPLIER_OFFER_FIELD_PREFIX}_text") or "").strip()
+    warning = str(fields.get(f"{SUPPLIER_OFFER_FIELD_PREFIX}_varning") or "").strip()
+    if not offer_text and not warning:
+        return ""
+    warning_html = (
+        "<div style='margin-bottom:10px;padding:10px 12px;background:#fdf2e9;border:1px solid #e8c9a8;"
+        f"color:#7a3e0d;font-size:13px;font-weight:700;'>{html.escape(warning)}</div>"
+        if warning else ""
+    )
+    offer_html = (
+        "<div style='padding:12px;border:1px solid #d9dee5;background:#fafafa;font-size:14px;"
+        f"line-height:1.6;color:#222831;'>{html.escape(offer_text).replace(chr(10), '<br>')}</div>"
+        if offer_text else ""
+    )
+    return (
+        "<div style='margin-top:20px;'>"
+        "<div style='font-size:12px;font-weight:700;color:#222831;margin-bottom:8px;'>"
+        "Färdig offert (internt – svarsknappen lägger in den i mejlet)</div>"
+        f"{warning_html}{offer_html}</div>"
+    )
 
 
 def build_selectable_email_value_html(email: str) -> str:
@@ -4256,7 +4356,11 @@ def build_notification_html(
     reply_block = ""
     customer_email = get_field_value(fields, "email", "e-post", "e-postadress")
     if is_valid_email_address(customer_email):
-        reply_href = build_customer_reply_mailto(form_type, customer_email)
+        reply_href = build_customer_reply_mailto(
+            form_type,
+            customer_email,
+            str(fields.get(f"{SUPPLIER_OFFER_FIELD_PREFIX}_text") or ""),
+        )
         reply_block = (
             "<div style='margin-top:20px;'>"
             f"<a href='{html.escape(reply_href)}' "
@@ -4288,6 +4392,7 @@ def build_notification_html(
         {rows_html}
       </table>
       {attachments_block}
+      {build_supplier_offer_html(fields)}
       {ai_reply_block}
       {reply_block}
       {status_actions_html}
@@ -4455,6 +4560,8 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
         return "", ""
 
     summary_keys = [
+        "product",
+        "article_no",
         "manufacturer",
         "model",
         "boat_year",
@@ -4772,6 +4879,17 @@ def build_customer_confirmation_preview_submission(form_type: str) -> Dict[str, 
                 "message": "Vi vill g\u00e4rna ha en originaln\u00e4ra dynsats i ljusgr\u00e5tt tyg.",
             },
         },
+        "Leverantorsbestallning": {
+            "form_type": "Leverant\u00f6rsbest\u00e4llning",
+            "fields": {
+                "name": "Per Lind",
+                "email": "per@example.com",
+                "phone": "070-222 33 44",
+                "product": "Yamarin 63 BR & DC \u2013 Hamnkapell (f.o.m 2019)",
+                "article_no": "YAM63BR2",
+                "home_port": "Kungsbacka",
+            },
+        },
         "Kontakt": {
             "form_type": "Kontakt",
             "fields": {
@@ -5022,6 +5140,12 @@ def send_mailgun_submission_notification(
     status_action_lines = build_submission_status_actions_text(submission_id, current_status)
     status_actions_html = build_submission_status_actions_html(submission_id, current_status)
     ai_reply_lines = ""
+    offer_text = str(fields.get(f"{SUPPLIER_OFFER_FIELD_PREFIX}_text") or "").strip()
+    offer_warning = str(fields.get(f"{SUPPLIER_OFFER_FIELD_PREFIX}_varning") or "").strip()
+    if offer_text or offer_warning:
+        ai_reply_lines = "Färdig offert (internt):\n" + "\n".join(
+            line for line in [f"OBS: {offer_warning}" if offer_warning else "", offer_text] if line
+        ) + "\n\n"
     preview_lines = "\n".join(line for line in [preview_title, preview_message] if line)
     if preview_lines:
         preview_lines += "\n\n"
@@ -5122,6 +5246,11 @@ def process_form_submission(
     if initial_status not in get_valid_submission_status_ids():
         initial_status = "nya-inskick"
     safe_fields = sanitize_fields(fields, submitted_via=submitted_via)
+    # Offertfälten sätts bara av servern, aldrig från det som klienten postar.
+    for key in [k for k in safe_fields if k.startswith(SUPPLIER_OFFER_FIELD_PREFIX)]:
+        safe_fields.pop(key, None)
+    if normalize_form_type(normalized_form_type) == "Leverantorsbestallning":
+        attach_supplier_offer(safe_fields)
     form_summary = build_form_summary(normalized_form_type, safe_fields)
     category, title = generate_submission_metadata_fallback(normalized_form_type, safe_fields)
     submission_id = f"form_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{os.urandom(4).hex()}"
@@ -7415,6 +7544,316 @@ def enrich_dyn_manufacturers(
     return result
 
 
+# ---------------------------------------------------------------------------
+# Hamnkapell och överdrag direkt från leverantör (havnekalesje.no).
+# Importeras med import_supplier_products.py. Priset visas aldrig publikt: det
+# hamnar bara i beställningens offertfält, som är dolda för kunden.
+# ---------------------------------------------------------------------------
+
+SUPPLIER_PRODUCTS_SEED_FILE = BASE_DIR / "supplier_products_seed.json"
+SUPPLIER_CATEGORY_KEY = "leverantorskapell"
+SUPPLIER_CATEGORY_TITLE = "Hamnkapell och stolshuvar direkt från leverantör"
+SUPPLIER_BRANDS = ["Yamarin", "Yamarin Cross", "Buster"]
+SUPPLIER_DEFAULT_DELIVERY = "Beställningsvara – vi bekräftar leveranstiden i offerten."
+# Leverantörens kolumn heter "Brutto ut". Bekräfta med Henricssons att det är
+# inklusive moms innan offerterna börjar gå ut.
+SUPPLIER_PRICE_VAT_NOTE = "inkl. moms"
+SUPPLIER_OFFER_FIELD_PREFIX = "__offert"
+
+# Uppdateras vid varje import. Texterna sätts bara när artikeln skapas så att
+# svenskade texter i adminpanelen inte skrivs över av leverantörens norska.
+SUPPLIER_IMPORT_ALWAYS = (
+    "article_no", "brand", "also_listed_under", "product_type", "model_year",
+    "source_url", "source_image_url", "image_path", "price_ore", "replacement_article_no",
+)
+SUPPLIER_IMPORT_ON_CREATE = ("model", "variant", "description", "sort_order", "orderable")
+SUPPLIER_ADMIN_TEXT_FIELDS = (
+    "model", "brand", "also_listed_under", "product_type", "model_year", "variant",
+    "description", "delivery_time", "replacement_article_no", "article_no",
+)
+
+
+def format_sek(ore: Any) -> str:
+    try:
+        kronor = int(round(int(ore or 0) / 100))
+    except (TypeError, ValueError):
+        return ""
+    return f"{kronor:,}".replace(",", " ") + " kr" if kronor else ""
+
+
+def supplier_product_title(product: Dict[str, Any]) -> str:
+    model = str(product.get("model") or "").strip()
+    product_type = str(product.get("product_type") or "").strip()
+    return f"{model} – {product_type}" if product_type else model
+
+
+def supplier_product_public_dict(product: Dict[str, Any]) -> Dict[str, Any]:
+    """Det enda som får lämna servern publikt. Inget pris."""
+    slug = str(product.get("slug") or "")
+    brand = str(product.get("brand") or "")
+    extra = [b.strip() for b in str(product.get("also_listed_under") or "").split(",") if b.strip()]
+    image_path = str(product.get("image_path") or "")
+    return {
+        "slug": slug,
+        "href": f"/leverantorskapell/{slug}",
+        "article_no": str(product.get("article_no") or ""),
+        "title": supplier_product_title(product),
+        "model": str(product.get("model") or ""),
+        "brand": brand,
+        "brands": [brand] + [b for b in extra if b != brand],
+        "product_type": str(product.get("product_type") or ""),
+        "model_year": str(product.get("model_year") or ""),
+        "variant": str(product.get("variant") or ""),
+        "description": str(product.get("description") or ""),
+        "delivery_time": str(product.get("delivery_time") or "") or SUPPLIER_DEFAULT_DELIVERY,
+        "image_url": image_path_to_site_url(image_path) if image_path else "",
+        "replacement_article_no": str(product.get("replacement_article_no") or ""),
+    }
+
+
+def _supplier_seed_rows() -> List[Dict[str, Any]]:
+    rows = read_json_file(SUPPLIER_PRODUCTS_SEED_FILE, [])
+    return [row for row in rows if isinstance(row, dict) and row.get("slug")] if isinstance(rows, list) else []
+
+
+def load_supplier_products(include_unpublished: bool = False) -> List[Dict[str, Any]]:
+    products: List[Dict[str, Any]] = []
+    db = get_db()
+    if db:
+        try:
+            rows = (
+                db.query(SupplierProduct)
+                .order_by(SupplierProduct.sort_order.asc(), SupplierProduct.id.asc())
+                .all()
+            )
+            products = [row.to_admin_dict() for row in rows]
+        except Exception as exc:
+            print(f"Warning: could not load supplier products: {exc}")
+        finally:
+            db.close()
+    if not products:
+        # Ingen databas (eller inte seedad än): visa importfilen som den är.
+        products = [
+            {**row, "id": None, "delivery_time": "", "published": True}
+            for row in _supplier_seed_rows()
+        ]
+    if include_unpublished:
+        return products
+    return [p for p in products if p.get("published", True)]
+
+
+def get_supplier_product_by_slug(slug: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
+    products = load_supplier_products()
+    wanted = str(slug or "").strip().lower()
+    for product in products:
+        if str(product.get("slug") or "").lower() == wanted:
+            return product, products
+    return None, products
+
+
+def _coerce_supplier_value(key: str, value: Any) -> Any:
+    if key in ("price_ore", "sort_order"):
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+    if key in ("orderable", "published"):
+        return bool(value)
+    return str(value or "").strip()
+
+
+def upsert_supplier_products(rows: List[Dict[str, Any]], commit: bool = False) -> Optional[Dict[str, Any]]:
+    db = get_db()
+    if not db:
+        return None
+    report: Dict[str, Any] = {"created": 0, "updated": 0, "unchanged": 0, "changes": []}
+    try:
+        existing = {p.slug: p for p in db.query(SupplierProduct).all()}
+        for row in rows:
+            slug = str(row.get("slug") or "").strip().lower()
+            if not slug:
+                continue
+            product = existing.get(slug)
+            if product is None:
+                report["created"] += 1
+                report["changes"].append(f"ny: {slug} ({row.get('article_no', '')})")
+                values = {
+                    key: _coerce_supplier_value(key, row.get(key))
+                    for key in SUPPLIER_IMPORT_ALWAYS + SUPPLIER_IMPORT_ON_CREATE
+                }
+                product = SupplierProduct(slug=slug, **values)
+                db.add(product)
+                existing[slug] = product
+                continue
+            diffs = []
+            for key in SUPPLIER_IMPORT_ALWAYS:
+                new_value = _coerce_supplier_value(key, row.get(key))
+                if getattr(product, key) != new_value:
+                    diffs.append(key)
+                    if key == "price_ore":
+                        report["changes"].append(
+                            f"pris {slug}: {format_sek(product.price_ore) or '0 kr'} -> {format_sek(new_value) or '0 kr'}"
+                        )
+                        # Ett pris som dyker upp (eller försvinner) styr beställningsbarheten.
+                        product.orderable = bool(new_value) and not row.get("replacement_article_no")
+                    setattr(product, key, new_value)
+            if diffs:
+                report["updated"] += 1
+                report["changes"].append(f"uppdaterad: {slug} ({', '.join(diffs)})")
+            else:
+                report["unchanged"] += 1
+        if commit:
+            db.commit()
+        else:
+            db.rollback()
+        return report
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def _seed_supplier_products_if_empty() -> None:
+    """Första uppstarten efter deploy fyller tabellen från importfilen, så att
+    ingen behöver köra importen mot produktionsdatabasen för hand."""
+    db = get_db()
+    if not db:
+        return
+    try:
+        if db.query(SupplierProduct).count():
+            return
+    finally:
+        db.close()
+    rows = _supplier_seed_rows()
+    if not rows:
+        return
+    try:
+        report = upsert_supplier_products(rows, commit=True)
+        if report:
+            print(f"Seeded {report['created']} supplier products.")
+    except Exception as exc:
+        # Två workers som seedar samtidigt krockar på slug; den ena vinner.
+        print(f"Warning: supplier product seed skipped: {exc}")
+
+
+def build_supplier_offer_text(product: Dict[str, Any], fields: Dict[str, Any]) -> str:
+    name = get_field_value(fields, "name", "namn")
+    price = format_sek(product.get("price_ore"))
+    lines = [
+        f"Hej {name}," if name else "Hej,",
+        "",
+        "Tack för din beställning. Här kommer vår offert:",
+        "",
+        f"Artikel: {supplier_product_title(product)}",
+    ]
+    if product.get("model_year"):
+        lines.append(f"Årsmodell: {product['model_year']}")
+    if product.get("variant"):
+        lines.append(f"Utförande: {product['variant']}")
+    lines.append(f"Artikelnummer: {product.get('article_no', '')}")
+    lines.append(f"Pris: {price} {SUPPLIER_PRICE_VAT_NOTE}" if price else "Pris: [FYLL I – pris saknas i leverantörslistan]")
+    lines.append(f"Leveranstid: {product.get('delivery_time') or SUPPLIER_DEFAULT_DELIVERY}")
+    lines += [
+        "",
+        "Svara på det här mejlet för att bekräfta beställningen, så lägger vi den hos leverantören.",
+        "",
+        "Vänliga hälsningar",
+        "Henricssons Båtkapell",
+        "+46 (0)31 47 18 20",
+    ]
+    return "\n".join(lines)
+
+
+def attach_supplier_offer(fields: Dict[str, str]) -> None:
+    """Lägger artikeln och en färdig offert på inskicket. Artikel och
+    artikelnummer är synliga fält (kunden får se vad den beställt); pris och
+    offerttext ligger i dolda __offert-fält som bara visas internt."""
+    slug = str(fields.pop("article", "") or "").strip().lower()
+    product, _ = get_supplier_product_by_slug(slug)
+    if not product:
+        fields[f"{SUPPLIER_OFFER_FIELD_PREFIX}_varning"] = f"Okänd artikel: {slug or '(saknas)'}"
+        return
+    title = supplier_product_title(product)
+    details = ", ".join(v for v in (product.get("model_year"), product.get("variant")) if v)
+    fields["product"] = f"{title} ({details})" if details else title
+    fields["article_no"] = str(product.get("article_no") or "")
+    fields[f"{SUPPLIER_OFFER_FIELD_PREFIX}_slug"] = str(product.get("slug") or "")
+    fields[f"{SUPPLIER_OFFER_FIELD_PREFIX}_pris"] = format_sek(product.get("price_ore"))
+    fields[f"{SUPPLIER_OFFER_FIELD_PREFIX}_text"] = build_supplier_offer_text(product, fields)
+    warnings = []
+    if not product.get("price_ore"):
+        warnings.append("Pris saknas i leverantörslistan – fyll i innan offerten skickas.")
+    if product.get("replacement_article_no"):
+        warnings.append(f"Leverantören hänvisar till artikel {product['replacement_article_no']}.")
+    if not product.get("orderable", True) and not warnings:
+        warnings.append("Artikeln är markerad som ej beställningsbar.")
+    if warnings:
+        fields[f"{SUPPLIER_OFFER_FIELD_PREFIX}_varning"] = " ".join(warnings)
+
+
+@app.route("/api/supplier_products", methods=["GET"])
+def public_supplier_products():
+    products = [supplier_product_public_dict(p) for p in load_supplier_products()]
+    return jsonify({
+        "key": SUPPLIER_CATEGORY_KEY,
+        "title": SUPPLIER_CATEGORY_TITLE,
+        "brands": SUPPLIER_BRANDS,
+        "products": products,
+    })
+
+
+@app.route("/api/admin/supplier_products", methods=["GET"])
+@admin_required
+def admin_list_supplier_products():
+    products = load_supplier_products(include_unpublished=True)
+    for product in products:
+        product["price_sek"] = round(int(product.get("price_ore") or 0) / 100, 2)
+    return jsonify({"products": products, "default_delivery": SUPPLIER_DEFAULT_DELIVERY})
+
+
+@app.route("/api/admin/supplier_products/<int:product_id>", methods=["PUT"])
+@admin_required
+def admin_update_supplier_product(product_id: int):
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Invalid payload"), 400
+    db = get_db()
+    if not db:
+        return jsonify(error="Database unavailable"), 503
+    try:
+        product = db.query(SupplierProduct).filter_by(id=product_id).first()
+        if not product:
+            return jsonify(error="Not found"), 404
+        for key in SUPPLIER_ADMIN_TEXT_FIELDS:
+            if key in payload:
+                limit = 5000 if key == "description" else 300
+                setattr(product, key, str(payload.get(key) or "").strip()[:limit])
+        for key in ("orderable", "published"):
+            if key in payload:
+                setattr(product, key, bool(payload.get(key)))
+        if "sort_order" in payload:
+            product.sort_order = _coerce_supplier_value("sort_order", payload.get("sort_order"))
+        if "price_sek" in payload:
+            try:
+                price = float(str(payload.get("price_sek") or 0).replace(" ", "").replace(",", "."))
+            except ValueError:
+                return jsonify(error="Ogiltigt pris"), 400
+            if price < 0:
+                return jsonify(error="Ogiltigt pris"), 400
+            product.price_ore = int(round(price * 100))
+        db.commit()
+        db.refresh(product)
+        data = product.to_admin_dict()
+        data["price_sek"] = round(data["price_ore"] / 100, 2)
+        return jsonify(data)
+    except Exception as exc:
+        db.rollback()
+        return jsonify(error=str(exc)), 500
+    finally:
+        db.close()
+
+
 @app.route("/api/dyn_manufacturers", methods=["GET"])
 def list_dyn_manufacturers():
     return jsonify(enrich_dyn_manufacturers())
@@ -8326,6 +8765,14 @@ def sitemap_xml():
         )
     except Exception as exc:
         print(f"sitemap: could not list temp product pages: {exc}")
+    try:
+        urls.extend(
+            absolute_public_url(f"/leverantorskapell/{product['slug']}")
+            for product in load_supplier_products()
+            if product.get("slug")
+        )
+    except Exception as exc:
+        print(f"sitemap: could not list supplier product pages: {exc}")
     xml_lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -8919,6 +9366,198 @@ def boat_brand_page(slug: str):
     )
 
 
+@app.route("/leverantorskapell", methods=["GET"])
+@app.route("/leverantorskapell/", methods=["GET"])
+def supplier_products_landing():
+    return redirect(f"/bilder-och-exempel#{SUPPLIER_CATEGORY_KEY}", code=302)
+
+
+@app.route("/leverantorskapell/<path:slug>", methods=["GET"])
+def supplier_product_page(slug: str):
+    clean_slug = slug.strip().rstrip("/")
+    product, products = get_supplier_product_by_slug(clean_slug)
+    if not product:
+        abort(404)
+    canonical_slug = str(product.get("slug") or "")
+    if clean_slug != canonical_slug:
+        return redirect(f"/leverantorskapell/{canonical_slug}", code=301)
+
+    # Allt nedan byggs från det publika urvalet: inget pris kan hamna i sidan.
+    item = supplier_product_public_dict(product)
+    esc = html.escape
+    title_text = item["title"]
+    image_url = image_variant_url(item["image_url"], 1400, 82) if item["image_url"] else absolute_public_url("/logo.png")
+    page_title = f"{title_text} - direkt från leverantör - Henricssons Båtkapell"
+    page_description = (
+        f"{title_text} ({item['article_no']}). Färdigt {item['product_type'].lower()} direkt från leverantör. "
+        "Beställ via formuläret så skickar vi en offert."
+    )[:300]
+    back_href = f"/bilder-och-exempel#{SUPPLIER_CATEGORY_KEY}"
+
+    facts = [
+        ("Artikelnummer", item["article_no"]),
+        ("Märke", " / ".join(item["brands"])),
+        ("Årsmodell", item["model_year"]),
+        ("Utförande", item["variant"]),
+        ("Leveranstid", item["delivery_time"]),
+    ]
+    facts_html = "".join(
+        f'<div class="seo-meta-block"><div class="seo-meta-label">{esc(label)}</div><p style="margin:0;">{esc(value)}</p></div>'
+        for label, value in facts if value
+    )
+
+    replacement_html = ""
+    replacement_no = item["replacement_article_no"]
+    if replacement_no:
+        replacement = next(
+            (p for p in products if str(p.get("article_no") or "").upper() == replacement_no.upper()),
+            None,
+        )
+        link = (
+            f'<a href="/leverantorskapell/{esc(replacement["slug"])}">{esc(supplier_product_title(replacement))} ({esc(replacement_no)})</a>'
+            if replacement else esc(replacement_no)
+        )
+        replacement_html = (
+            '<div class="supplier-notice">Leverantören hänvisar till en annan artikel för den här modellen: '
+            f"{link}. Skicka gärna förfrågan ändå så hjälper vi dig rätt.</div>"
+        )
+
+    related_cards: List[str] = []
+    same_model = [p for p in products if p.get("slug") != canonical_slug and p.get("model") == product.get("model")]
+    same_brand = [p for p in products if p.get("slug") != canonical_slug and p.get("brand") == product.get("brand") and p not in same_model]
+    for other in (same_model + same_brand)[:4]:
+        other_item = supplier_product_public_dict(other)
+        other_image = image_variant_url(other_item["image_url"], 520, 72) if other_item["image_url"] else "/logo.png"
+        subtitle = ", ".join(v for v in (other_item["model_year"], other_item["variant"]) if v) or other_item["article_no"]
+        related_cards.append(
+            f"""
+            <a class="seo-related-card" href="{esc(other_item['href'])}">
+                <img src="{esc(other_image)}" alt="{esc(other_item['title'])}" loading="lazy" decoding="async">
+                <div class="seo-related-copy">
+                    <strong>{esc(other_item['title'])}</strong>
+                    <span>{esc(subtitle)}</span>
+                </div>
+            </a>
+            """
+        )
+
+    content_html = f"""
+    <style>
+        .supplier-notice {{ margin: 0 0 1rem; padding: 0.9rem 1rem; background: #f7f1e6; border-left: 3px solid var(--brass); font-size: 0.95rem; line-height: 1.6; }}
+        .supplier-description {{ margin: 1.25rem 0 0; line-height: 1.75; color: #3d4a5c; white-space: pre-line; }}
+        .supplier-order h2 {{ font-size: 1.5rem; margin: 0 0 0.35rem; }}
+        .supplier-order .subtitle {{ margin: 0 0 1.1rem; color: var(--muted); font-size: 0.95rem; line-height: 1.6; }}
+        .supplier-order .hb-form-done {{ display: none; }}
+        .supplier-order .supplier-error {{ display: none; margin-top: 0.75rem; color: #9b2c2c; font-size: 0.9rem; }}
+        .supplier-main-image {{ width: 100%; height: auto; display: block; background: #eef1f4; }}
+    </style>
+    <main class="seo-page">
+        <section class="seo-hero">
+            <nav class="seo-breadcrumbs" aria-label="Brödsmulor">
+                <a href="/">Hem</a>
+                <span>/</span>
+                <a href="{esc(back_href)}">Direkt från leverantör</a>
+                <span>/</span>
+                <span>{esc(title_text)}</span>
+            </nav>
+            <span class="seo-kicker">{esc(SUPPLIER_CATEGORY_TITLE)}</span>
+            <h1>{esc(title_text)}</h1>
+        </section>
+        <section class="seo-grid">
+            <article class="seo-card">
+                <img class="supplier-main-image" src="{esc(image_url)}" alt="{esc(title_text)}" loading="eager" decoding="async" fetchpriority="high">
+                {f'<p class="supplier-description">{esc(item["description"])}</p>' if item["description"] else ''}
+            </article>
+            <aside class="seo-card">
+                <div class="seo-meta">{facts_html}</div>
+            </aside>
+        </section>
+        <section class="seo-grid" style="margin-top:2rem;">
+            <form id="supplierOrderForm" class="seo-card supplier-order" novalidate>
+                {replacement_html}
+                <h2>Beställ – få en offert</h2>
+                <p class="subtitle">Fyll i dina uppgifter så skickar vi en färdig offert med pris och leveranstid för artikel {esc(item['article_no'])}.</p>
+                <input type="hidden" name="article" value="{esc(canonical_slug)}">
+                <div class="hb-form-grid-2">
+                    <div class="hb-form-row"><label for="so-name">Namn *</label><input id="so-name" name="name" required autocomplete="name"></div>
+                    <div class="hb-form-row"><label for="so-phone">Telefon *</label><input id="so-phone" name="phone" type="tel" required autocomplete="tel"></div>
+                </div>
+                <div class="hb-form-row"><label for="so-email">E-post *</label><input id="so-email" name="email" type="email" required autocomplete="email"></div>
+                <div class="hb-form-grid-2">
+                    <div class="hb-form-row"><label for="so-year">Båtens årsmodell</label><input id="so-year" name="boat_year"></div>
+                    <div class="hb-form-row"><label for="so-port">Hemmahamn + Ort</label><input id="so-port" name="home_port"></div>
+                </div>
+                <div class="hb-form-row"><label for="so-message">Övrig information</label><textarea id="so-message" name="message"></textarea></div>
+                <button type="submit" class="seo-btn seo-btn-primary">Skicka beställning</button>
+                <div class="supplier-error" role="alert"></div>
+                <div class="hb-form-done">Tack! Vi har tagit emot din beställning och återkommer med en offert.</div>
+            </form>
+            <aside class="seo-card">
+                <div class="seo-meta-block" style="border-top:0;padding-top:0;">
+                    <div class="seo-meta-label">Så går det till</div>
+                    <p style="margin:0;line-height:1.7;">Du skickar beställningen här. Vi kontrollerar att artikeln passar din båt och mejlar en offert med pris och leveranstid. Beställningen blir bindande först när du bekräftat offerten.</p>
+                </div>
+                <div class="seo-cta-row">
+                    <a class="seo-btn" href="{esc(back_href)}">Alla artiklar</a>
+                    <a class="seo-btn" href="/kapellforfragan">Måttsytt kapell</a>
+                </div>
+            </aside>
+        </section>
+        <section class="seo-related">
+            <h2>Fler artiklar</h2>
+            <div class="seo-related-grid">
+                {''.join(related_cards) if related_cards else '<div class="seo-card"><p style="margin:0;">Se alla artiklar under Bilder &amp; exempel.</p></div>'}
+            </div>
+        </section>
+    </main>
+    <script>
+        (function () {{
+            const form = document.getElementById('supplierOrderForm');
+            const startedAt = Date.now();
+            form.addEventListener('submit', async function (event) {{
+                event.preventDefault();
+                const error = form.querySelector('.supplier-error');
+                error.style.display = 'none';
+                if (!form.checkValidity()) {{
+                    form.reportValidity();
+                    return;
+                }}
+                const button = form.querySelector('button[type="submit"]');
+                const original = button.textContent;
+                button.disabled = true;
+                button.textContent = 'Skickar...';
+                const fields = {{}};
+                new FormData(form).forEach((value, key) => {{ fields[key] = value; }});
+                fields.__form_started_at = String(startedAt);
+                try {{
+                    const resp = await fetch('/api/submit_form', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ form_type: 'Leverantörsbeställning', fields }})
+                    }});
+                    const data = await resp.json().catch(() => ({{}}));
+                    if (!resp.ok) throw new Error(data.error || 'Kunde inte skicka beställningen.');
+                    button.remove();
+                    form.querySelector('.hb-form-done').style.display = 'block';
+                }} catch (err) {{
+                    button.disabled = false;
+                    button.textContent = original;
+                    error.textContent = err.message || 'Kunde inte skicka beställningen. Försök igen.';
+                    error.style.display = 'block';
+                }}
+            }});
+        }})();
+    </script>
+    """
+    return render_public_page(
+        title=page_title,
+        description=page_description,
+        canonical_path=f"/leverantorskapell/{canonical_slug}",
+        content_html=content_html,
+        og_image=image_url,
+    )
+
+
 def build_analytics_summary(days: int = 30) -> Dict[str, Any]:
     days = max(1, min(int(days or 30), 365))
     analytics_tz = ZoneInfo("Europe/Stockholm")
@@ -9156,6 +9795,7 @@ PUBLIC_STATIC_EXTENSIONS = {
 }
 PRIVATE_STATIC_FILES = {
     "form_submissions.json",
+    "supplier_products_seed.json",  # innehåller inköpspriser
     "ai_settings.json",
     "ai_lab_settings.json",
     "ai_lab_tv_estimates.json",

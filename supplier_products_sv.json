@@ -1,0 +1,296 @@
+{
+  "yam88dcsyr": {
+    "model_year": "Alla årsmodeller",
+    "variant": "Rostfri ram på vindrutan",
+    "description": "Till Yamarin 88 DC finns två modeller. YAM88DCSYR passar båtar med rostfri ram på vindrutan (Premium-modeller). YAM88DCSVA passar båtar med svart ram på vindrutan (standardmodeller)."
+  },
+  "yam88dcsva": {
+    "model_year": "Alla årsmodeller",
+    "variant": "Svart ram på vindrutan",
+    "description": "Till Yamarin 88 DC finns två modeller. YAM88DCSYR passar båtar med rostfri ram på vindrutan (Premium-modeller). YAM88DCSVA passar båtar med svart ram på vindrutan (standardmodeller)."
+  },
+  "yam80dc2": {
+    "model_year": "Fr.o.m. 2024",
+    "description": "Hamnkapell till Yamarin 80 DC. Använder det befintliga blixtlåset i vindrutan och fästs med tre gummistroppar i motorbrunnen. Vridknappar och tryckknappar monteras vid montering: en tryckknapp på varje sida framtill på vindrutan och två vridknappar på varje sida invändigt akterut."
+  },
+  "yam79dc": {
+    "description": "Till Yamarin 79 DC finns bara en modell. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam76dcom": {
+    "variant": "Ö-Metall-vindruta, se bild",
+    "description": "Finns i tre utföranden beroende på vindruta. YAM76DCÖM: för Ö-Metall-vindruta (fläns som är fastskruvad mot däcket). YAM76DCTM: för Taylor Made-vindruta (röd märkning i bakkant). YAM76DCER: för Ertec-vindruta (rostfri topp, vit list mot däcket). Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam76dctm": {
+    "variant": "Taylor Made-vindruta, se bild",
+    "description": "Finns i tre utföranden beroende på vindruta. YAM76DCÖM: för Ö-Metall-vindruta (fläns som är fastskruvad mot däcket). YAM76DCTM: för Taylor Made-vindruta (röd märkning i bakkant). YAM76DCER: för Ertec-vindruta (rostfri topp, vit list mot däcket). Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam76dcer": {
+    "variant": "Ertec-vindruta, se bild",
+    "description": "Finns i tre utföranden beroende på vindruta. YAM76DCÖM: för Ö-Metall-vindruta (fläns som är fastskruvad mot däcket). YAM76DCTM: för Taylor Made-vindruta (röd märkning i bakkant). YAM76DCER: för Ertec-vindruta (rostfri topp, vit list mot däcket). Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam75brcr1": {
+    "model_year": "T.o.m. 2020",
+    "description": "Till den här båten finns två modeller, beroende på årsmodell. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam75brcr2": {
+    "model_year": "Fr.o.m. 2021",
+    "description": "Till den här båten finns två modeller, beroende på årsmodell. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam68dc1": {
+    "model_year": "T.o.m. 2011",
+    "variant": "Tryckknappar",
+    "description": "Yamarin 68 DC har levererats med tre olika vindrutor, alla tillverkade av Taylor Made. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam68dc2": {
+    "model_year": "2012–2013",
+    "variant": "Tryckknappar",
+    "description": "Yamarin 68 DC har levererats med tre olika vindrutor, alla tillverkade av Taylor Made. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam68dc3": {
+    "model_year": "2014",
+    "variant": "Kapellknappar",
+    "description": "Yamarin 68 DC har levererats med tre olika vindrutor, alla tillverkade av Taylor Made. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam67dc": {
+    "model_year": "Fr.o.m. 2022",
+    "description": "Hamnkapell till Yamarin 67 DC. Använder alla knappar på vindrutan och stropparna på akterdäcket. Några hål på sidorna behöver göras. Verktyg medföljer."
+  },
+  "yam65dc": {
+    "model_year": "T.o.m. 2013",
+    "variant": "Tryckknappar",
+    "description": "Yamarin 65 DC finns med två olika vindrutor. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam65dc2": {
+    "model_year": "2014–2021",
+    "variant": "Kapellknappar, aluminium- och svart vindruta",
+    "description": "Yamarin 65 DC finns med två olika vindrutor. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam64dc": {
+    "model": "Yamarin 64 DC och 6420",
+    "model_year": "Alla årsmodeller",
+    "description": "Passar både Yamarin 6420 och 64 DC, alla årsmodeller. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam64brcr": {
+    "model_year": "Alla årsmodeller",
+    "description": "Hamnkapell till Yamarin 64 BR Cross. Hål behöver göras vid knapparna som sitter på glasfibern. Använd det medföljande verktyget."
+  },
+  "yam63br1": {
+    "model": "Yamarin 63 BR Cross",
+    "model_year": "Alla årsmodeller",
+    "description": "Hamnkapell till Yamarin 63 BR och DC. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam63br1-yamarin-63-br-dc": {
+    "model": "Yamarin 63 BR och DC",
+    "model_year": "T.o.m. 2018",
+    "description": "Hamnkapell till Yamarin 63 BR och DC. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam63br2": {
+    "model": "Yamarin 63 BR och DC",
+    "model_year": "Fr.o.m. 2019",
+    "description": "Hamnkapell till Yamarin 63 BR och DC. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam62brcr": {
+    "model_year": "Alla årsmodeller",
+    "description": "Hamnkapell till Yamarin 62 BR Cross. Här finns bara en modell. Hål behöver göras vid knapparna som sitter på glasfibern. Använd det medföljande verktyget."
+  },
+  "yam6110": {
+    "model_year": "Alla årsmodeller",
+    "description": "Passar alla årsmodeller. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam60dc": {
+    "model_year": "Alla årsmodeller",
+    "description": "Hamnkapell till Yamarin 60 DC. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam59br": {
+    "model": "Yamarin 59 BR",
+    "model_year": "Fr.o.m. 2023",
+    "description": "Hamnkapell till Yamarin 59 BR. Fästs med knappar framtill på vindrutan och blixtlås på sidorna. I motorbrunnen fästs tre gummistroppar i kapellknappar."
+  },
+  "yam59ht": {
+    "model": "Yamarin 59 HT",
+    "model_year": "Alla årsmodeller",
+    "description": "Hamnkapell till Yamarin 5930/59 HT. Fästs med kapellknappar längs hardtoppen och gummistroppar i motorbrunnen. Hål på sidorna görs med det medföljande verktyget."
+  },
+  "yam59dc": {
+    "model": "Yamarin 59 DC och 5920",
+    "model_year": "Alla årsmodeller",
+    "description": "Passar alla Yamarin 5920 och 59 DC. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam58br": {
+    "model": "Yamarin 58 BR och 5820",
+    "model_year": "Alla årsmodeller",
+    "description": "Passar alla modeller av Yamarin 5820 och 58 BR. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam57brcr": {
+    "model_year": "Alla årsmodeller",
+    "variant": "Standard, grått hamnkapell",
+    "description": "Hamnkapell till Yamarin 57 BR Cross. Hål behöver göras vid knapparna som sitter på glasfibern. Använd det medföljande verktyget."
+  },
+  "yam57brcrvmax": {
+    "model_year": "Fr.o.m. 2023",
+    "variant": "Svart med VmaX-logga",
+    "description": "Hamnkapell till Yamarin 57 BR Cross. Hål behöver göras vid knapparna som sitter på glasfibern. Använd det medföljande verktyget."
+  },
+  "yam56br": {
+    "model_year": "T.o.m. 2022",
+    "description": "Passar alla årsmodeller av Yamarin 56 BR t.o.m. 2022. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam55brcr": {
+    "model": "Yamarin 55 BR Cross",
+    "model_year": "2024",
+    "variant": "Nyhet",
+    "description": "Hamnkapell till Yamarin 55 BR Cross. Här finns bara en modell. Kapellet fästs med blixtlås i vindrutan, och remmar i motorbrunnen håller bakstycket på plats. Hål behöver göras vid knapparna på sidorna. Använd det medföljande verktyget."
+  },
+  "yam54brcr": {
+    "model_year": "Alla årsmodeller",
+    "description": "Hamnkapell till Yamarin 54 BR Cross. Här finns bara en modell. Hål behöver göras vid knapparna som sitter på glasfibern. Använd det medföljande verktyget."
+  },
+  "yam53brcr": {
+    "model_year": "Alla årsmodeller",
+    "description": "Hamnkapell till Yamarin 53 BR Cross som går ned över vindrutan framtill. Hål behöver göras vid knapparna som sitter på glasfibern. Använd det medföljande verktyget."
+  },
+  "yam53br": {
+    "model_year": "Alla årsmodeller",
+    "description": "Passar alla årsmodeller. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam5220": {
+    "model": "Yamarin 5150 och 5220",
+    "model_year": "Alla årsmodeller",
+    "description": "Passar alla modeller av Yamarin 5150 och 5220. Hål behöver göras i hamnkapellet för knapparna som sitter akter om vindrutan. Kapellet har en kraftig PVC-duk fastsydd som förstärkning, och hålen görs med det medföljande verktyget."
+  },
+  "yam50br": {
+    "model_year": "Fr.o.m. 2022",
+    "description": "Hamnkapell till Yamarin 50 BR. Passar även Yamarin 49 BR Cross. Kapellet går ned framför vindrutan så att det kan användas på båtar både med och utan kapell, och täcker kapellet med två stroppar som fästs i motorbrunnen."
+  },
+  "yam49brcr": {
+    "model": "Yamarin 49 BR Cross",
+    "model_year": "Alla årsmodeller",
+    "description": "Utgått hos leverantören – använd YAM50BR (Yamarin 50 BR). Hamnkapell till Yamarin 49 BR Cross som går ned över vindrutan framtill. Hål behöver göras vid knapparna som sitter på glasfibern. Använd det medföljande verktyget."
+  },
+  "yam62cc": {
+    "model": "Yamarin 62 CC och 6210",
+    "model_year": "Alla årsmodeller",
+    "description": "Konsolöverdrag till alla modeller av Yamarin 6210 och 62 CC."
+  },
+  "yam59sc": {
+    "model": "Yamarin 59 SC",
+    "model_year": "Fr.o.m. 2023",
+    "description": "Konsolöverdrag till Yamarin 59 SC. Täcker vindruta och dubbelstol. Skjut ryggdynan på förarstolen framåt, så får alla lösa dynor plats under överdraget."
+  },
+  "yam59cc": {
+    "model": "Yamarin 5910, 59 CC, 61 CC m.fl.",
+    "model_year": "Alla årsmodeller",
+    "variant": "Täcker även stolarna",
+    "description": "Stort konsolöverdrag som passar Yamarin 56 CC, 5810, 5910, 59 CC, 61 CC och 61 CC Cross. Passar även 5200 och 5210."
+  },
+  "yam56sc": {
+    "model_year": "Alla årsmodeller",
+    "description": "Stort konsolöverdrag till Yamarin 56 SC. Täcker konsolen och båda stolarna."
+  },
+  "yam50sc1": {
+    "model": "Yamarin 50 SC/S och 5010/S",
+    "model_year": "T.o.m. 2016",
+    "description": "Konsolöverdrag till Yamarin 50 SC/S och 5010/S."
+  },
+  "yam4901": {
+    "model": "Yamarin 490 och 5400",
+    "description": "Konsolöverdrag till Yamarin 490 och 5400."
+  },
+  "46sc1": {
+    "model": "Yamarin 46 SC och Cross",
+    "model_year": "T.o.m. 2018",
+    "description": "Finns i tre modeller. 46SC1 passar Yamarin 4510/4610 och 46 SC t.o.m. 2018. 46SC2 passar Yamarin 46 SC fr.o.m. 2019. 46SC3 passar Yamarin 46 SC Cross fr.o.m. 2019."
+  },
+  "46sc2": {
+    "model": "Yamarin 46 SC och Cross",
+    "model_year": "Fr.o.m. 2019",
+    "description": "Finns i tre modeller. 46SC1 passar Yamarin 4510/4610 och 46 SC t.o.m. 2018. 46SC2 passar Yamarin 46 SC fr.o.m. 2019. 46SC3 passar Yamarin 46 SC Cross fr.o.m. 2019."
+  },
+  "46sc3": {
+    "model": "Yamarin 46 SC och Cross",
+    "model_year": "Cross, fr.o.m. 2019",
+    "description": "Finns i tre modeller. 46SC1 passar Yamarin 4510/4610 och 46 SC t.o.m. 2018. 46SC2 passar Yamarin 46 SC fr.o.m. 2019. 46SC3 passar Yamarin 46 SC Cross fr.o.m. 2019."
+  },
+  "yam44sc1": {
+    "model": "Yamarin 44 SC/4410",
+    "description": "Konsolöverdrag till Yamarin 44 SC och 4410."
+  },
+  "busterlx": {
+    "model_year": "Fr.o.m. 2021",
+    "description": "Hamnkapell till Buster LX fr.o.m. 2021. Fästs med kapellknappar på vindrutan, kardborreband på mittrutan, Buster-clips på sidorna och gummistroppar i motorbrunnen."
+  },
+  "busterx": {
+    "model_year": "2021–2024",
+    "variant": "Salmi-blixtlås",
+    "description": "Hamnkapell till Buster X, 2021–2024 har Salmi-blixtlås och fr.o.m. 2025 blixtlås av typen Opti. Kontrollera vilket blixtlås din båt har."
+  },
+  "busterx2": {
+    "model_year": "Fr.o.m. 2025",
+    "variant": "Opti-blixtlås",
+    "description": "Hamnkapell till Buster X, 2021–2024 har Salmi-blixtlås och fr.o.m. 2025 blixtlås av typen Opti. Kontrollera vilket blixtlås din båt har."
+  },
+  "busxl1": {
+    "model_year": "2020–2024",
+    "variant": "Fästs med Salmi-blixtlås i vindrutan",
+    "description": "Hamnkapell till Buster XL fr.o.m. 2020. Fästs i blixtlåsen i vindrutan, med clips på sidorna och gummistroppar i motorbrunnen."
+  },
+  "busxl2": {
+    "model_year": "Fr.o.m. 2025",
+    "variant": "Fästs med Opti-blixtlås i vindrutan",
+    "description": "Hamnkapell till Buster XL fr.o.m. 2020. Fästs i blixtlåsen i vindrutan, med clips på sidorna och gummistroppar i motorbrunnen."
+  },
+  "busxlvmax": {
+    "model_year": "Fr.o.m. 2021",
+    "variant": "Fästs med Salmi-blixtlås i vindrutan",
+    "description": "Till Buster XL Vmax används standardkapellet för Buster XL, artikel BUSXL1."
+  },
+  "busxxl1": {
+    "model_year": "2020–2024",
+    "variant": "Fästs med Salmi-blixtlås i vindrutan",
+    "description": "Hamnkapell till Buster XXL fr.o.m. 2020. Fästs i blixtlåsen i vindrutan, med clips på sidorna och gummistroppar i motorbrunnen."
+  },
+  "busxxl2": {
+    "model_year": "Fr.o.m. 2025",
+    "variant": "Fästs med Opti-blixtlås i vindrutan",
+    "description": "Hamnkapell till Buster XXL fr.o.m. 2020. Fästs i blixtlåsen i vindrutan, med clips på sidorna och gummistroppar i motorbrunnen."
+  },
+  "busmag1": {
+    "model_year": "2018–2021",
+    "variant": "Fästs med tryckknappar på vindrutan",
+    "description": "Hamnkapell till Buster Magnum. T.o.m. 2021 fästs det i knapparna på vindrutan, fr.o.m. 2022 i blixtlås i vindrutan och gummistroppar i motorbrunnen. Buster-clips på sidorna."
+  },
+  "busmag2": {
+    "model_year": "2022–2024",
+    "variant": "Fästs med Salmi-blixtlås på vindrutan",
+    "description": "Hamnkapell till Buster Magnum. T.o.m. 2021 fästs det i knapparna på vindrutan, fr.o.m. 2022 i blixtlås i vindrutan och gummistroppar i motorbrunnen. Buster-clips på sidorna."
+  },
+  "busmag3": {
+    "model_year": "Fr.o.m. 2025",
+    "variant": "Fästs med Opti-blixtlås på vindrutan",
+    "description": "Hamnkapell till Buster Magnum. T.o.m. 2021 fästs det i knapparna på vindrutan, fr.o.m. 2022 i blixtlås i vindrutan och gummistroppar i motorbrunnen. Buster-clips på sidorna."
+  },
+  "bussupmag1": {
+    "model_year": "2018–2021",
+    "variant": "Fästs med kapellknappar i vindrutan",
+    "description": "Hamnkapell till Buster Super Magnum. Fästs med knappar eller blixtlås på vindrutan beroende på årsmodell: 2022–2024 Salmi-blixtlås, fr.o.m. 2025 blixtlås av märket Opti. Gummistroppar i motorbrunnen och Buster-clips på sidorna. Kontrollera vad som sitter på din båt."
+  },
+  "bussupmag2": {
+    "model_year": "2022–2024",
+    "variant": "Fästs med Salmi-blixtlås i vindrutan",
+    "description": "Hamnkapell till Buster Super Magnum. Fästs med knappar eller blixtlås på vindrutan beroende på årsmodell: 2022–2024 Salmi-blixtlås, fr.o.m. 2025 blixtlås av märket Opti. Gummistroppar i motorbrunnen och Buster-clips på sidorna. Kontrollera vad som sitter på din båt."
+  },
+  "bussupmag3": {
+    "model_year": "Fr.o.m. 2025",
+    "variant": "Fästs med Opti-blixtlås i vindrutan",
+    "description": "Hamnkapell till Buster Super Magnum. Fästs med knappar eller blixtlås på vindrutan beroende på årsmodell: 2022–2024 Salmi-blixtlås, fr.o.m. 2025 blixtlås av märket Opti. Gummistroppar i motorbrunnen och Buster-clips på sidorna. Kontrollera vad som sitter på din båt."
+  },
+  "busmagm5": {
+    "model_year": "2015–2017",
+    "description": "Hamnkapell till Buster Magnum M5. Fästs i knapparna på vindrutan och med gummistroppar i motorbrunnen. Tryckknappar monteras på sidorna."
+  },
+  "busstol": {
+    "model": "Stolöverdrag till Buster",
+    "model_year": "Alla årsmodeller",
+    "description": "Svart stolöverdrag som passar Buster-stolar eller motsvarande."
+  }
+}
