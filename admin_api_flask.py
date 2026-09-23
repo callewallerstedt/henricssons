@@ -4571,6 +4571,8 @@ def build_customer_summary(fields: Dict[str, Any]) -> Tuple[str, str]:
         "quantity",
         "size",
         "address",
+        "postal_code",
+        "city",
         "subject",
         "message",
     ]
@@ -7755,6 +7757,10 @@ def build_supplier_offer_text(product: Dict[str, Any], fields: Dict[str, Any]) -
     lines.append(f"Artikelnummer: {product.get('article_no', '')}")
     lines.append(f"Pris: {price} {SUPPLIER_PRICE_VAT_NOTE}" if price else "Pris: [FYLL I – pris saknas i leverantörslistan]")
     lines.append(f"Leveranstid: {product.get('delivery_time') or SUPPLIER_DEFAULT_DELIVERY}")
+    postal_city = " ".join(v for v in (get_field_value(fields, "postal_code"), get_field_value(fields, "city")) if v)
+    address = ", ".join(v for v in (get_field_value(fields, "address"), postal_city) if v)
+    if address:
+        lines.append(f"Leveransadress: {address}")
     lines += [
         "",
         "Svara på det här mejlet för att bekräfta beställningen, så lägger vi den hos leverantören.",
@@ -9484,6 +9490,11 @@ def supplier_product_page(slug: str):
                     <div class="hb-form-row"><label for="so-phone">Telefon *</label><input id="so-phone" name="phone" type="tel" required autocomplete="tel"></div>
                 </div>
                 <div class="hb-form-row"><label for="so-email">E-post *</label><input id="so-email" name="email" type="email" required autocomplete="email"></div>
+                <div class="hb-form-row"><label for="so-address">Adress *</label><input id="so-address" name="address" required autocomplete="street-address"></div>
+                <div class="hb-form-grid-2">
+                    <div class="hb-form-row"><label for="so-postal">Postnummer *</label><input id="so-postal" name="postal_code" required autocomplete="postal-code" inputmode="numeric"></div>
+                    <div class="hb-form-row"><label for="so-city">Ort *</label><input id="so-city" name="city" required autocomplete="address-level2"></div>
+                </div>
                 <div class="hb-form-grid-2">
                     <div class="hb-form-row"><label for="so-year">Båtens årsmodell</label><input id="so-year" name="boat_year"></div>
                     <div class="hb-form-row"><label for="so-port">Hemmahamn + Ort</label><input id="so-port" name="home_port"></div>
