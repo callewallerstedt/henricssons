@@ -7554,7 +7554,7 @@ SUPPLIER_PRODUCTS_SEED_FILE = BASE_DIR / "supplier_products_seed.json"
 SUPPLIER_CATEGORY_KEY = "leverantorskapell"
 SUPPLIER_CATEGORY_TITLE = "Hamnkapell och stolshuvar direkt från leverantör"
 SUPPLIER_BRANDS = ["Yamarin", "Yamarin Cross", "Buster"]
-SUPPLIER_DEFAULT_DELIVERY = "Beställningsvara – vi bekräftar leveranstiden i offerten."
+SUPPLIER_DEFAULT_DELIVERY = "Beställningsvara – ca 3 veckors leveranstid."
 # Leverantörens kolumn heter "Brutto ut". Bekräfta med Henricssons att det är
 # inklusive moms innan offerterna börjar gå ut.
 SUPPLIER_PRICE_VAT_NOTE = "inkl. moms"
@@ -7743,7 +7743,8 @@ def build_supplier_offer_text(product: Dict[str, Any], fields: Dict[str, Any]) -
     lines = [
         f"Hej {name}," if name else "Hej,",
         "",
-        "Tack för din beställning. Här kommer vår offert:",
+        "Tack för din förfrågan,",
+        "vi har möjlighet att offerera följande:",
         "",
         f"Artikel: {supplier_product_title(product)}",
     ]
