@@ -130,6 +130,7 @@ CORE_PUBLIC_PATHS = [
     "/tillfalliga-produkter",
     "/kontakt",
     "/kapellforfragan",
+    "/integritetspolicy",
 ]
 LEGACY_EXAMPLE_REDIRECTS = {
     "16-4400": "/exempel/16-4400ht",
@@ -1747,9 +1748,9 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
     <title>{{ title }}</title>
     <meta name="description" content="{{ description }}"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="preload" href="/assets/fonts/montserrat-400-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/libre-baskerville-400-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/fonts/site.css">
     <link rel="icon" href="/logo.png">
     <link rel="canonical" href="{{ canonical_url }}"/>
     <meta property="og:title" content="{{ title }}"/>
@@ -2314,7 +2315,7 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
             </div>
             <div class="hb-footer-bottom">
                 <div>&copy; Henricssons Båtkapell AB &middot; Org.nr 556799-2192</div>
-                <div>Kungsbacka, Sverige</div>
+                <div>Kungsbacka, Sverige &middot; <a href="/integritetspolicy">Integritetspolicy</a></div>
             </div>
         </div>
     </footer>
@@ -5996,6 +5997,9 @@ def add_cors_headers(response):
             response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
         elif path_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico")):
             response.headers["Cache-Control"] = "public, max-age=604800, stale-while-revalidate=2592000"
+        elif path_lower.endswith((".woff2", ".woff")):
+            # Självhostade typsnitt ändras aldrig under samma filnamn.
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
 
@@ -9503,6 +9507,7 @@ def supplier_product_page(slug: str):
                 <button type="submit" class="seo-btn seo-btn-primary">Skicka beställning</button>
                 <div class="supplier-error" role="alert"></div>
                 <div class="hb-form-done">Tack! Vi har tagit emot din beställning och återkommer med en offert.</div>
+                <p class="hb-form-privacy" style="margin-top:0.9rem;font-size:0.8rem;color:var(--muted);">Vi hanterar dina uppgifter enligt v&aring;r <a href="/integritetspolicy" style="color:inherit;">integritetspolicy</a>.</p>
             </form>
             <aside class="seo-card">
                 <div class="seo-meta-block" style="border-top:0;padding-top:0;">

@@ -5,10 +5,10 @@
     <title>Kontakt - Henricssons Båtkapell</title>
     <meta name="description" content="Kontakta Henricssons Båtkapell i Kungsbacka för frågor om båtkapell, fenderstrumpor, dynsatser och besök i verkstaden. Ring gärna innan besök."/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=optional" rel="stylesheet">
-    <link rel="stylesheet" href="premium.css?v=20260420b"/>
+    <link rel="preload" href="/assets/fonts/montserrat-400-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/libre-baskerville-400-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/fonts/site.css">
+    <link rel="stylesheet" href="premium.css?v=20260924a"/>
     <link rel="icon" href="logo.png">
     <link rel="canonical" href="https://www.henricssonsbatkapell.se/kontakt"/>
     <meta property="og:title" content="Kontakt - Henricssons Båtkapell"/>
@@ -21,6 +21,25 @@
     <meta name="twitter:description" content="Kontakta Henricssons Båtkapell i Kungsbacka för frågor om båtkapell, fenderstrumpor, dynsatser och besök i verkstaden. Ring gärna innan besök."/>
     <meta name="twitter:image" content="https://www.henricssonsbatkapell.se/logo.png"/>
     <link rel="preload" as="image" href="bakgrundhav.webp" type="image/webp" fetchpriority="high">
+    <style>
+        /* Kartan: en egen förhandsbild tills besökaren väljer att ladda Google-kartan. */
+        .hb-map-consent { position: relative; height: 450px; overflow: hidden; background: var(--cream-2); }
+        .hb-map-consent > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .hb-map-card { position: absolute; left: 50%; bottom: 2rem; transform: translateX(-50%); width: min(460px, calc(100% - 2rem)); background: rgba(255, 255, 255, 0.96); box-shadow: 0 18px 42px rgba(12, 26, 43, 0.18); padding: 1.25rem 1.4rem; display: grid; gap: 0.35rem; text-align: center; }
+        .hb-map-card strong { font-family: 'Libre Baskerville', serif; font-weight: 400; font-size: 1.15rem; color: var(--ink); }
+        .hb-map-card > span { color: var(--muted); font-size: 0.92rem; }
+        .hb-map-actions { display: flex; gap: 1rem; justify-content: center; align-items: center; flex-wrap: wrap; margin: 0.6rem 0 0.2rem; }
+        .hb-map-directions { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); text-decoration: none; }
+        .hb-map-directions:hover { color: var(--brass); }
+        .hb-map-card small { color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+        .hb-map-card small a { color: inherit; }
+        .hb-map-credit { position: absolute; right: 0; top: 0; background: rgba(255, 255, 255, 0.85); font-size: 0.68rem; padding: 0.15rem 0.45rem; color: #444; }
+        .hb-map-credit a { color: inherit; }
+        @media (max-width: 600px) {
+            .hb-map-consent { height: 380px; }
+            .hb-map-card { bottom: 1rem; padding: 1rem; }
+        }
+    </style>
 </head>
 <body class="hb-premium">
     <div class="hb-top">
@@ -68,6 +87,11 @@
                 <div class="row"><h3>Telefon</h3><p><a href="tel:+46314718200">+46 (0)31 47 18 20</a></p></div>
                 <div class="row"><h3>E-post</h3><p><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></p></div>
                 <div class="row"><h3>Besök</h3><p><span class="hb-contact-highlight">Kontakta oss alltid innan besök så vi är på plats</span></p></div>
+                <div class="row hb-contact-social">
+                    <h3>Instagram</h3>
+                    <p>Följ oss och se hur vi jobbar och vad vi har gjort.</p>
+                    <a class="hb-ig-link" href="https://www.instagram.com/henricssonsbatkapell" target="_blank" rel="noopener"><span class="hb-ig-dot"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.25" cy="6.75" r="1.25" fill="currentColor" stroke="none"/></svg></span>@henricssonsbatkapell</a>
+                </div>
             </aside>
             <form id="contactForm" class="hb-form-card" data-subject="Kontakt">
                 <h2>Skicka meddelande</h2>
@@ -84,11 +108,37 @@
                 <div id="contactAttachments"></div>
                 <button type="submit" class="hb-btn hb-btn-primary"><span>Skicka meddelande</span></button>
                 <div class="hb-form-done">Tack! Ditt meddelande har skickats.</div>
+                <p class="hb-form-privacy" style="margin-top:0.9rem;font-size:0.8rem;color:var(--muted);">Vi hanterar dina uppgifter enligt v&aring;r <a href="/integritetspolicy" style="color:inherit;">integritetspolicy</a>.</p>
             </form>
         </div>
     </section>
 
-    <section class="hb-section hb-map"><div class="wrap"><iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4660.458833098003!2d12.049716311534919!3d57.508085739122635!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464fed5990737987%3A0x20da512b8425f52!2sHenricssons%20B%C3%A5tkapell%20AB!5e1!3m2!1ssv!2sse!4v1751304808249!5m2!1ssv!2sse" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe></div></section>
+    <section class="hb-section hb-map"><div class="wrap">
+        <div class="hb-map-consent" id="hbMap" data-src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4660.458833098003!2d12.049716311534919!3d57.508085739122635!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464fed5990737987%3A0x20da512b8425f52!2sHenricssons%20B%C3%A5tkapell%20AB!5e1!3m2!1ssv!2sse!4v1751304808249!5m2!1ssv!2sse">
+            <img src="assets/optimized/karta-kontakt.webp" alt="Karta: Henricssons Båtkapell, Energigatan 17E i Kungsbacka" loading="lazy" decoding="async"/>
+            <div class="hb-map-card">
+                <strong>Henricssons Båtkapell</strong>
+                <span>Energigatan 17E, 434 37 Kungsbacka</span>
+                <div class="hb-map-actions">
+                    <button type="button" class="hb-btn hb-btn-primary" id="hbMapLoad"><span>Visa interaktiv karta</span></button>
+                    <a class="hb-map-directions" href="https://www.google.com/maps/dir/?api=1&amp;destination=Henricssons+B%C3%A5tkapell+AB%2C+Energigatan+17E%2C+434+37+Kungsbacka" target="_blank" rel="noopener">Vägbeskrivning &rarr;</a>
+                </div>
+                <small>Den interaktiva kartan laddas från Google först när du klickar. <a href="/integritetspolicy#karta">Läs mer</a></small>
+            </div>
+            <span class="hb-map-credit">&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-bidragsgivare</span>
+        </div>
+    </div></section>
+    <script>
+        document.getElementById('hbMapLoad').addEventListener('click', function () {
+            const holder = document.getElementById('hbMap');
+            const frame = document.createElement('iframe');
+            frame.src = holder.dataset.src;
+            frame.title = 'Karta till Henricssons Båtkapell';
+            frame.referrerPolicy = 'no-referrer-when-downgrade';
+            frame.allowFullscreen = true;
+            holder.replaceWith(frame);
+        });
+    </script>
 
     <footer class="hb-footer">
         <div class="wrap">
@@ -124,6 +174,7 @@
                         <li><a href="mailto:info@henricssonsbatkapell.se">info@henricssonsbatkapell.se</a></li>
                         <li>Energigatan 17E</li>
                         <li>434 37 Kungsbacka</li>
+                        <li class="hb-footer-social"><a href="https://www.instagram.com/henricssonsbatkapell" target="_blank" rel="noopener" aria-label="Följ oss på Instagram"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.25" cy="6.75" r="1.25" fill="currentColor" stroke="none"/></svg><span>Följ oss på Instagram</span></a></li>
                     </ul>
                 </div>
                 <div>
@@ -140,7 +191,7 @@
             </div>
             <div class="hb-footer-bottom">
                 <div>© Henricssons Båtkapell AB · Org.nr 556799-2192</div>
-                <div>Kungsbacka, Sverige</div>
+                <div>Kungsbacka, Sverige &middot; <a href="/integritetspolicy">Integritetspolicy</a></div>
             </div>
         </div>
     </footer>

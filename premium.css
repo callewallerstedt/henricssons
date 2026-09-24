@@ -1246,6 +1246,19 @@
 }
 .hb-contact-info .row a:hover { border-color: var(--brass); }
 
+.hb-contact-info .row.hb-contact-social { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(245,240,230,0.12); margin-bottom: 0; }
+.hb-contact-info .row.hb-contact-social p { font-size: 0.92rem; margin-bottom: 0.9rem; }
+.hb-contact-info .row a.hb-ig-link {
+    display: inline-flex; align-items: center; gap: 0.6rem;
+    padding: 0.6rem 1.1rem 0.6rem 0.65rem; border: 1px solid rgba(178,138,76,0.5); border-radius: 999px;
+    font-size: 0.9rem; font-weight: 500; transition: background 0.2s, border-color 0.2s;
+}
+.hb-contact-info .row a.hb-ig-link:hover { background: rgba(178,138,76,0.14); border-color: var(--brass); }
+.hb-ig-link .hb-ig-dot {
+    width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: #fff; flex: none;
+    background: radial-gradient(circle farthest-corner at 28% 100%, #fec564 0%, #fec053 10%, #f5832b 28%, #e5343c 44%, rgba(229,52,60,0) 75%), linear-gradient(145deg, #5c38d6 8%, #c7309f 55%, #e5343c 100%);
+}
+
 /* ---------- Gallery page (bilder & exempel) ---------- */
 .hb-gallery-page { background: var(--cream); }
 .hb-search-bar {
@@ -1506,6 +1519,16 @@
     line-height: 1.9;
 }
 .hb-footer ul { list-style: none; padding: 0; }
+
+.hb-footer li.hb-footer-social { margin-top: 0.7rem; }
+.hb-footer .hb-footer-social a {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.4rem 0.9rem 0.4rem 0.7rem; border: 1px solid rgba(178,138,76,0.45); border-radius: 999px;
+    color: var(--cream); font-size: 0.82rem; line-height: 1.4;
+    transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.hb-footer .hb-footer-social a:hover { border-color: var(--brass); background: rgba(178,138,76,0.12); color: var(--cream); }
+.hb-footer .hb-footer-social svg { color: var(--brass); flex: none; }
 .hb-footer ul li { margin-bottom: 0; }
 .hb-footer .brand > img {
     height: 48px;
