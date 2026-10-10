@@ -39,6 +39,52 @@ def sample():
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_research_and_review_receive_the_same_actual_customer_images(self):
+        raw, archive, source = sample()
+        source.update(id='image-request',input_images=[
+            {'filename':'first.jpg','data_url':'data:image/jpeg;base64,first'},
+            {'filename':'second.jpg','data_url':'data:image/jpeg;base64,second'}])
+        raw['facts'].append({'claim':'Bildobservation', 'source_id':'image-request:image:2', 'excerpt':'En båt med kapell syns i bilden.'})
+        responses = [
+            {'status':'completed','output':[{'type':'function_call','name':'search_history','call_id':'c1','arguments':'{"query":"Test"}'}]},
+            {'status':'completed','output':[{'type':'message','content':[{'type':'output_text','text':json.dumps(raw)}]}]},
+            {'status':'completed','output':[{'type':'message','content':[{'type':'output_text','text':'{"safe":true,"issues":[]}'}]}]}
+        ]
+        with patch.object(q.requests,'post') as api:
+            from unittest.mock import Mock
+            api.side_effect = [Mock(status_code=200,json=Mock(return_value=r)) for r in responses]
+            result = q.run_agent(source,archive,'gpt-6.1-sol','',api_key='test')
+        first = api.call_args_list[0].kwargs['json']['input'][0]['content']
+        review = api.call_args_list[-1].kwargs['json']['input'][0]['content']
+        expected = [x['data_url'] for x in source['input_images']]
+        for content in (first,review):
+            self.assertEqual([x['image_url'] for x in content if x['type']=='input_image'], expected)
+            manifest = json.loads(content[0]['text'])['request']['image_sources']
+            self.assertEqual([x['id'] for x in manifest],['image-request:image:1','image-request:image:2'])
+            self.assertNotIn('input_images',json.loads(content[0]['text'])['request'])
+        self.assertEqual(result['facts'][-1]['evidence_type'],'image')
+        self.assertEqual(result['facts'][-1]['source_filename'],'second.jpg')
+        self.assertTrue(result['evidence_check']['safe'])
+
+    def test_visual_review_can_reject_a_false_image_claim(self):
+        raw, archive, source = sample()
+        result = q.validate_result(raw,source,archive)
+        source.update(id='image-request',input_images=[{'filename':'photo.jpg','data_url':'data:image/jpeg;base64,photo'}])
+        from unittest.mock import Mock
+        verdict = {'status':'completed','output':[{'type':'message','content':[{'type':'output_text','text':'{"safe":false,"issues":["Artikelnumret syns inte i kundbilden."]}'}]}]}
+        with patch.object(q.requests,'post',return_value=Mock(status_code=200,json=Mock(return_value=verdict))):
+            q.verify_draft(result,source,archive,'gpt-6.1-sol','test')
+        self.assertEqual(result['decision'],'internal_review')
+        self.assertFalse(result['quote']['lines'])
+        self.assertFalse(result['email']['body'])
+
+    def test_filename_does_not_create_an_image_evidence_source(self):
+        raw, archive, source = sample()
+        raw['facts'].append({'claim':'Bildbevis', 'source_id':'request:image:1','excerpt':'Artikelnummer A1 syns i bilden.'})
+        result=q.validate_result(raw,source,archive)
+        self.assertEqual(result['decision'],'internal_review')
+        self.assertFalse(result['email']['body'])
+
     def test_live_progress_follows_research_and_draft_validation(self):
         raw, archive, source = sample()
         archive.search = lambda query: [{"id": "gmail:old", "subject": "Offert"}]
@@ -213,6 +259,19 @@ class AdminTests(unittest.TestCase):
             app.run_ai_lab_agent({"id":"unit-request","fields":{},"kind":"manual"})
         self.assertEqual(agent.call_args.args[2],"gpt-6.1-sol")
         self.assertEqual(agent.call_args.kwargs['feedback'][0]['id'],'memory1')
+
+    def test_stored_submission_images_are_loaded_into_the_agent(self):
+        from io import BytesIO
+        from PIL import Image
+        data=BytesIO();Image.new('RGB',(2100,1000),'blue').save(data,format='JPEG')
+        db=app.get_db()
+        db.add(app.SubmissionAttachment(submission_id='unit-request',filename='customer.jpg',mime='image/jpeg',data=data.getvalue()))
+        db.commit();db.close()
+        images,docs=app.quote_agent_request_attachments({'kind':'submission','id':'unit-request'})
+        self.assertEqual(len(images),1)
+        self.assertEqual(images[0]['filename'],'customer.jpg')
+        self.assertTrue(images[0]['data_url'].startswith('data:image/jpeg;base64,'))
+        self.assertEqual(docs,[])
 
     def test_cached_result_does_not_rerun_or_send(self):
         submission = {"id":"unit-request","fields":{"email":"current@example.test"}}

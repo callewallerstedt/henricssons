@@ -56,6 +56,12 @@ Nya inskick granskas i bakgrunden och får en separat Agent Test-ruta i internme
 kundsvaret och en PDF i Niclas importerade originalmall. Hela modalen har en
 gemensam scroll; PDF-förhandsvisningen har ingen separat scroll.
 
+Både offertagenten och den separata slutgranskningen får samma kundbilder som
+bilddata, med stabila käll-ID:n. Bildiakttagelser kontrolleras visuellt och visas
+som bildobservationer med filnamn; de behandlas inte som ordagranna mejlcitat.
+Förekomsten av en bild eller dess filnamn räcker aldrig för att godkänna ett
+påstående om vad bilden visar.
+
 När agenten arbetar visas aktuellt steg och en aktivitetslista från de verkliga
 sökningarna, lästa källorna, granskningen och PDF-genereringen. Status och resultat
 sparas på servern. Modalen och webbläsaren kan stängas utan att avbryta jobbet;

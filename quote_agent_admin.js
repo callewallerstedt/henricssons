@@ -113,7 +113,12 @@ function renderQuoteAgentPanel(container, item) {
         if (result.facts && result.facts.length) {
             const sources = $('<details>').append($('<summary>').text('Visa källbelagda uppgifter'));
             const list = $('<div>');
-            result.facts.forEach(fact => list.append($('<p>').append($('<strong>').text(fact.claim), $('<blockquote>').text(fact.excerpt))));
+            result.facts.forEach(fact => {
+                const row = $('<div>').append($('<p>').append($('<strong>').text(fact.claim)));
+                if (fact.evidence_type === 'image') row.append($('<small>').addClass('quote-agent-muted').text(`Bildobservation · ${fact.source_filename}`), $('<p>').text(fact.excerpt));
+                else row.append($('<blockquote>').text(fact.excerpt));
+                list.append(row);
+            });
             sources.append(list); output.append(sources);
         }
         const email = result.email || {};
