@@ -66,6 +66,19 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(result['facts'][-1]['source_filename'],'second.jpg')
         self.assertTrue(result['evidence_check']['safe'])
 
+    def test_customer_citation_uses_the_same_source_shown_to_both_models(self):
+        raw, archive, source = sample()
+        source.update(id='customer-request',fields={'email':'current@example.test','boat_year':'1982','home_port':'Ort','manufacturer':'Test','model':'575'},body='En fråga',request_documents=[{'filename':'extra.pdf','text':'Komplettering från kunden.'}])
+        shown = json.loads(q.request_content(source)[0]['text'])['request']['evidence_source']
+        archive.read_sources[shown['id']] = shown
+        self.assertEqual(archive.read(shown['id']),shown)
+        for excerpt in ('boat_year: 1982','Komplettering från kunden.'):
+            raw['facts'] = [{'claim':'Kunduppgift','source_id':shown['id'],'excerpt':excerpt}]
+            result = q.validate_result(copy.deepcopy(raw),source,archive)
+            self.assertEqual(result['facts'],raw['facts'])
+        raw['facts'] = [{'claim':'Hopklippta fält','source_id':shown['id'],'excerpt':'manufacturer: Test\nmodel: 575\nboat_year: 1982'}]
+        self.assertFalse(q.validate_result(raw,source,archive)['facts'])
+
     def test_visual_review_can_reject_a_false_image_claim(self):
         raw, archive, source = sample()
         result = q.validate_result(raw,source,archive)

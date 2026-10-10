@@ -53,7 +53,10 @@ utförande, tydliga villkor, Tack för er förfrågan och välkommen att höra a
 Använd aktuell signatur från konfigurationen, aldrig gamla adresser från arkivet.
 Skriv inte att en offert bifogas om inget offertunderlag valts. Påstå aldrig att något
 har skickats. Vid blockerad offert, föreslå frågor eller intern kontroll.
-Fakta ska stödjas av ordagranna citat från lästa källor. Välj offertens historiska
+Textfakta ska stödjas av ordagranna, sammanhängande citat från lästa källor.
+För kundens formuläruppgifter finns källtexten i request.evidence_source.text med
+dess käll-ID. Citera en uppgift i taget om fälten ligger på olika ställen; sätt inte
+ihop utspridda fält till ett påstått sammanhängande citat. Välj offertens historiska
 artikelrader med asset_id och row_index, skriv inga egna priser. Blanda inte varianter.
 Bildiakttagelser använder kundbildens egna käll-ID i image_sources. Skriv excerpt
 som en konkret visuell observation, inte som ett ordagrant textcitat. Granskningen
@@ -297,7 +300,7 @@ class Archive:
         return sorted(candidates, key=lambda v: (v["score"], v["date"]), reverse=True)[:20]
 
     def read(self, source_id):
-        if self.read_sources.get(source_id, {}).get("kind") == "incoming_image":
+        if self.read_sources.get(source_id, {}).get("kind") in ("incoming_image", "incoming_request"):
             return self.read_sources[source_id]
         if source_id.startswith("submission:"):
             row = next((r for r in self.submissions() if "submission:" + r["id"] == source_id), None)
@@ -372,10 +375,19 @@ def request_image_sources(source):
             for index, image in enumerate(source.get("input_images", []))]
 
 
+def request_evidence_source(source):
+    text = "\n".join(str(k) + ": " + str(v) for k, v in source.get("fields", {}).items())
+    text += "\n" + str(source.get("body", "")) + "\n" + json.dumps(source.get("request_documents", []), ensure_ascii=False)
+    return {"id": str(source.get("id") or "request"), "kind": "incoming_request", "text": text,
+            "subject": source.get("subject", source.get("title", "")),
+            "warning": "Customer-supplied information; not independent proof of technical fit or current prices."}
+
+
 def request_content(source, context=None):
     """Use the same text, image identities and actual images for research and review."""
     public_source = {k: v for k, v in source.items() if k != "input_images"}
     public_source["image_sources"] = request_image_sources(source)
+    public_source["evidence_source"] = request_evidence_source(source)
     content = [{"type": "input_text", "text": json.dumps({"request": public_source, **(context or {})}, ensure_ascii=False)}]
     for image, evidence in zip(source.get("input_images", []), public_source["image_sources"]):
         content.extend([{"type": "input_text", "text": "Kundbild " + evidence["id"] + ": " + evidence["filename"]},
@@ -386,11 +398,8 @@ def request_content(source, context=None):
 def run_agent(source, archive, model, style, api_key=None, feedback=(), business_instructions="", progress=None):
     key = api_key or os.getenv("OPENAI_API_KEY")
     if not key: raise RuntimeError("OpenAI is not configured")
-    request_text = "\n".join(str(k) + ": " + str(v) for k, v in source.get("fields", {}).items())
-    request_text += "\n" + str(source.get("body", "")) + "\n" + json.dumps(source.get("request_documents", []), ensure_ascii=False)
-    archive.read_sources[str(source.get("id", "request"))] = {"id": str(source.get("id", "request")),
-        "kind": "incoming_request", "text": request_text, "subject": source.get("subject", source.get("title", "")),
-        "warning": "Customer-supplied information; not independent proof of technical fit or current prices."}
+    incoming = request_evidence_source(source)
+    archive.read_sources[incoming["id"]] = incoming
     for image in request_image_sources(source):
         archive.read_sources[image["id"]] = {**image, "kind": "incoming_image",
             "warning": "Customer image supplied directly to both models. Visual observations require independent visual review; a filename does not prove image content."}
