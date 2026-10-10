@@ -60,7 +60,7 @@ function renderQuoteAgentPanel(container, item) {
             quoteHeading = $('<h4>').text('Offertbilaga · originalmall');
             output.append($('<button type="button">').addClass('btn btn-secondary').text('Visa offert-PDF ↓').on('click', () => quoteHeading[0].scrollIntoView({behavior:'smooth',block:'start'})));
         } else {
-            output.append($('<p>').addClass('quote-agent-muted').text(result.decision === 'ask_customer' ? 'Ingen offertbilaga ännu – kunden behöver komplettera uppgifterna ovan.' : 'Ingen offertbilaga skapad. Se agentens bedömning och kontrollpunkter.'));
+            output.append($('<p>').addClass('quote-agent-muted').text(result.decision === 'ask_customer' ? 'Ingen offertbilaga ännu – kunden behöver först komplettera uppgifterna.' : 'Ingen offertbilaga skapad. Se agentens bedömning och kontrollpunkter.'));
         }
         addList('Kunden behöver komplettera', result.missing_customer_fields);
         addList('Kontroll för Niclas', result.internal_blockers);
@@ -78,7 +78,7 @@ function renderQuoteAgentPanel(container, item) {
             output.append($('<h4>').text('Föreslaget kundsvar'), $('<p>').addClass('quote-agent-subject').text(email.subject || ''));
             output.append($('<div>').addClass('quote-agent-mail').text(email.body));
             const actions = $('<div>').addClass('quote-agent-actions');
-            if (data.draft_url) actions.append($('<a>').addClass('btn').attr({href: data.draft_url, download: 'Henricssons-mejlutkast.eml'}).text('Öppna mejlutkast med bilaga'));
+            if (data.draft_url) actions.append($('<a>').addClass('btn').attr({href: data.draft_url, download: 'Henricssons-mejlutkast.eml'}).text(data.has_pdf ? 'Öppna mejlutkast med bilaga' : 'Öppna mejlutkast'));
             actions.append($('<button type="button">').addClass('btn btn-secondary').text('Kopiera kundsvaret').on('click', async function () {
                 try { await navigator.clipboard.writeText(email.body); $(this).text('Kopierat'); }
                 catch (_) { progress.text('Kunde inte kopiera. Markera texten i svaret.'); }

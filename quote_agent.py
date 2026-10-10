@@ -541,7 +541,8 @@ def render_test_html(result, draft_url=""):
     blockers = result.get("internal_blockers", [])
     body = result.get("email", {}).get("body", "")
     source_list = "".join("<li>" + esc(s["filename"]) + " · " + esc(s["date"]) + "</li>" for s in result.get("quote_sources", []))
-    button = ("<a href='" + html.escape(draft_url, quote=True) + "' style='display:inline-block;padding:12px 18px;background:#17334a;color:white;text-decoration:none;font-weight:bold'>Öppna mejlutkast med bilaga</a>" if draft_url and body else "")
+    button_label = "Öppna mejlutkast med bilaga" if result.get("quote", {}).get("lines") else "Öppna mejlutkast"
+    button = ("<a href='" + html.escape(draft_url, quote=True) + "' style='display:inline-block;padding:12px 18px;background:#17334a;color:white;text-decoration:none;font-weight:bold'>" + button_label + "</a>" if draft_url and body else "")
     return ("<div style='margin-top:30px;border-top:4px solid #17334a;padding:22px;background:#eef4f8;border-left:1px solid #cbd5df;border-right:1px solid #cbd5df;border-bottom:1px solid #cbd5df'>"
             "<div style='font-size:20px;font-weight:bold;color:#17334a'>Agent Test</div>"
             "<p style='font-size:12px;color:#667085'>Internt test. Inget kundsvar skickas automatiskt.</p>"
