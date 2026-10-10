@@ -77,6 +77,8 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(result['decision'],'internal_review')
         self.assertFalse(result['quote']['lines'])
         self.assertFalse(result['email']['body'])
+        self.assertEqual(result['proposed_email'],raw['email'])
+        with self.assertRaises(ValueError): q.build_draft(result)
 
     def test_filename_does_not_create_an_image_evidence_source(self):
         raw, archive, source = sample()
@@ -130,6 +132,26 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(result["decision"], "internal_review")
         self.assertFalse(result["quote"]["lines"])
         self.assertFalse(result["email"]["body"])
+        self.assertEqual(result['proposed_email'],raw['email'])
+
+    def test_rejected_proposal_is_visible_in_both_internal_formats_without_draft_link(self):
+        raw, archive, source = sample()
+        raw['facts'][0]['excerpt'] = 'Unsupported evidence'
+        result = q.validate_result(raw,source,archive)
+        for render in (q.render_test_html,q.render_test_text):
+            shown = render(result,'https://example.test/unsafe-draft')
+            self.assertIn('Ej godkänt kundförslag',shown)
+            self.assertIn('Se bifogad offert!',shown)
+            self.assertNotIn('https://example.test/unsafe-draft',shown)
+
+    def test_approved_proposal_keeps_the_outlook_draft(self):
+        raw, archive, source = sample()
+        result = q.validate_result(raw,source,archive)
+        self.assertEqual(result['proposed_email'],result['email'])
+        for render in (q.render_test_html,q.render_test_text):
+            shown = render(result,'https://example.test/safe-draft')
+            self.assertIn('https://example.test/safe-draft',shown)
+            self.assertNotIn('Ej godkänt kundförslag',shown)
 
     def test_variant_question_prevents_quote(self):
         raw, archive, source = sample()
@@ -197,6 +219,29 @@ class AdminTests(unittest.TestCase):
         for url in ("/api/quote_agent/status","/api/quote_agent/feedback","/api/quote_agent/submission/unit-request/pdf","/api/quote_agent/submission/unit-request"):
             self.assertIn(self.client.get(url).status_code,(401,403))
         self.assertEqual(self.client.get('/api/quote_agent/draft?id=unit-request&ts=1&token=bad').status_code,403)
+
+    def test_rejected_proposal_survives_api_and_feedback_but_cannot_be_downloaded_as_draft(self):
+        raw, archive, source = sample()
+        raw['facts'][0]['excerpt'] = 'Unsupported evidence'
+        result = q.validate_result(raw,source,archive)
+        id = 'rejected-proposal'
+        db = app.get_db()
+        db.add(app.FormSubmission(id=id,form_type='Kontakt',fields={'email':'current@example.test'}))
+        db.add(app.QuoteRun(id=id,result=result))
+        db.commit(); db.close()
+        data = self.client.get('/api/quote_agent/submission/'+id,headers=self.headers).json
+        self.assertEqual(data['result']['proposed_email'],raw['email'])
+        self.assertEqual(data['draft_url'],'')
+        signed_url = app.get_quote_agent_draft_url(id)
+        from urllib.parse import urlsplit
+        url = urlsplit(signed_url)
+        self.assertEqual(self.client.get(url.path+'?'+url.query).status_code,409)
+        response = self.client.post('/api/quote_agent/feedback',headers=self.headers,json={'submission_id':id,'text':'Kontrollera bildpåståendet först.','scope':'global'})
+        self.assertEqual(response.status_code,200)
+        db = app.get_db()
+        feedback = db.get(app.QuoteAgentFeedback,response.json['id'])
+        self.assertEqual(feedback.context['previous_email'],raw['email'])
+        db.close()
 
     def test_job_continues_without_original_view_and_reports_persisted_progress(self):
         id = 'background-progress'

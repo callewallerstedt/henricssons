@@ -56,6 +56,12 @@ Nya inskick granskas i bakgrunden och får en separat Agent Test-ruta i internme
 kundsvaret och en PDF i Niclas importerade originalmall. Hela modalen har en
 gemensam scroll; PDF-förhandsvisningen har ingen separat scroll.
 
+Originalförslaget till kundsvar sparas även när granskningen underkänner det
+eller offertbilagan inte kan färdigställas. Admin och Agent Test visar det
+tydligt märkt **Ej godkänt kundförslag**, så Niclas kan ge feedback på texten.
+Outlook-knappen och utkastets API använder bara det godkända kundsvaret;
+ett underkänt förslag kan inte laddas ned som mejlutkast.
+
 Både offertagenten och den separata slutgranskningen får samma kundbilder som
 bilddata, med stabila käll-ID:n. Bildiakttagelser kontrolleras visuellt och visas
 som bildobservationer med filnamn; de behandlas inte som ordagranna mejlcitat.

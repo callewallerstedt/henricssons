@@ -6953,7 +6953,7 @@ def quote_agent_feedback_route():
         result = run.result if run else {}
         feedback_id = os.urandom(16).hex()
         context = {"boat": result.get("boat", {}), "decision": result.get("decision"),
-                   "quote_sources": result.get("quote_sources", []), "previous_email": result.get("email", {})}
+                   "quote_sources": result.get("quote_sources", []), "previous_email": result.get("proposed_email") or result.get("email", {})}
         if scope == "model" and not context["boat"].get("model"):
             return jsonify(error="Ingen identifierad modell finns ännu. Välj generell feedback."), 400
         db.add(QuoteAgentFeedback(id=feedback_id, submission_id=submission_id, text=text, scope=scope, context=context, active=True))

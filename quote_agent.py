@@ -459,6 +459,9 @@ def run_agent(source, archive, model, style, api_key=None, feedback=(), business
 def validate_result(raw, source, archive):
     if not archive.trace or not any(t["label"] == "search_history" for t in archive.trace):
         raise ValueError("History was not searched")
+    # Keep the generated proposal separate from the email allowed into Outlook.
+    # Review may reject the latter; Niclas still needs the original for feedback.
+    proposed_email = dict(raw["email"])
     blockers = list(raw["internal_blockers"])
     facts = []
     for fact in raw["facts"]:
@@ -518,7 +521,7 @@ def validate_result(raw, source, archive):
     if total is not None and basis == "exclusive": total = subtotal + vat
     rounding = total.quantize(Decimal("1"), rounding=ROUND_HALF_UP) - total if total is not None else None
     if total is not None: total += rounding
-    email = raw["email"]
+    email = dict(proposed_email)
     if not lines and re.search(r"bifogad?\s+offert|bifogar.*offert", email["body"], re.I):
         blockers.append("Kundutkast hänvisade till en offert som inte kunde skapas. Utkastet hålls inne.")
         email = {"subject": email["subject"], "body": ""}
@@ -528,7 +531,7 @@ def validate_result(raw, source, archive):
     return {**raw, "decision": decision, "safety_level": safety_level,
             "quote_sources": [{"asset_id": a, "filename": archive.read_assets[a]["filename"], "date": archive.read_assets[a].get("quote_date", ""), "quote_number": archive.read_assets[a].get("quote_number", "")} for a in dict.fromkeys(l["source_id"] for l in lines)],
             "facts": facts, "missing_customer_fields": list(dict.fromkeys(missing)),
-            "internal_blockers": list(dict.fromkeys(blockers)), "email": email,
+            "internal_blockers": list(dict.fromkeys(blockers)), "email": email, "proposed_email": proposed_email,
             "sending_enabled": False, "quote": {"status": "historical_draft" if lines else "blocked", "lines": lines,
                 "tax_basis": basis, "tax_rate_percent": tax_rate, "subtotal_ex_vat_sek": float(subtotal) if subtotal is not None else None,
                 "vat_sek": float(vat) if vat is not None else None, "total_sek": float(total) if total is not None else None,
@@ -581,10 +584,12 @@ def render_test_html(result, draft_url=""):
     facts = "".join("<li>" + esc(f["claim"]) + "</li>" for f in result.get("facts", []))
     missing = result.get("missing_customer_fields", [])
     blockers = result.get("internal_blockers", [])
-    body = result.get("email", {}).get("body", "")
+    approved_body = result.get("email", {}).get("body", "")
+    body = (result.get("proposed_email") or result.get("email", {})).get("body", "")
+    held = bool(body and not approved_body)
     source_list = "".join("<li>" + esc(s["filename"]) + " · " + esc(s["date"]) + "</li>" for s in result.get("quote_sources", []))
     button_label = "Öppna mejlutkast med bilaga" if result.get("quote", {}).get("lines") else "Öppna mejlutkast"
-    button = ("<a href='" + html.escape(draft_url, quote=True) + "' style='display:inline-block;padding:12px 18px;background:#17334a;color:white;text-decoration:none;font-weight:bold'>" + button_label + "</a>" if draft_url and body else "")
+    button = ("<a href='" + html.escape(draft_url, quote=True) + "' style='display:inline-block;padding:12px 18px;background:#17334a;color:white;text-decoration:none;font-weight:bold'>" + button_label + "</a>" if draft_url and approved_body and not held else "")
     return ("<div style='margin-top:30px;border-top:4px solid #17334a;padding:22px;background:#eef4f8;border-left:1px solid #cbd5df;border-right:1px solid #cbd5df;border-bottom:1px solid #cbd5df'>"
             "<div style='font-size:20px;font-weight:bold;color:#17334a'>Agent Test</div>"
             "<p style='font-size:12px;color:#667085'>Internt test. Inget kundsvar skickas automatiskt.</p>"
@@ -594,14 +599,20 @@ def render_test_html(result, draft_url=""):
             + ("<strong>Bygger på tidigare offert</strong><ul>" + source_list + "</ul>" if source_list else "")
             + ("<p><strong>Kunden behöver komplettera</strong><br>" + esc("\n".join(missing)) + "</p>" if missing else "")
             + ("<p><strong>Intern kontroll</strong><br>" + esc("\n".join(blockers)) + "</p>" if blockers else "")
-            + ("<p><strong>Föreslaget kundsvar</strong></p><div style='background:white;padding:14px;border:1px solid #cbd5df'>" + esc(body) + "</div>" if body else "")
+            + ("<p><strong>" + ("Ej godkänt kundförslag · för granskning" if held else "Föreslaget kundsvar") + "</strong></p>"
+               + ("<p>Förslaget visas för granskning och feedback. Det kan inte öppnas som mejlutkast.</p>" if held else "")
+               + "<div style='background:white;padding:14px;border:1px solid " + ("#c77c38" if held else "#cbd5df") + "'>" + esc(body) + "</div>" if body else "")
             + "<p>" + button + "</p></div>")
 
 
 def render_test_text(result, draft_url=""):
+    approved_body = result.get("email", {}).get("body", "")
+    body = (result.get("proposed_email") or result.get("email", {})).get("body", "")
+    held = bool(body and not approved_body)
     lines = ["", "=" * 48, "Agent Test", "Internt test. Inget kundsvar skickas automatiskt.", "", result.get("explanation", "")]
     for label, values in (("Kunden behöver komplettera", result.get("missing_customer_fields", [])), ("Intern kontroll", result.get("internal_blockers", []))):
         if values: lines.extend(["", label + ":", *values])
-    lines += ["", "Underlag:", *[f["claim"] for f in result.get("facts", [])], *[s["filename"] + " · " + s.get("date", "") for s in result.get("quote_sources", [])], "", "Föreslaget kundsvar:", result.get("email", {}).get("body", "")]
-    if draft_url: lines += ["", "Öppna mejlutkast: " + draft_url]
+    lines += ["", "Underlag:", *[f["claim"] for f in result.get("facts", [])], *[s["filename"] + " · " + s.get("date", "") for s in result.get("quote_sources", [])], "", "Ej godkänt kundförslag · för granskning:" if held else "Föreslaget kundsvar:", body]
+    if held: lines += ["", "Förslaget visas för granskning och feedback. Det kan inte öppnas som mejlutkast."]
+    if draft_url and approved_body and not held: lines += ["", "Öppna mejlutkast: " + draft_url]
     return "\n".join(lines)

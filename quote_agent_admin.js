@@ -121,17 +121,20 @@ function renderQuoteAgentPanel(container, item) {
             });
             sources.append(list); output.append(sources);
         }
-        const email = result.email || {};
+        const approvedEmail = result.email || {};
+        const email = result.proposed_email || approvedEmail;
+        const held = !!email.body && !approvedEmail.body;
         if (email.body) {
-            output.append($('<h4>').text('Föreslaget kundsvar'), $('<p>').addClass('quote-agent-subject').text(email.subject || ''));
-            output.append($('<div>').addClass('quote-agent-mail').text(email.body));
+            output.append($('<h4>').text(held ? 'Ej godkänt kundförslag · för granskning' : 'Föreslaget kundsvar'), $('<p>').addClass('quote-agent-subject').text(email.subject || ''));
+            if (held) output.append($('<p>').addClass('quote-agent-review-warning').text('Förslaget underkändes eller kunde inte färdigställas. Det visas här så att Niclas kan granska texten och lämna feedback. Se kontrollpunkterna ovan.'));
+            output.append($('<div>').addClass('quote-agent-mail').toggleClass('is-rejected', held).text(email.body));
             const actions = $('<div>').addClass('quote-agent-actions');
-            if (data.draft_url) actions.append($('<a>').addClass('btn').attr({href: data.draft_url, download: 'Henricssons-mejlutkast.eml'}).text(data.has_pdf ? 'Öppna mejlutkast med bilaga' : 'Öppna mejlutkast'));
-            actions.append($('<button type="button">').addClass('btn btn-secondary').text('Kopiera kundsvaret').on('click', async function () {
+            if (data.draft_url && approvedEmail.body && !held) actions.append($('<a>').addClass('btn').attr({href: data.draft_url, download: 'Henricssons-mejlutkast.eml'}).text(data.has_pdf ? 'Öppna mejlutkast med bilaga' : 'Öppna mejlutkast'));
+            actions.append($('<button type="button">').addClass('btn btn-secondary').text(held ? 'Kopiera förslaget för granskning' : 'Kopiera kundsvaret').on('click', async function () {
                 try { await navigator.clipboard.writeText(email.body); $(this).text('Kopierat'); }
                 catch (_) { progress.text('Kunde inte kopiera. Markera texten i svaret.'); }
             }));
-            output.append(actions, $('<p>').addClass('quote-agent-muted').text('Öppna .eml-filen i Outlook som ett oskickat mejl. Niclas väljer själv om och när det skickas.'));
+            output.append(actions, $('<p>').addClass('quote-agent-muted').text(held ? 'Mejlutkast är spärrat tills ett nytt förslag har godkänts i granskningen.' : 'Öppna .eml-filen i Outlook som ett oskickat mejl. Niclas väljer själv om och när det skickas.'));
         }
         if (data.has_pdf) {
             const pdfHeading = quoteHeading;
