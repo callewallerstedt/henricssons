@@ -30,6 +30,10 @@ services:
         sync: false
       - key: ADMIN_CHAT_MODEL
         value: gpt-5.4
+      - key: QUOTE_AGENT_MODEL
+        value: gpt-6.1-sol
+      - key: QUOTE_AGENT_REASONING_EFFORT
+        value: high
       - key: CHAT_MODEL
         value: gpt-5-mini
       - key: OPENAI_MODEL

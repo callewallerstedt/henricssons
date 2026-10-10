@@ -405,7 +405,7 @@
         $("quote-rounding").textContent = quote.rounding_sek != null ? formatMoney(quote.rounding_sek) : "-";
         $("quote-total").textContent = quote.total_sek != null ? `${formatMoney(quote.total_sek)} kr` : "-";
         const boatName = [boat.manufacturer, boat.model, boat.year].filter(Boolean).join(" ");
-        $("quote-blocker-note").textContent = `${boatName ? `${boatName}: ` : ""}Priser, artikelnummer och lager är AI-estimat från simulerad prisdata och verifieras innan offerten skickas till kund.`;
+        $("quote-blocker-note").textContent = `${boatName ? `${boatName}: ` : ""}Historiska priser och artikelrader är hämtade ur Niclas offert-PDF:er. Priser, frakt och villkor behöver bekräftas. Inga kundsvar skickas automatiskt.`;
     }
 
     async function copyEmail() {

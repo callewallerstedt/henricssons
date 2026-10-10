@@ -4049,9 +4049,12 @@ function buildSupplierOfferPanel(item) {
 }
 
 function renderAiResponsePanel(responseColumn, item, status, index, modal) {
+    const cleanup = responseColumn.data('quoteAgentCleanup');
+    if (cleanup) cleanup();
     responseColumn.empty();
+    renderQuoteAgentPanel(responseColumn, item);
     const responseSection = $('<div>').addClass('form-section');
-    responseSection.append($('<h3>').text('AI-svar'));
+    if (item.proposed_response) responseSection.append($('<h3>').text('Tidigare sparat svar'));
 
     const responseDiv = $('<div>').addClass('proposed-response');
     if (item.proposed_response) {
@@ -4065,37 +4068,9 @@ function renderAiResponsePanel(responseColumn, item, status, index, modal) {
             .css({ color: '#666', fontStyle: 'italic' })
             .text('Inget AI-svar skapat ännu.');
     }
-    responseSection.append(responseDiv);
+    if (item.proposed_response) responseSection.append(responseDiv);
 
     const actionButtons = $('<div>').addClass('response-actions').css('margin-top', '1rem');
-    const createButton = $('<button>')
-        .addClass('btn')
-        .text(item.proposed_response ? 'Skapa nytt AI-svar' : 'Skapa AI-svar')
-        .on('click', async function() {
-            if (!item.form_id) return;
-            const button = $(this);
-            const originalText = button.text();
-            button.prop('disabled', true).text('Skapar...');
-            try {
-                const res = await adminFetch(`${API_BASE}/api/generate_submission_response`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: item.form_id })
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok || !data.success) {
-                    throw new Error(data.error || ('HTTP ' + res.status));
-                }
-                item.proposed_response = data.proposed_response || '';
-                saveStatusItems();
-                renderAiResponsePanel(responseColumn, item, status, index, modal);
-            } catch (err) {
-                alert('Kunde inte skapa AI-svar: ' + (err.message || err));
-                button.prop('disabled', false).text(originalText);
-            }
-        });
-    actionButtons.append(createButton);
-
     if (item.proposed_response) {
         actionButtons.append($('<button>').addClass('btn btn-secondary').css('margin-left', '0.5rem').text('Kopiera svar').on('click', function() {
             navigator.clipboard.writeText(item.proposed_response).then(() => {

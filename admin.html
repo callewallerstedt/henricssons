@@ -1757,6 +1757,7 @@
         .modal-close:hover { background: var(--surface-2); color: var(--text); }
 
         /* Form Submission Modal (wide) */
+        body:has(#form-submission-modal.active) { overflow: hidden; }
         .form-submission-modal-content {
             background: var(--surface);
             width: 95vw !important;
@@ -1775,6 +1776,7 @@
             margin: 0;
             padding: 1rem 1.5rem;
             border-bottom: none;
+            flex-shrink: 0;
         }
         .form-submission-modal-content .modal-header h2 { color: #fff; font-size: 1.1rem; }
         .form-submission-modal-content .modal-close { background: rgba(255,255,255,0.12); color: #fff; }
@@ -1784,8 +1786,11 @@
         .form-modal-mobile-actions { display: none; }
         .form-submission-modal-content .modal-body {
             flex: 1;
-            overflow: hidden;
-            display: flex;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
+            display: block;
             padding: 0;
         }
         .attachment-lightbox {
@@ -1871,24 +1876,25 @@
         }
         .form-modal-columns {
             display: flex;
-            flex: 1;
             gap: 0;
-            overflow: hidden;
-            min-height: 0;
+            overflow: visible;
+            min-height: 100%;
         }
         .form-info-column {
             flex: 1;
-            overflow-y: auto;
+            overflow: visible;
             padding: 1.25rem 1.5rem;
             border-right: 1px solid var(--border);
             min-height: 0;
+            min-width: 0;
         }
         .ai-response-column {
             flex: 1;
-            overflow-y: auto;
+            overflow: visible;
             padding: 1.25rem 1.5rem;
             background: var(--surface-2);
             min-height: 0;
+            min-width: 0;
         }
         .ai-response-column .form-section {
             background: var(--surface);
@@ -2154,8 +2160,7 @@
                 flex: 0 0 auto;
             }
             .form-modal-columns { flex-direction: column; }
-            .form-info-column { border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
-            .ai-response-column { max-height: 50vh; }
+            .form-info-column { border-right: none; border-bottom: 1px solid var(--border); }
         }
 
         @media (max-width: 600px) {
@@ -2492,6 +2497,31 @@
             body { overscroll-behavior: none; }
             .primary-tab-btn, .topbar-btn { -webkit-user-select: none; user-select: none; }
         }
+        .quote-agent-panel { padding: 20px; background: #f3f7fa; border: 1px solid #cbd9e3; border-top: 4px solid #183c55; border-radius: 10px; color: #183244; }
+        .quote-agent-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+        .quote-agent-heading h3 { margin: 0; }
+        .quote-agent-heading span { font-size: 12px; color: #567084; }
+        .quote-agent-muted { font-size: 13px; line-height: 1.5; color: #53697b; }
+        .quote-agent-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+        .quote-agent-actions .btn { margin: 0; text-decoration: none; }
+        .quote-agent-output { line-height: 1.55; overflow-wrap: anywhere; }
+        .quote-agent-output h4 { margin: 18px 0 7px; color: #183c55; }
+        .quote-agent-output ul { padding-left: 20px; }
+        .quote-agent-output li { margin-bottom: 7px; }
+        .quote-agent-safety { display: inline-block; padding: 5px 12px; background: #fff3d5; color: #704d08; border: 1px solid #ecd08d; border-radius: 20px; font-size: 13px; font-weight: 600; }
+        .quote-agent-mail { white-space: pre-wrap; padding: 18px; background: #fff; border: 1px solid #d4dfe7; border-radius: 8px; color: #253746; }
+        .quote-agent-subject { font-weight: 600; }
+        .quote-agent-panel details { margin: 15px 0; }
+        .quote-agent-panel summary { cursor: pointer; font-weight: 600; }
+        .quote-agent-panel blockquote { margin: 8px 0; padding: 10px 14px; border-left: 3px solid #a0b6c7; background: #fff; white-space: pre-wrap; font-size: 13px; }
+        .quote-agent-pdf { display: block; width: 100%; height: auto; margin-top: 12px; border: 1px solid #cbd9e3; border-radius: 6px; background: #fff; }
+        .quote-agent-feedback { border-top: 1px solid #cbd9e3; margin-top: 22px; padding-top: 18px; }
+        .quote-agent-feedback h4 { margin: 0; }
+        .quote-agent-feedback textarea { display: block; width: 100%; box-sizing: border-box; margin: 12px 0; padding: 12px; border: 1px solid #b6cad9; border-radius: 8px; font: inherit; resize: vertical; min-height: 90px; background: #fff; color: #183244; }
+        .quote-agent-feedback select { max-width: 100%; padding: 9px; border-radius: 6px; border: 1px solid #b6cad9; background: #fff; }
+        .quote-agent-memory { border: 1px solid #d4dfe7; background: #fff; border-radius: 8px; padding: 12px; margin-top: 10px; }
+        .quote-agent-memory p { white-space: pre-wrap; margin: 8px 0; }
+        @media (max-width: 640px) { .quote-agent-panel { padding: 14px; } .quote-agent-actions .btn { width: 100%; text-align: center; } }
     </style>
 </head>
 <body>
@@ -3070,7 +3100,8 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
-<script src="admin.js?v=20260922a" defer></script>
+<script src="admin.js?v=20261010-agent" defer></script>
+<script src="quote_agent_admin.js?v=20261010c" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle

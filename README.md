@@ -47,6 +47,48 @@ igen. Ange en annan mapp med `python backup_data.py <sökväg>`.
 - API-anrop kan även autentiseras med headern `X-Admin-Key: <ADMIN_API_KEY>`.
 - Formulärinskick hanteras under fliken Inskick; mailnotiser + kundbekräftelser går via Mailgun.
 
+### Agent Svar / Agent Test
+
+Offertagenten använder OpenAI Responses API (`gpt-6.1-sol`, reasoning `high`).
+Nya inskick granskas i bakgrunden och får en separat Agent Test-ruta i internmejlet.
+Öppna ett inskick i admin och välj **Agent Svar** för att granska eller köra igen,
+även på äldre ärenden. Panelen visar bedömning, källcitat, källoffertens datum,
+kundsvaret och en PDF i Niclas importerade originalmall. Hela modalen har en
+gemensam scroll; PDF-förhandsvisningen har ingen separat scroll.
+
+**Feedback till agenten** sparas i `quote_agent_feedback` och läses vid varje
+körning. Välj generell feedback eller feedback för den identifierade modellen.
+Sparade minnen kan tas bort; deras ursprungliga utkast och källor finns kvar i
+feedbackens granskningshistorik. **Spara och kör igen** skapar ett nytt förslag.
+
+Agenten kan söka/läsa men har inget verktyg för att skicka kundmejl. Utkastknappen
+laddar ned en `.eml` med `X-Unsent: 1` och eventuell offertbilaga, för öppning i
+Niclas Outlook. Kontrollera stödet i hans faktiska Outlook-version före användning;
+knappen skriver inte till en Microsoft 365-brevlådas Drafts-mapp via Graph.
+Internnotiser och ordinarie mottagningsbekräftelser går fortsatt via Mailgun.
+
+Priser, rabatter och frakt läses ur original-PDF:erna. Äldre källor är tillåtna
+och markeras **kolla priset**. Agenten ska fråga vid oklar modell/variant och lämna
+specialarbete till Niclas. Historiska villkor återanvänds aldrig som nya löften.
+PDF:en är märkt UTKAST: ett skarpt offertnummer, aktuella villkor och giltighet
+måste fastställas i affärssystemet. Prislistan och lagret är inte anslutna.
+
+Importera den privata mejlhistoriken med:
+
+```powershell
+python import_quote_archive.py .agent-cache --base-url https://www.henricssonsbatkapell.se
+```
+
+Importen kräver adminnyckel och använder originalmejl med verifierad avsändare
+`niclas@henricssonsbatkapell.se` samt deras hämtade bilagor. Den lägger arkivet,
+den redigerade originalmallen och det kompletta Verdana-typsnittet i privata
+databastabeller. `QUOTE_AGENT_FONT_FILE` kan ange Verdana-fil vid mallimport.
+Kundmejl, bilagor och typsnitt ska inte publiceras som webbassets eller checkas in.
+Codex Gmail-koppling ger inte servern löpande åtkomst till nya Bcc-mejl: uppdatera
+arkivet med samma importerare tills serverns egen Gmail-anslutning är konfigurerad.
+
+Kör `python -m unittest test_quote_agent` för isolerade kontroller utan utskick.
+
 ## Deploy på Render
 
 En web service + Postgres, definierat i `render.yaml`. Auto-deploy vid push till `main`. Hälsokontroll: `/healthz`.
