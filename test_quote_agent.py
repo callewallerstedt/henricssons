@@ -182,6 +182,7 @@ class AdminTests(unittest.TestCase):
                 time.sleep(.02)
             self.assertEqual(data['state'],'completed')
             self.assertEqual(data['progress']['stage'],'completed')
+            self.assertEqual(data['progress']['events'][0]['stage'],'reading')
             self.assertIn('verifying',[e['stage'] for e in data['progress']['events']])
             self.assertEqual(agent.call_count,1)
             send.assert_not_called()

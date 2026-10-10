@@ -3592,13 +3592,14 @@ def get_or_create_quote_agent_result(submission, attachments=None):
                     db.add(QuoteAgentJob(id=submission["id"], state="queued", token="", updated_at=datetime.utcnow()))
                     db.commit()
         token = os.urandom(16).hex()
-        claimed = db.query(QuoteAgentJob).filter(QuoteAgentJob.id == submission["id"],
-            ((QuoteAgentJob.state == "queued") | ((QuoteAgentJob.state == "running") & (QuoteAgentJob.updated_at < datetime.utcnow() - timedelta(minutes=6))))).update(
-            {"state": "running", "token": token, "updated_at": datetime.utcnow()}, synchronize_session=False)
-        if claimed:
-            db.merge(QuoteAgentProgress(id=submission["id"], token=token,
-                     data=quote_agent_progress_data({}, "reading", "Startar granskningen av förfrågan.")))
-        db.commit()
+        with QUOTE_AGENT_QUEUE_LOCK:
+            claimed = db.query(QuoteAgentJob).filter(QuoteAgentJob.id == submission["id"],
+                ((QuoteAgentJob.state == "queued") | ((QuoteAgentJob.state == "running") & (QuoteAgentJob.updated_at < datetime.utcnow() - timedelta(minutes=6))))).update(
+                {"state": "running", "token": token, "updated_at": datetime.utcnow()}, synchronize_session=False)
+            if claimed:
+                db.merge(QuoteAgentProgress(id=submission["id"], token=token,
+                         data=quote_agent_progress_data({}, "reading", "Startar granskningen av förfrågan.")))
+            db.commit()
     finally: db.close()
     if not claimed:
         # A concurrent admin click must not create a second quote or interrupt mail generation.
@@ -3652,7 +3653,10 @@ def enqueue_quote_agent(submission, force=False):
     if not db: raise RuntimeError("Agent database unavailable")
     try:
         with QUOTE_AGENT_QUEUE_LOCK:
-            job, existing = db.get(QuoteAgentJob, submission["id"]), db.get(QuoteRun, submission["id"])
+            # Serialize queue transitions with worker claims, including across
+            # server processes, so reopening cannot reset an active run.
+            job = db.query(QuoteAgentJob).filter_by(id=submission["id"]).with_for_update().first()
+            existing = db.get(QuoteRun, submission["id"])
             if job and job.state == "running" and job.updated_at > datetime.utcnow() - timedelta(minutes=6): return
             if existing and not force and (not job or job.state == "completed"): return
             if not job: job = QuoteAgentJob(id=submission["id"])
