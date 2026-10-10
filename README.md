@@ -56,6 +56,13 @@ Nya inskick granskas i bakgrunden och får en separat Agent Test-ruta i internme
 kundsvaret och en PDF i Niclas importerade originalmall. Hela modalen har en
 gemensam scroll; PDF-förhandsvisningen har ingen separat scroll.
 
+När agenten arbetar visas aktuellt steg och en aktivitetslista från de verkliga
+sökningarna, lästa källorna, granskningen och PDF-genereringen. Status och resultat
+sparas på servern. Modalen och webbläsaren kan stängas utan att avbryta jobbet;
+öppna samma inskick igen för att följa det. En tillfällig nätverksstörning i admin
+stoppar inte jobbet, och statusen hämtas igen automatiskt. Visad tid är förfluten
+tid, inte en uppskattning av när agenten blir klar.
+
 **Feedback till agenten** sparas i `quote_agent_feedback` och läses vid varje
 körning. Välj generell feedback eller feedback för den identifierade modellen.
 Sparade minnen kan tas bort; deras ursprungliga utkast och källor finns kvar i

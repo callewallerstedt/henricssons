@@ -2502,6 +2502,31 @@
         .quote-agent-heading h3 { margin: 0; }
         .quote-agent-heading span { font-size: 12px; color: #567084; }
         .quote-agent-muted { font-size: 13px; line-height: 1.5; color: #53697b; }
+        .quote-agent-work { padding: 18px; margin: 16px 0; background: #fff; border: 1px solid #c8dbe7; border-radius: 12px; }
+        .quote-agent-work[hidden] { display: none; }
+        .quote-agent-work-top { display: flex; align-items: center; gap: 10px; color: #183c55; }
+        .quote-agent-work-top strong { flex: 1; }
+        .quote-agent-work-elapsed { font-size: 12px; font-variant-numeric: tabular-nums; color: #637b8c; }
+        .quote-agent-spinner { width: 16px; height: 16px; flex: 0 0 16px; border: 2px solid #dbe8ef; border-top-color: #23648b; border-radius: 50%; animation: quote-agent-spin 1s linear infinite; }
+        @keyframes quote-agent-spin { to { transform: rotate(360deg); } }
+        .quote-agent-work-detail { font-size: 14px; line-height: 1.5; margin: 10px 0 16px; overflow-wrap: anywhere; }
+        .quote-agent-steps { display: flex; list-style: none; padding: 0; margin: 0; gap: 4px; }
+        .quote-agent-steps li { flex: 1; text-align: center; color: #758998; position: relative; }
+        .quote-agent-steps li:not(:last-child)::after { content: ''; position: absolute; height: 2px; background: #e0e9ef; width: calc(100% - 28px); left: calc(50% + 16px); top: 13px; }
+        .quote-agent-steps span { display: grid; place-items: center; width: 28px; height: 28px; margin: 0 auto 6px; border-radius: 50%; background: #edf2f6; font-size: 12px; font-weight: 700; }
+        .quote-agent-steps small { display: block; font-size: 11px; line-height: 1.3; }
+        .quote-agent-steps .is-active { color: #165c83; font-weight: 700; }
+        .quote-agent-steps .is-active span { background: #d9ecf7; box-shadow: 0 0 0 3px #edf7fc; }
+        .quote-agent-steps .is-done span { background: #e4f2eb; color: #286047; }
+        .quote-agent-steps .is-done::after { background: #b7d5c5; }
+        .quote-agent-work-background { font-size: 12px; line-height: 1.5; color: #53697b; padding-top: 14px; border-top: 1px solid #e7eef3; margin: 16px 0 0; }
+        .quote-agent-work .quote-agent-activity { margin: 14px 0 0; font-size: 12px; }
+        .quote-agent-activity ol { padding: 0; list-style: none; margin: 10px 0 0; }
+        .quote-agent-activity li { display: flex; gap: 10px; margin: 7px 0; line-height: 1.5; }
+        .quote-agent-activity time { flex: 0 0 auto; color: #758998; font-variant-numeric: tabular-nums; }
+        .quote-agent-activity li span { overflow-wrap: anywhere; }
+        .quote-agent-work.is-complete .quote-agent-spinner { animation: none; border-color: #8ab39d; background: #e4f2eb; }
+        @media (prefers-reduced-motion: reduce) { .quote-agent-spinner { animation: none; } }
         .quote-agent-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
         .quote-agent-actions .btn { margin: 0; text-decoration: none; }
         .quote-agent-output { line-height: 1.55; overflow-wrap: anywhere; }
@@ -3101,7 +3126,7 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 <script src="chat_widget.js?v=20260420a" defer></script>
 <script src="admin.js?v=20261010-agent" defer></script>
-<script src="quote_agent_admin.js?v=20261010d" defer></script>
+<script src="quote_agent_admin.js?v=20261010e" defer></script>
 <script>
 (function() {
     // Mobile sidebar toggle

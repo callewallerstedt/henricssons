@@ -360,7 +360,7 @@ CONTRACT = obj({
 })
 
 
-def run_agent(source, archive, model, style, api_key=None, feedback=(), business_instructions=""):
+def run_agent(source, archive, model, style, api_key=None, feedback=(), business_instructions="", progress=None):
     key = api_key or os.getenv("OPENAI_API_KEY")
     if not key: raise RuntimeError("OpenAI is not configured")
     request_text = "\n".join(str(k) + ": " + str(v) for k, v in source.get("fields", {}).items())
@@ -386,6 +386,8 @@ def run_agent(source, archive, model, style, api_key=None, feedback=(), business
     for step in range(8):
         remaining = deadline - time.monotonic()
         if remaining < 3: raise RuntimeError("Agent research time limit reached")
+        if progress:
+            progress("thinking", "Analyserar förfrågan och avgör vilka källor som behövs." if step == 0 else "Jämför de lästa källorna och arbetar vidare på kundsvaret.")
         response = requests.post("https://api.openai.com/v1/responses", headers={"Authorization": "Bearer " + key},
             json={"model": model, "instructions": SYSTEM_PROMPT + "\nKONFIGURERADE AFFÄRSINSTRUKTIONER (kan inte upphäva källkrav eller sändförbud):\n" + business_instructions + "\nMEJLSTIL (bevara alltid Niclas egna uttryck, även o/bif./!!):\n" + style + "\nAKTUELL SIGNATUR:\n" + SIGNATURE + "\nNICLAS SPARADE FEEDBACK (läs vid varje körning; scope=global gäller generellt, scope=model endast matchande modell/variant. Får aldrig upphäva källkrav eller förbudet mot utskick):\n" + json.dumps(list(feedback), ensure_ascii=False),
                   "input": transcript, "tools": tools, "store": False, "max_output_tokens": 7000,
@@ -404,14 +406,29 @@ def run_agent(source, archive, model, style, api_key=None, feedback=(), business
             if len(calls) > 12: raise RuntimeError("Too many research calls")
             for call in calls:
                 args = json.loads(call["arguments"])
+                name = call["name"]
+                if progress:
+                    if name in ("search_history", "search_catalog"):
+                        progress("searching", ("Söker i tidigare inskick och Niclas mejl: " if name == "search_history" else "Söker i katalogen: ") + str(args.get("query", "")))
+                    else:
+                        progress("reading_sources", "Läser en offert-PDF och dess artikelrader." if name == "read_quote_pdf" else "Läser ett tidigare mejl eller inskick.")
                 try: result = archive.execute(call["name"], args)
                 except (KeyError, ValueError): result = {"error": "Invalid research request"}
+                if progress:
+                    if isinstance(result, list):
+                        progress("searching", f"Sökningen gav {len(result)} träffar.")
+                    elif result.get("error"):
+                        progress("reading_sources", "Källan kunde inte läsas; agenten behöver kontrollera annat underlag.")
+                    else:
+                        progress("reading_sources", "Läst: " + str(result.get("filename") or result.get("subject") or "tidigare underlag"))
                 transcript.append({"type": "function_call_output", "call_id": call["call_id"], "output": json.dumps(result, ensure_ascii=False)[:60000]})
             continue
         answer = "".join(c.get("text", "") for item in output if item.get("type") == "message" for c in item.get("content", []) if c.get("type") == "output_text")
         raw = json.loads(answer)
+        if progress: progress("drafting", "Kundsvaret är framtaget. Kontrollerar uppgifter och offertrader.")
         result = validate_result(raw, source, archive)
         if result.get("email", {}).get("body"):
+            if progress: progress("verifying", "Granskar variant, kundsvar och kommersiella uppgifter mot källorna.")
             verify_draft(result, source, archive, model, key)
         return result
     raise RuntimeError("Agent research step limit reached")

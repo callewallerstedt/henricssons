@@ -518,6 +518,13 @@ class QuoteAgentJob(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class QuoteAgentProgress(Base):
+    __tablename__ = "quote_agent_progress"
+    id = Column(String, primary_key=True)
+    token = Column(String, nullable=False)
+    data = Column(SQLJSON, nullable=False)
+
+
 class FormSubmission(Base):
     __tablename__ = "form_submissions"
 
@@ -3480,20 +3487,23 @@ def quote_agent_request_attachments(source, attachments=None):
     return images, documents
 
 
-def run_ai_lab_agent(source: Dict[str, Any], attachments=None) -> Dict[str, Any]:
+def run_ai_lab_agent(source: Dict[str, Any], attachments=None, progress=None) -> Dict[str, Any]:
     settings = load_ai_lab_settings()
     model = os.getenv("QUOTE_AGENT_MODEL", "gpt-6.1-sol").strip() or "gpt-6.1-sol"
     run_id = str(source.get("id") or hashlib.sha256(str(time.time_ns()).encode()).hexdigest()[:16])
     archive = quote_agent.Archive(get_db, QUOTE_AGENT_MODELS, get_all_submissions, quote_agent_catalog)
+    if progress: progress("reading", "Läser kundens uppgifter och bilagor.")
     images, documents = quote_agent_request_attachments(source, attachments)
     enriched_source = {**source, "input_images": images, "request_documents": documents,
                        "recipient": get_field_value(source.get("fields", {}), "email", "e-post", "e-postadress")}
     feedback = load_quote_agent_feedback()
-    result = quote_agent.run_agent(enriched_source, archive, model, settings["email_style_guide"], feedback=feedback, business_instructions=settings["agent_prompt"])
+    if progress: progress("reading", f"Underlaget är laddat: {len(images)} bilder, {len(documents)} dokument och {len(feedback)} sparade minnen.")
+    result = quote_agent.run_agent(enriched_source, archive, model, settings["email_style_guide"], feedback=feedback, business_instructions=settings["agent_prompt"], progress=progress)
     result["feedback_ids"] = [row["id"] for row in feedback]
     result["model"], result["reasoning_effort"] = model, "high"
     pdf = None
     if result["quote"]["lines"]:
+        if progress: progress("pdf", "Skapar offert-PDF i Niclas originalmall.")
         db = get_db()
         try:
             template_id = get_site_content("quote_agent_template")
@@ -3530,6 +3540,42 @@ def load_quote_agent_feedback():
     finally: db.close()
 
 
+QUOTE_AGENT_PHASES = {"queued": 0, "reading": 0, "thinking": 1, "searching": 1,
+                      "reading_sources": 1, "drafting": 2, "verifying": 3,
+                      "pdf": 4, "saving": 4, "completed": 5}
+QUOTE_AGENT_TITLES = {"queued": "Väntar på sin tur", "reading": "Läser förfrågan",
+                      "thinking": "Analyserar underlaget", "searching": "Söker i arkivet",
+                      "reading_sources": "Läser tidigare underlag", "drafting": "Tar fram kundsvaret",
+                      "verifying": "Granskar svaret mot källorna", "pdf": "Skapar offertbilagan",
+                      "saving": "Sparar resultatet", "completed": "Klart"}
+
+
+def quote_agent_progress_data(previous, stage, detail):
+    now = datetime.now(timezone.utc).isoformat()
+    event = {"stage": stage, "title": QUOTE_AGENT_TITLES[stage], "detail": str(detail)[:400], "at": now}
+    return {**event, "phase": QUOTE_AGENT_PHASES[stage],
+            "started_at": previous.get("started_at") or (now if stage != "queued" else ""),
+            "events": (previous.get("events", []) + [event])[-40:]}
+
+
+def update_quote_agent_progress(submission_id, token, stage, detail):
+    """Persist real worker events; an older worker cannot replace a newer run's status."""
+    db = get_db()
+    if not db: return
+    try:
+        job = db.query(QuoteAgentJob).filter_by(id=submission_id, token=token).with_for_update().first()
+        if not job or job.state != "running": return
+        status = db.get(QuoteAgentProgress, submission_id)
+        previous = status.data if status and status.token == token else {}
+        db.merge(QuoteAgentProgress(id=submission_id, token=token, data=quote_agent_progress_data(previous, stage, detail)))
+        job.updated_at = datetime.utcnow()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print("Quote Agent progress could not be saved:", type(exc).__name__)
+    finally: db.close()
+
+
 def get_or_create_quote_agent_result(submission, attachments=None):
     """One persisted job per request; both internal mail and admin use its saved result."""
     db = get_db()
@@ -3549,6 +3595,9 @@ def get_or_create_quote_agent_result(submission, attachments=None):
         claimed = db.query(QuoteAgentJob).filter(QuoteAgentJob.id == submission["id"],
             ((QuoteAgentJob.state == "queued") | ((QuoteAgentJob.state == "running") & (QuoteAgentJob.updated_at < datetime.utcnow() - timedelta(minutes=6))))).update(
             {"state": "running", "token": token, "updated_at": datetime.utcnow()}, synchronize_session=False)
+        if claimed:
+            db.merge(QuoteAgentProgress(id=submission["id"], token=token,
+                     data=quote_agent_progress_data({}, "reading", "Startar granskningen av förfrågan.")))
         db.commit()
     finally: db.close()
     if not claimed:
@@ -3565,14 +3614,17 @@ def get_or_create_quote_agent_result(submission, attachments=None):
     source = {"kind": "submission", "id": submission["id"], "form_type": submission.get("form_type", "Kontakt"),
               "fields": {k: v for k, v in submission.get("fields", {}).items() if not str(k).startswith("__")},
               "title": submission.get("title", ""), "summary": submission.get("form_summary", ""), "timestamp": submission.get("timestamp", "")}
+    def progress(stage, detail):
+        update_quote_agent_progress(submission["id"], token, stage, detail)
     try:
-        run = run_ai_lab_agent(source, attachments)
+        run = run_ai_lab_agent(source, attachments, progress=progress)
         result = run["result"]
         pdf = base64.b64decode(run["quote_pdf_base64"]) if run.get("quote_pdf_base64") else None
         result["trace"] = run["trace"]
     except Exception as exc:
         print("Quote Agent research failed:", type(exc).__name__)
         result, pdf = quote_agent.blocked_result("Agentgranskningen kunde inte slutföras. Niclas behöver granska förfrågan manuellt."), None
+    progress("saving", "Sparar svaret och eventuell offertbilaga på ärendet.")
     db = get_db()
     if db:
         try:
@@ -3581,6 +3633,10 @@ def get_or_create_quote_agent_result(submission, attachments=None):
                 return quote_agent.blocked_result("En nyare agentkörning har tagit över.")
             result["created_at"] = datetime.now(SWEDEN_TZ).isoformat()
             db.merge(QuoteRun(id=submission["id"], result=result, quote_pdf=pdf))
+            status = db.get(QuoteAgentProgress, submission["id"])
+            detail = "Svaret och offertbilagan är sparade." if pdf else "Svaret är sparat. Se bedömningen för frågor eller manuell granskning."
+            db.merge(QuoteAgentProgress(id=submission["id"], token=token,
+                     data=quote_agent_progress_data(status.data if status and status.token == token else {}, "completed", detail)))
             job.state, job.updated_at = "completed", datetime.utcnow()
             db.commit()
         except Exception:
@@ -3602,6 +3658,7 @@ def enqueue_quote_agent(submission, force=False):
             if not job: job = QuoteAgentJob(id=submission["id"])
             job.state, job.token, job.updated_at = "queued", "", datetime.utcnow()
             db.merge(job)
+            db.merge(QuoteAgentProgress(id=submission["id"], token="", data=quote_agent_progress_data({}, "queued", "Jobbet fortsätter på servern även om du stänger den här vyn.")))
             db.commit()
         QUOTE_AGENT_EXECUTOR.submit(get_or_create_quote_agent_result, submission)
     finally: db.close()
@@ -6827,8 +6884,12 @@ def quote_agent_submission_route(submission_id):
         if job and (state == "queued" or (state == "running" and job.updated_at < datetime.utcnow() - timedelta(minutes=6))):
             enqueue_quote_agent(submission, force=True)
             state = "running"
+            db.expire_all()
+            job = db.get(QuoteAgentJob, submission_id)
+        progress = db.get(QuoteAgentProgress, submission_id)
         result = run.result if run and state == "completed" else None
         return jsonify(state=state, result=result,
+                       progress=progress.data if progress and job and progress.token == job.token else None,
                        has_pdf=bool(run and run.quote_pdf and result),
                        draft_url=get_quote_agent_draft_url(submission_id) if result and result.get("email", {}).get("body") else "",
                        model=os.getenv("QUOTE_AGENT_MODEL", "gpt-6.1-sol"), sending_enabled=False)

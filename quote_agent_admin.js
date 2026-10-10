@@ -9,6 +9,16 @@ function renderQuoteAgentPanel(container, item) {
     const runButton = $('<button type="button">').addClass('btn').text('Agent Svar');
     const progress = $('<span>').addClass('quote-agent-muted').attr('role', 'status');
     controls.append(runButton, progress);
+    const workCard = $('<div>').addClass('quote-agent-work').prop('hidden', true);
+    const workTitle = $('<strong>'), workDetail = $('<p>').addClass('quote-agent-work-detail');
+    const workElapsed = $('<span>').addClass('quote-agent-work-elapsed');
+    const phases = ['Underlag', 'Sökning', 'Kundsvar', 'Granskning', 'Bilaga & spara'];
+    const steps = $('<ol>').addClass('quote-agent-steps').attr('aria-label', 'Agentens arbetssteg');
+    phases.forEach((label, index) => steps.append($('<li>').append($('<span>').text(index + 1), $('<small>').text(label))));
+    const activity = $('<details>').addClass('quote-agent-activity').append($('<summary>').text('Visa aktivitet'));
+    const activityList = $('<ol>'); activity.append(activityList);
+    workCard.append($('<div>').addClass('quote-agent-work-top').append($('<span>').addClass('quote-agent-spinner').attr('aria-hidden', 'true'), workTitle, workElapsed),
+        workDetail, steps, $('<p>').addClass('quote-agent-work-background').text('Du kan stänga den här vyn eller lämna sidan. Agenten fortsätter på servern. Öppna inskicket igen för att se status och resultat.'), activity);
     const output = $('<div>').addClass('quote-agent-output');
     const feedbackBox = $('<div>').addClass('quote-agent-feedback');
     const feedbackInput = $('<textarea rows="3" maxlength="4000">').attr('placeholder', 'Vad blev fel? Vad ska agenten tänka på nästa gång?').attr('aria-label', 'Feedback till agenten');
@@ -20,9 +30,9 @@ function renderQuoteAgentPanel(container, item) {
     const memoryList = $('<div>').addClass('quote-agent-memory-list');
     memories.append(memoryList);
     feedbackBox.append($('<h4>').text('Feedback till agenten'), $('<p>').addClass('quote-agent-muted').text('Sparas i databasen och läses vid varje körning. Feedback ändrar nästa utkast; ett redan skapat utkast uppdateras när du kör igen.'), feedbackInput, scope, $('<div>').addClass('quote-agent-actions').append(save, saveAndRun), feedbackStatus, memories);
-    panel.append(heading, hint, controls, output, feedbackBox);
+    panel.append(heading, hint, controls, workCard, output, feedbackBox);
     container.append(panel);
-    let timer = null, pdfUrl = null, running = false, closed = false;
+    let timer = null, elapsedTimer = null, startedAt = null, pdfUrl = null, running = false, closed = false;
     const endpoint = `${API_BASE}/api/quote_agent/submission/${encodeURIComponent(id)}`;
     async function requestJson(url, options) {
         const response = await adminFetch(url, options);
@@ -34,7 +44,36 @@ function renderQuoteAgentPanel(container, item) {
         running = value;
         runButton.prop('disabled', value).text(value ? 'Agenten arbetar…' : 'Kör Agent Svar igen');
         saveAndRun.prop('disabled', value);
-        progress.text(value ? 'Söker, läser underlag och granskar utkastet. Det kan ta några minuter.' : '');
+        progress.text('');
+        if (!value && elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    }
+    function renderWork(data) {
+        const state = data.progress || {};
+        workCard.prop('hidden', false).toggleClass('is-complete', !running);
+        workTitle.text(state.title || (running ? 'Startar agenten' : 'Klart'));
+        workDetail.text(state.detail || 'Hämtar status från servern.');
+        workCard.find('.quote-agent-work-background').toggle(running);
+        const phase = Number.isInteger(state.phase) ? state.phase : 0;
+        steps.children().each(function (index) {
+            $(this).toggleClass('is-done', index < phase).toggleClass('is-active', running && index === phase);
+            $(this).find('span').text(index < phase ? '✓' : index + 1);
+            $(this).attr('aria-current', running && index === phase ? 'step' : null);
+        });
+        startedAt = state.started_at ? new Date(state.started_at).getTime() : null;
+        function updateElapsed() {
+            if (!startedAt) { workElapsed.text(running ? 'Pågår' : ''); return; }
+            const end = running ? Date.now() : new Date(state.at).getTime();
+            const seconds = Math.max(0, Math.floor((end - startedAt) / 1000));
+            workElapsed.text(`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
+        }
+        if (elapsedTimer) clearInterval(elapsedTimer);
+        updateElapsed();
+        elapsedTimer = running ? setInterval(updateElapsed, 1000) : null;
+        activityList.empty();
+        (state.events || []).forEach(event => activityList.append($('<li>').append(
+            $('<time>').text(new Date(event.at).toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit', second:'2-digit'})),
+            $('<span>').text(event.detail || event.title))));
+        activity.toggle(!!state.events?.length);
     }
     function addList(title, rows) {
         if (!rows || !rows.length) return;
@@ -44,11 +83,15 @@ function renderQuoteAgentPanel(container, item) {
         if (closed) return;
         if (data.state === 'running' || data.state === 'queued') {
             setBusy(true);
+            renderWork(data);
+            output.empty();
             if (timer) clearTimeout(timer);
             timer = setTimeout(load, 3000);
             return;
         }
         setBusy(false);
+        if (data.progress) renderWork(data);
+        else workCard.prop('hidden', true);
         if (!data.result) { runButton.text('Agent Svar'); return; }
         output.empty();
         if (pdfUrl) { URL.revokeObjectURL(pdfUrl); pdfUrl = null; }
@@ -112,11 +155,17 @@ function renderQuoteAgentPanel(container, item) {
     async function load() {
         if (closed || !panel[0].isConnected) return;
         try { await display(await requestJson(endpoint)); }
-        catch (error) { setBusy(false); progress.text(error.message); }
+        catch (error) {
+            progress.text(`Status kunde inte hämtas: ${error.message}. Försöker igen…`);
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(load, 5000);
+        }
     }
     async function start() {
         if (running) return;
         setBusy(true);
+        output.empty();
+        renderWork({});
         try { await display(await requestJson(endpoint, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({regenerate: true})})); }
         catch (error) { setBusy(false); progress.text(error.message); }
     }
@@ -153,6 +202,6 @@ function renderQuoteAgentPanel(container, item) {
     runButton.on('click', start);
     save.on('click', () => saveFeedback(false));
     saveAndRun.on('click', () => saveFeedback(true));
-    container.data('quoteAgentCleanup', () => { closed = true; if (timer) clearTimeout(timer); if (pdfUrl) URL.revokeObjectURL(pdfUrl); });
+    container.data('quoteAgentCleanup', () => { closed = true; if (timer) clearTimeout(timer); if (elapsedTimer) clearInterval(elapsedTimer); if (pdfUrl) URL.revokeObjectURL(pdfUrl); });
     load(); loadMemories();
 }

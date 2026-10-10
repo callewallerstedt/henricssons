@@ -3,6 +3,8 @@ import copy
 import json
 import os
 import tempfile
+import threading
+import time
 import unittest
 from decimal import Decimal
 from email import policy
@@ -37,6 +39,24 @@ def sample():
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_live_progress_follows_research_and_draft_validation(self):
+        raw, archive, source = sample()
+        archive.search = lambda query: [{"id": "gmail:old", "subject": "Offert"}]
+        events = []
+        responses = [
+            {"status": "completed", "output": [{"type": "function_call", "name": "search_history", "call_id": "c1", "arguments": '{"query":"Test Variant"}'}]},
+            {"status": "completed", "output": [{"type": "message", "content": [{"type": "output_text", "text": json.dumps(raw)}]}]}
+        ]
+        with patch.object(q.requests, 'post') as api, patch.object(q, 'verify_draft') as verify:
+            api.return_value.status_code = 200
+            api.return_value.json.side_effect = responses
+            result = q.run_agent(source, archive, 'gpt-6.1-sol', '', api_key='test', progress=lambda stage, detail: events.append((stage, detail)))
+        self.assertEqual(result['decision'], 'quote_draft')
+        self.assertIn(('searching', 'Sökningen gav 1 träffar.'), events)
+        self.assertEqual(events[-2][0], 'drafting')
+        self.assertEqual(events[-1][0], 'verifying')
+        verify.assert_called_once()
+
     def test_search_handles_optional_submission_metadata(self):
         archive=q.Archive(lambda:None,(),lambda:[{"id":"old","fields":{"model":"Uttern D55"},"form_summary":None,"title":None,"timestamp":None}],lambda:[])
         rows=archive.search('Uttern D55')
@@ -128,9 +148,56 @@ class AdminTests(unittest.TestCase):
         db.commit(); db.close()
 
     def test_private_endpoints_require_authentication(self):
-        for url in ("/api/quote_agent/status","/api/quote_agent/feedback","/api/quote_agent/submission/unit-request/pdf"):
+        for url in ("/api/quote_agent/status","/api/quote_agent/feedback","/api/quote_agent/submission/unit-request/pdf","/api/quote_agent/submission/unit-request"):
             self.assertIn(self.client.get(url).status_code,(401,403))
         self.assertEqual(self.client.get('/api/quote_agent/draft?id=unit-request&ts=1&token=bad').status_code,403)
+
+    def test_job_continues_without_original_view_and_reports_persisted_progress(self):
+        id = 'background-progress'
+        db = app.get_db()
+        db.add(app.FormSubmission(id=id,form_type='Kontakt',fields={'email':'current@example.test'}))
+        db.commit(); db.close()
+        entered, release = threading.Event(), threading.Event()
+        def worker(source, attachments=None, progress=None):
+            progress('searching', 'Söker efter modell och variant.')
+            entered.set()
+            if not release.wait(5): raise RuntimeError('Test timeout')
+            progress('verifying', 'Granskar källorna.')
+            return {'result':q.blocked_result('Behöver Niclas'), 'trace':[]}
+        path = '/api/quote_agent/submission/'+id
+        with patch.object(app,'run_ai_lab_agent',side_effect=worker) as agent, patch.object(app,'send_mailgun_email') as send:
+            try:
+                self.assertEqual(self.client.post(path,headers=self.headers,json={}).status_code,200)
+                self.assertTrue(entered.wait(3))
+                another_view = app.app.test_client()
+                data = another_view.get(path,headers=self.headers).json
+                self.assertEqual(data['state'],'running')
+                self.assertEqual(data['progress']['stage'],'searching')
+                another_view.post(path,headers=self.headers,json={'regenerate':True})
+            finally:
+                release.set()
+            for _ in range(60):
+                data = another_view.get(path,headers=self.headers).json
+                if data['state']=='completed': break
+                time.sleep(.02)
+            self.assertEqual(data['state'],'completed')
+            self.assertEqual(data['progress']['stage'],'completed')
+            self.assertIn('verifying',[e['stage'] for e in data['progress']['events']])
+            self.assertEqual(agent.call_count,1)
+            send.assert_not_called()
+
+    def test_older_worker_cannot_replace_current_progress(self):
+        id = 'progress-token-test'
+        db = app.get_db()
+        db.add(app.QuoteAgentJob(id=id,state='running',token='new'))
+        db.commit(); db.close()
+        app.update_quote_agent_progress(id,'new','searching','Ny körning')
+        app.update_quote_agent_progress(id,'old','pdf','Gammal körning')
+        db = app.get_db()
+        status = db.get(app.QuoteAgentProgress,id)
+        self.assertEqual(status.token,'new')
+        self.assertEqual(status.data['detail'],'Ny körning')
+        db.close()
 
     def test_feedback_persists_and_can_be_removed(self):
         response = self.client.post('/api/quote_agent/feedback',headers=self.headers,json={"submission_id":"unit-request","text":"Fråga om bågarna är original.","scope":"global"})
