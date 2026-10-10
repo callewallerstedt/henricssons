@@ -802,6 +802,7 @@ SessionLocal = None
 DB_INIT_LOCK = threading.RLock()
 DB_RETRY_INTERVAL_SECONDS = 20.0
 _db_last_init_attempt = 0.0
+DB_INIT_ERROR: Dict[str, Any] = {}
 SITE_CONTENT_CACHE: Dict[str, Any] = {}
 SITE_CONTENT_CACHE_LOCK = threading.RLock()
 SITE_CONTENT_MISSING = object()
@@ -871,7 +872,7 @@ def _clear_read_only_on_connect(target_engine: Any) -> None:
 
 
 def init_db() -> None:
-    global engine, SessionLocal, _db_last_init_attempt
+    global engine, SessionLocal, _db_last_init_attempt, DB_INIT_ERROR
     with DB_INIT_LOCK:
         _db_last_init_attempt = time.time()
         try:
@@ -887,9 +888,18 @@ def init_db() -> None:
             _migrate_boat_brand_columns()
             _migrate_dyn_manufacturer_columns()
             SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+            DB_INIT_ERROR = {}
             print("Database connected.")
             _seed_supplier_products_if_empty()
         except Exception as exc:
+            message = str(exc).splitlines()[0][:500]
+            for key in ("DATABASE_URL", "ADMIN_API_KEY", "OPENAI_API_KEY", "GITHUB_TOKEN", "MAILGUN_API_KEY"):
+                secret = os.getenv(key, "")
+                if secret: message = message.replace(secret, "[redacted]")
+            from urllib.parse import urlparse
+            password = urlparse(DATABASE_URL).password
+            if password: message = message.replace(password, "[redacted]")
+            DB_INIT_ERROR = {"type": type(exc).__name__, "code": getattr(getattr(exc, "orig", None), "pgcode", None), "message": message}
             print(f"Warning: database init failed, file fallback will be used: {exc}")
             engine = None
             SessionLocal = None
@@ -6794,7 +6804,7 @@ def ai_lab_run_route():
 def quote_agent_status_route():
     db = get_db()
     if not db:
-        return jsonify(error="Archive database unavailable"), 503
+        return jsonify(error="Archive database unavailable", database_error=DB_INIT_ERROR), 503
     try:
         return jsonify(messages=db.query(QuoteHistory).count(), pdfs=db.query(QuoteAsset).filter(~QuoteAsset.id.startswith("template:")).count(),
                        template_configured=bool(get_site_content("quote_agent_template")), sending_enabled=False)
