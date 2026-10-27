@@ -636,9 +636,26 @@ function fetchManufacturers() {
         });
 }
 
+// Exempel-slugs som slagits ihop med en dynsats/båtstol. De ligger kvar i
+// models_meta.json men visas bara via Dynsatser-fliken.
+let mergedExampleTargets = new Map();
+
+function loadMergedExampleTargets() {
+    return fetch(`${API_BASE}/api/dynsatser_catalog?kind=all&v=${Date.now()}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+            mergedExampleTargets = new Map();
+            ((json && json.entries) || []).forEach(entry => {
+                (entry.legacy_slugs || []).forEach(slug => mergedExampleTargets.set(slug, entry));
+            });
+        })
+        .catch(() => {});
+}
+
 function fetchExtras() {
     // Ladda allt direkt från models_meta.json och mappa till extrasData-strukturen
     const url = `${API_BASE}/henricssons_bilder/models_meta.json?v=${Date.now()}`;
+    loadMergedExampleTargets().then(() => { if (extrasLoaded) buildExtrasList(); });
     return fetch(url)
         .then(r => {
             if (!r.ok) {
@@ -1396,16 +1413,26 @@ function buildExtrasList(){
     pairs.forEach(({obj, idx, cat})=>{
         const searchStr = `${obj.name||''} ${obj.manufacturer||''} ${obj.model||''} ${obj.variant||''}`.toLowerCase();
         const isSelected = idx===selectedExtraIndex && (activeExtrasKey==='all'?cat===editExtrasCat:cat===activeExtrasKey);
-        const inactiveCls = obj.published===false ? 'inactive' : '';
+        const mergedInto = mergedExampleTargets.get(obj.slug);
+        const inactiveCls = (obj.published===false || mergedInto) ? 'inactive' : '';
         const noImagesCls = (!obj.images || obj.images.length === 0) ? 'no-images' : '';
         const safeName = escapeHtml(obj.name || '-');
-        const div = $(`<div class="extras-item ${inactiveCls} ${noImagesCls} ${isSelected?'selected-e':''}" data-index="${idx}" data-cat="${cat}" data-search="${searchStr}"><span class="extra-name">${safeName}</span></div>`);
+        const mergedNote = mergedInto ? `<span class="extra-merged-note" title="Visas på sajten som ${escapeHtml(mergedInto.name || '')}">→ flyttad till ${mergedInto.kind === 'batstol' ? 'Båtstolar' : 'Dynsatser'}</span>` : '';
+        const div = $(`<div class="extras-item ${inactiveCls} ${noImagesCls} ${isSelected?'selected-e':''}" data-index="${idx}" data-cat="${cat}" data-search="${searchStr}"><span class="extra-name">${safeName}</span>${mergedNote}</div>`);
         list.append(div);
     });
 
     const headingText = extrasCategories[activeExtrasKey] || 'Poster';
-    const plusBtn = activeExtrasKey==='all' ? '' : ' <button class="add-btn" id="add-extra-btn">+</button>';
+    const plusBtn = (activeExtrasKey==='all' || activeExtrasKey==='boatseats') ? '' : ' <button class="add-btn" id="add-extra-btn">+</button>';
     $('#extras-heading').html(`${headingText}${plusBtn}`);
+    if(activeExtrasKey==='boatseats'){
+        const notice = $(`<div class="extras-merged-banner">
+            <span>Dynsatser och båtstolar hanteras nu på ett ställe: fliken <strong>Dynsatser</strong>. Där väljer du om posten är en dynsats eller båtstol och vilka båtmodeller den passar. Posterna nedan är gamla exempel som redan flyttats dit.</span>
+            <button type="button" class="btn">Öppna Dynsatser</button>
+        </div>`);
+        notice.find('button').on('click', () => switchTab('dynsatser'));
+        list.prepend(notice);
+    }
 
     // Bind clicks
     $('.extras-item').off('click').on('click', function(){
@@ -5110,7 +5137,80 @@ function renderBoatBrands() {
         return;
     }
     if (empty) empty.style.display = 'none';
-    boatBrandsCache.forEach(brand => list.appendChild(buildBoatBrandCard(brand)));
+    boatBrandsCache
+        .filter(brand => !boatBrandKindFilter || (brand.kind || 'dynsats') === boatBrandKindFilter)
+        .forEach(brand => list.appendChild(buildBoatBrandCard(brand)));
+}
+
+let boatBrandKindFilter = '';
+$(document).on('click', '.bb-kind-btn', function () {
+    boatBrandKindFilter = this.dataset.kind || '';
+    $('.bb-kind-btn').removeClass('active');
+    $(this).addClass('active');
+    $('#bb-add-btn').text(boatBrandKindFilter === 'batstol' ? '+ Ny båtstol' : '+ Ny dynsats');
+    renderBoatBrands();
+});
+
+// Kapellexemplens modellnamn per tillverkare, som förslag till "Passar båtmodell".
+let kapellModelsByMaker = null;
+function loadKapellModelsByMaker() {
+    if (kapellModelsByMaker) return Promise.resolve(kapellModelsByMaker);
+    return fetch(`${API_BASE}/henricssons_bilder/models_meta.json?v=${Date.now()}`)
+        .then(r => r.ok ? r.json() : {})
+        .then(meta => {
+            const byMaker = new Map();
+            Object.values(meta || {}).forEach(item => {
+                if (!item || item.published === false) return;
+                const category = String(item.category || '');
+                if (/stol|dyn/i.test(category)) return;
+                const key = normalizeMakerKey(item.manufacturer);
+                const model = String(item.model || '').trim();
+                if (!key || !model) return;
+                if (!byMaker.has(key)) byMaker.set(key, new Set());
+                byMaker.get(key).add(model);
+            });
+            kapellModelsByMaker = byMaker;
+            return byMaker;
+        })
+        .catch(() => new Map());
+}
+
+function normalizeMakerKey(value) {
+    return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+}
+
+function renderBoatModelSuggestions(card) {
+    const box = card.querySelector('.bb-model-suggestions');
+    if (!box) return;
+    const mfrId = card.querySelector('.bb-manufacturer').value;
+    const mfr = dynManufacturersCache.find(m => String(m.id) === String(mfrId));
+    if (!mfr) {
+        box.textContent = 'Välj tillverkare för att se förslag från kapellexemplen.';
+        return;
+    }
+    loadKapellModelsByMaker().then(byMaker => {
+        const models = Array.from(byMaker.get(normalizeMakerKey(mfr.name)) || []).sort((a, b) => a.localeCompare(b, 'sv', { numeric: true }));
+        if (!models.length) {
+            box.textContent = `Inga kapellexempel för ${mfr.name} än.`;
+            return;
+        }
+        box.innerHTML = `<details><summary>Välj bland kapellexemplen för ${escHtml(mfr.name)} (${models.length})</summary><div class="bb-model-chips"></div></details>`;
+        const chips = box.querySelector('.bb-model-chips');
+        models.forEach(model => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'bb-model-chip';
+            chip.textContent = model;
+            chip.addEventListener('click', () => {
+                const area = card.querySelector('.bb-models');
+                const lines = area.value.split('\n').map(l => l.trim()).filter(Boolean);
+                if (!lines.includes(model)) lines.push(model);
+                area.value = lines.join('\n');
+                area.dispatchEvent(new Event('input'));
+            });
+            chips.appendChild(chip);
+        });
+    });
 }
 
 function buildBoatBrandCard(brand) {
@@ -5118,6 +5218,9 @@ function buildBoatBrandCard(brand) {
     card.className = 'bb-card';
     card.dataset.brandId = brand.id;
     const slug = brand.slug || '';
+    const kind = brand.kind || 'dynsats';
+    const pageHref = brand.href || (slug ? `/dynsatser/${slug}` : '');
+    const legacy = (brand.legacy_slugs || []);
     card.innerHTML = `
         <div class="bb-fields">
             <div>
@@ -5130,12 +5233,25 @@ function buildBoatBrandCard(brand) {
             </div>
             <div class="bb-row-2col">
                 <div>
+                    <label>Typ</label>
+                    <select class="bb-kind">
+                        <option value="dynsats"${kind === 'dynsats' ? ' selected' : ''}>Dynsats</option>
+                        <option value="batstol"${kind === 'batstol' ? ' selected' : ''}>Båtstol</option>
+                    </select>
+                </div>
+                <div>
                     <label>Sorteringsordning</label>
                     <input type="text" class="bb-sort" value="${escHtml(String(brand.sort_order || 0))}" placeholder="0">
                 </div>
-                <div style="display:flex;align-items:flex-end;">
-                    ${slug ? `<a href="/dynsatser/${escHtml(slug)}" target="_blank" style="font-size:0.82rem;color:var(--primary);text-decoration:none;white-space:nowrap;">↗ Se sida</a>` : ''}
-                </div>
+            </div>
+            <div>
+                <label>Passar båtmodell (en per rad)</label>
+                <textarea class="bb-models" placeholder="t.ex. 512 Excel">${escHtml((brand.boat_models || []).join('\n'))}</textarea>
+                <div class="bb-hint bb-model-suggestions"></div>
+            </div>
+            <div class="bb-hint">
+                ${pageHref ? `<a href="${escHtml(pageHref)}" target="_blank" style="color:var(--primary);text-decoration:none;">↗ Se sida</a>` : ''}
+                ${legacy.length ? `<br>Gamla länkar som skickas hit: ${legacy.map(l => escHtml(l)).join(', ')}` : ''}
             </div>
             <div>
                 <label>Beskrivning</label>
@@ -5143,7 +5259,7 @@ function buildBoatBrandCard(brand) {
             </div>
             <div class="bb-actions">
                 <span class="bb-save-status"></span>
-                <button type="button" class="btn btn-danger bb-delete">Ta bort dynsats</button>
+                <button type="button" class="btn btn-danger bb-delete">Ta bort</button>
             </div>
         </div>
         <div class="bb-images">
@@ -5163,6 +5279,7 @@ function buildBoatBrandCard(brand) {
     `;
     renderBoatBrandImages(card, brand);
     bindBoatBrandCard(card, brand);
+    renderBoatModelSuggestions(card);
     return card;
 }
 
@@ -5239,16 +5356,24 @@ function bindBoatBrandCard(card, brand) {
         bbSaveTimers.set(card, t);
     }
 
-    [nameInput, sortInput, descInput].forEach(el => el.addEventListener('input', scheduleSave));
+    const modelsInput = card.querySelector('.bb-models');
+    const kindSelect = card.querySelector('.bb-kind');
+    [nameInput, sortInput, descInput, modelsInput].forEach(el => el.addEventListener('input', scheduleSave));
     // Manufacturer change saves immediately (also refresh tillverkare counts after).
     mfrSelect.addEventListener('change', () => {
         status.textContent = 'Sparar...';
         status.classList.remove('is-saved', 'is-error');
+        renderBoatModelSuggestions(card);
         saveBoatBrand(card, brand, status).then(() => loadDynManufacturers());
+    });
+    kindSelect.addEventListener('change', () => {
+        status.textContent = 'Sparar...';
+        status.classList.remove('is-saved', 'is-error');
+        saveBoatBrand(card, brand, status);
     });
 
     card.querySelector('.bb-delete').addEventListener('click', async () => {
-        if (!confirm(`Ta bort märket "${brand.name || 'utan namn'}"? Detta kan inte ångras.`)) return;
+        if (!confirm(`Ta bort "${brand.name || 'utan namn'}"? Detta kan inte ångras.`)) return;
         try {
             const res = await adminFetch(`${API_BASE}/api/boat_brands/${brand.id}`, { method: 'DELETE' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -5298,11 +5423,13 @@ async function saveBoatBrand(card, brand, status) {
     const description = card.querySelector('.bb-description').value;
     const mfrRaw = card.querySelector('.bb-manufacturer').value;
     const manufacturer_id = mfrRaw ? parseInt(mfrRaw, 10) : null;
+    const kind = card.querySelector('.bb-kind').value;
+    const boat_models = card.querySelector('.bb-models').value;
     try {
         const res = await adminFetch(`${API_BASE}/api/boat_brands/${brand.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, sort_order: sort, description, manufacturer_id })
+            body: JSON.stringify({ name, sort_order: sort, description, manufacturer_id, kind, boat_models })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const updated = await res.json();
@@ -5310,10 +5437,14 @@ async function saveBoatBrand(card, brand, status) {
         brand.description = updated.description;
         brand.sort_order = updated.sort_order;
         brand.manufacturer_id = updated.manufacturer_id;
+        brand.kind = updated.kind;
+        brand.boat_models = updated.boat_models;
         const cached = boatBrandsCache.find(b => b.id === brand.id);
         if (cached) {
             cached.name = updated.name;
             cached.manufacturer_id = updated.manufacturer_id;
+            cached.kind = updated.kind;
+            cached.boat_models = updated.boat_models;
         }
         status.textContent = 'Sparat ✓';
         status.classList.add('is-saved');
@@ -5329,7 +5460,12 @@ async function addBoatBrand() {
         const res = await adminFetch(`${API_BASE}/api/boat_brands`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'Ny dynsats', description: '', sort_order: boatBrandsCache.length })
+            body: JSON.stringify({
+                name: boatBrandKindFilter === 'batstol' ? 'Ny båtstol' : 'Ny dynsats',
+                kind: boatBrandKindFilter || 'dynsats',
+                description: '',
+                sort_order: boatBrandsCache.length
+            })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const brand = await res.json();

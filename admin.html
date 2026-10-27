@@ -1458,6 +1458,62 @@
         .tp-dropzone input[type="file"] { display: none; }
         .tp-upload-status { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.4rem; min-height: 1.1em; }
 
+        .extra-merged-note { display: block; font-size: 0.72rem; color: var(--primary); margin-top: 0.2rem; }
+        .extras-merged-banner {
+            grid-column: 1 / -1;
+            padding: 0.9rem 1rem;
+            border: 1px dashed var(--primary);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        .bb-card select {
+            width: 100%;
+            padding: 0.6rem 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+        .bb-card textarea.bb-models { min-height: 64px; }
+        .bb-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.3rem; line-height: 1.45; }
+        .bb-model-chip {
+            display: inline-block;
+            margin: 0.2rem 0.25rem 0 0;
+            padding: 0.15rem 0.55rem;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--text);
+            font-size: 0.76rem;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .bb-model-chip:hover { border-color: var(--primary); color: var(--primary); }
+        .bb-model-suggestions summary { cursor: pointer; color: var(--primary); }
+        .bb-model-chips { margin-top: 0.3rem; }
+        .bb-filter { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.75rem; }
+        .bb-kind-btn {
+            background: var(--surface);
+            color: var(--text-soft);
+            border: 1px solid var(--border);
+            padding: 0.4rem 0.85rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            min-height: 32px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .bb-kind-btn:hover { background: var(--surface-2); }
+        .bb-kind-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
         /* ================ BOAT BRANDS (DYNSATSER) ================ */
         .bb-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
         .bb-card {
@@ -2968,12 +3024,17 @@
 
                 <div class="card">
                     <h2 style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-                        <span>Dynsatser</span>
+                        <span>Dynsatser &amp; båtstolar</span>
                         <button class="btn" id="bb-add-btn">+ Ny dynsats</button>
                     </h2>
                     <p style="color:var(--text-muted);margin-top:-0.5rem;font-size:0.92rem;">
-                        Varje dynsats kopplas till en <strong>tillverkare</strong> och får ett eget bildgalleri. Välj vilken bild som ska vara omslag (visas först) med stjärnan på bilden.
+                        Det här är det enda stället där dynsatser och båtstolar hanteras. Varje post kopplas till en <strong>tillverkare</strong>, får en <strong>typ</strong> (Dynsats visas under Dynsatser, Båtstol under Båtstolar) och ett eget bildgalleri. Under <strong>Passar båtmodell</strong> anger du vilka båtmodeller posten hör till, så visas den under &quot;Andra tittade även på&quot; på kapellsidorna för samma modell. Alla poster syns även i Bilder &amp; exempel och i sökningen. Välj omslagsbild med stjärnan.
                     </p>
+                    <div class="bb-filter" id="bb-filter">
+                        <button type="button" class="bb-kind-btn active" data-kind="">Alla</button>
+                        <button type="button" class="bb-kind-btn" data-kind="dynsats">Dynsatser</button>
+                        <button type="button" class="bb-kind-btn" data-kind="batstol">Båtstolar</button>
+                    </div>
                     <div id="bb-empty-state" style="display:none;padding:2rem;text-align:center;color:var(--text-muted);border:1px dashed var(--border);border-radius:12px;margin-top:1rem;">
                         Inga dynsatser ännu. Klicka på <strong>+ Ny dynsats</strong> för att lägga till.
                     </div>
@@ -3163,7 +3224,7 @@
         boats: { t: 'Tillverkare & modeller', s: 'Hantera båtdatabasen' },
         images: { t: 'Bilder & exempel', s: 'Galleri och kategorier' },
         tempproducts: { t: 'Tillfälliga produkter', s: 'Hantera produkter med bilder, pris och beskrivning' },
-        dynsatser: { t: 'Dynsatser', s: 'Hantera tillverkare och dynsatser med bilder på dynsatser-sidan' },
+        dynsatser: { t: 'Dynsatser & båtstolar', s: 'Hantera tillverkare, dynsatser och båtstolar med bilder' },
         supplier: { t: 'Leverantörsartiklar', s: 'Hamnkapell och överdrag direkt från leverantör – pris, texter och leveranstid' }
     };
     function syncTitle(primary) {

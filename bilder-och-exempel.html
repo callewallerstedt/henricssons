@@ -167,6 +167,7 @@
                     <div class="hb-nav-submenu">
                         <a href="/tillbehor">Fenderstrumpor</a>
                         <a href="/dynsatser">Dynsatser</a>
+                        <a href="/batstolar">Båtstolar</a>
                         <a href="/tillfalliga-produkter">Tillfälliga produkter</a>
                     </div>
                 </details>
@@ -273,6 +274,7 @@
                         <li><a href="/bilder-och-exempel">Bilder &amp; exempel</a></li>
                         <li><a href="/tillbehor">Fenderstrumpor</a></li>
                         <li><a href="/dynsatser">Dynsatser</a></li>
+                        <li><a href="/batstolar">Båtstolar</a></li>
                         <li><a href="/tillfalliga-produkter">Tillfälliga produkter</a></li>
                         <li><a href="/kontakt">Kontakt</a></li>
                     </ul>
@@ -310,6 +312,7 @@
         var bilderexData = [];
         var extrasData = {};
         var supplierData = null;
+        var dynCatalog = null;
         const SUPPLIER_KEY = 'leverantorskapell';
         const SUPPLIER_TITLE = 'Hamnkapell och stolshuvar direkt fr\u00e5n leverant\u00f6r';
         let bilderexSupplierBrand = '';
@@ -452,9 +455,15 @@
 
         function buildData() {
             bilderexData = [];
+            // Dynor och b\u00e5tstolar hanteras numera bara under Dynsatser/B\u00e5tstolar.
+            // Gamla exempel som slagits ihop d\u00e4r hoppas \u00f6ver och ers\u00e4tts av posten.
+            const dynEntries = dynCatalog && Array.isArray(dynCatalog.entries) ? dynCatalog.entries : [];
+            const mergedSlugs = new Set();
+            dynEntries.forEach(entry => (entry.legacy_slugs || []).forEach(slug => mergedSlugs.add(slug)));
             if (extrasData && typeof extrasData === 'object') {
                 Object.entries(extrasData).forEach(([slug, item]) => {
                     if (item.hasOwnProperty('published') && item.published === false) return;
+                    if (mergedSlugs.has(slug) || mergedSlugs.has(String(item.canonical_slug || '')) || mergedSlugs.has(extractExampleSlug(item.source, ''))) return;
                     const catMap = {
                         'Motorb\u00e5tar': { label: 'Motorb\u00e5tar', key: 'motorb\u00e5tar' },
                         'Segelb\u00e5tar': { label: 'Segelb\u00e5tar', key: 'segelb\u00e5tar' },
@@ -481,6 +490,29 @@
                     });
                 });
             }
+            const dynSortKey = entry => `${entry.kind === 'batstol' ? 1 : 0} ${entry.manufacturer || ''} ${entry.name || ''}`;
+            dynEntries.slice().sort((a, b) => dynSortKey(a).localeCompare(dynSortKey(b), 'sv', { numeric: true })).forEach(entry => {
+                const isStol = entry.kind === 'batstol';
+                const maker = String(entry.manufacturer || '').trim();
+                let name = String(entry.name || '').trim();
+                if (maker && normalizeSearchText(name).startsWith(normalizeSearchText(maker) + ' ')) {
+                    name = name.slice(maker.length).trim();
+                }
+                const imgs = (entry.image_urls || []).map(url => /^https?:\/\//i.test(url) ? url : `${API_BASE}${url}`);
+                bilderexData.push({
+                    namn: name,
+                    tillverkare: maker || (isStol ? 'B\u00e5tstol' : ''),
+                    kategori: 'B\u00e5tstolar & Dynor',
+                    kategoriKey: 'b\u00e5tstol',
+                    href: `${API_BASE}${entry.href}`,
+                    sub: isStol ? 'B\u00e5tstol' : 'Dynsats',
+                    readMoreLabel: 'Se bilder',
+                    slug: entry.slug,
+                    images: imgs.length ? imgs : [`${API_BASE}/logo.png`],
+                    beskrivning: entry.description || '',
+                    searchExtra: [(entry.boat_models || []).join(' '), isStol ? 'b\u00e5tstol b\u00e5tstolar stol' : 'dynsats dynsatser dynor b\u00e5tdynor'].join(' ')
+                });
+            });
             // Leverant\u00f6rsartiklarna ligger i en egen kategori och blandas inte in
             // under "Visa alla" - de hittas via sin ruta eller via s\u00f6k.
             const supplierProducts = supplierData && Array.isArray(supplierData.products) ? supplierData.products : [];
@@ -773,7 +805,7 @@
                 const examplePath = item.href || buildExamplePath(item);
                 const safeExamplePath = escapeHtml(examplePath);
                 const safeSub = escapeHtml(item.sub || '');
-                const readMoreLabel = item.isSupplier ? 'Visa &amp; best&auml;ll' : 'L&auml;s exempel';
+                const readMoreLabel = item.readMoreLabel ? escapeHtml(item.readMoreLabel) : (item.isSupplier ? 'Visa &amp; best&auml;ll' : 'L&auml;s exempel');
                 const loading = i === 0 ? 'eager' : 'lazy';
                 const priority = i === 0 ? 'high' : 'low';
                 div.innerHTML = `
@@ -851,7 +883,7 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             bilderexInitModal();
-            loadSupplierProducts().finally(loadExtrasData);
+            Promise.all([loadSupplierProducts(), loadDynCatalog()]).finally(loadExtrasData);
             setInterval(() => {
                 if (!document.hidden) loadExtrasData();
             }, 300000);
@@ -885,6 +917,13 @@
                 .then(r => r.ok ? r.json() : null)
                 .then(json => { supplierData = json && Array.isArray(json.products) ? json : null; })
                 .catch(() => { supplierData = null; });
+        }
+
+        function loadDynCatalog() {
+            return fetch(`${API_BASE}/api/dynsatser_catalog?kind=all`, { cache: 'no-cache' })
+                .then(r => r.ok ? r.json() : null)
+                .then(json => { dynCatalog = json && Array.isArray(json.entries) ? json : null; })
+                .catch(() => { dynCatalog = null; });
         }
 
         function debounce(fn, wait) {

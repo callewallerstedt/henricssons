@@ -129,6 +129,7 @@ CORE_PUBLIC_PATHS = [
     "/search",
     "/tillbehor",
     "/dynsatser",
+    "/batstolar",
     "/tillfalliga-produkter",
     "/kontakt",
     "/kapellforfragan",
@@ -738,6 +739,33 @@ class SupplierProduct(Base):
         }
 
 
+BOAT_BRAND_KIND_DYNSATS = "dynsats"
+BOAT_BRAND_KIND_BATSTOL = "batstol"
+BOAT_BRAND_KINDS = {
+    BOAT_BRAND_KIND_DYNSATS: {"path": "/dynsatser", "label": "Dynsatser", "singular": "Dynsats"},
+    BOAT_BRAND_KIND_BATSTOL: {"path": "/batstolar", "label": "Båtstolar", "singular": "Båtstol"},
+}
+
+
+def normalize_boat_brand_kind(value: Any) -> str:
+    kind = str(value or "").strip().lower()
+    return kind if kind in BOAT_BRAND_KINDS else BOAT_BRAND_KIND_DYNSATS
+
+
+def split_lines(value: Any) -> List[str]:
+    """Text column holding one value per line (comma also accepted)."""
+    if isinstance(value, (list, tuple)):
+        parts = [str(item or "") for item in value]
+    else:
+        parts = re.split(r"[\n,]", str(value or ""))
+    seen: List[str] = []
+    for part in parts:
+        clean = part.strip()
+        if clean and clean not in seen:
+            seen.append(clean)
+    return seen
+
+
 class BoatBrand(Base):
     __tablename__ = "boat_brands"
 
@@ -747,6 +775,14 @@ class BoatBrand(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     manufacturer_id = Column(Integer, ForeignKey("dyn_manufacturers.id", ondelete="SET NULL"), nullable=True, index=True)
     cover_image_id = Column(Integer, nullable=True)
+    # "dynsats" visas under /dynsatser, "batstol" under /batstolar.
+    kind = Column(String, nullable=False, default=BOAT_BRAND_KIND_DYNSATS)
+    # Båtmodeller (en per rad) som posten hör till. Kopplar kapellexemplen för
+    # samma modell till dynsatsen och tvärtom.
+    boat_models = Column(Text, nullable=False, default="")
+    # Gamla /exempel/- och /dynsatser/-slugs som slagits ihop hit (en per rad)
+    # och därför 301-omdirigeras till posten.
+    legacy_slugs = Column(Text, nullable=False, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -758,6 +794,9 @@ class BoatBrand(Base):
             "sort_order": int(self.sort_order or 0),
             "manufacturer_id": self.manufacturer_id,
             "cover_image_id": self.cover_image_id,
+            "kind": normalize_boat_brand_kind(self.kind),
+            "boat_models": split_lines(self.boat_models),
+            "legacy_slugs": split_lines(self.legacy_slugs),
             "images": images or [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -831,6 +870,12 @@ def _migrate_boat_brand_columns() -> None:
             additions.append("ALTER TABLE boat_brands ADD COLUMN manufacturer_id INTEGER")
         if "cover_image_id" not in existing:
             additions.append("ALTER TABLE boat_brands ADD COLUMN cover_image_id INTEGER")
+        if "kind" not in existing:
+            additions.append("ALTER TABLE boat_brands ADD COLUMN kind VARCHAR NOT NULL DEFAULT 'dynsats'")
+        if "boat_models" not in existing:
+            additions.append("ALTER TABLE boat_brands ADD COLUMN boat_models TEXT NOT NULL DEFAULT ''")
+        if "legacy_slugs" not in existing:
+            additions.append("ALTER TABLE boat_brands ADD COLUMN legacy_slugs TEXT NOT NULL DEFAULT ''")
         if not additions:
             return
         with engine.begin() as conn:
@@ -1193,6 +1238,7 @@ def example_matches_search(item: Dict[str, Any], query: str) -> bool:
         item.get("delivery", ""),
         item.get("canonical_slug", ""),
         item.get("fallback_slug", ""),
+        item.get("search_extra", ""),
     ]
     haystack = normalize_search_text(" ".join(str(field or "") for field in fields))
     compact_haystack = haystack.replace(" ", "")
@@ -1200,6 +1246,30 @@ def example_matches_search(item: Dict[str, Any], query: str) -> bool:
     if compact_query and compact_query in compact_haystack:
         return True
     return all(token in haystack or token in compact_haystack for token in normalized_query.split())
+
+
+def boat_brand_search_records() -> List[Dict[str, Any]]:
+    """Dynsatser och båtstolar i samma form som exemplen, för sökningen."""
+    manufacturer_names = dyn_manufacturer_names()
+    records: List[Dict[str, Any]] = []
+    for brand in enrich_boat_brands(_fetch_boat_brands(include_images=False)):
+        kind_info = BOAT_BRAND_KINDS[normalize_boat_brand_kind(brand.get("kind"))]
+        manufacturer = manufacturer_names.get(int(brand.get("manufacturer_id") or 0), "")
+        name = str(brand.get("name") or "")
+        # Namnet innehåller oftast redan tillverkaren ("Bella 512 Excel").
+        if manufacturer and normalize_search_text(name).startswith(normalize_search_text(manufacturer)):
+            manufacturer = ""
+        records.append({
+            "manufacturer": manufacturer,
+            "model": name,
+            "category": kind_info["label"],
+            "variant": " ".join(brand.get("boat_models") or []),
+            "description": str(brand.get("description") or ""),
+            "search_extra": "dynsats dynsatser dynor båtdynor" if kind_info["path"] == "/dynsatser" else "båtstol båtstolar stol",
+            "canonical_slug": str(brand.get("slug") or ""),
+            "href": str(brand.get("href") or ""),
+        })
+    return records
 
 
 def extract_referrer_host(referrer: str) -> str:
@@ -1738,6 +1808,10 @@ def list_canonical_examples() -> List[Dict[str, Any]]:
     # Avpublicerade exempel ska varken hamna i sitemap eller bland relaterade
     # länkar - annars gör Publicerad-reglaget ingen skillnad utåt.
     items = [item for item in canonical_examples.values() if is_example_published(item)]
+    # Dynor och båtstolar som flyttats till /dynsatser och /batstolar listas där.
+    merge_targets = merged_example_targets()
+    if merge_targets:
+        items = [item for item in items if not example_merge_target(item, merge_targets)]
     items.sort(key=lambda item: (str(item.get("manufacturer", "")).lower(), str(item.get("model", "")).lower(), str(item.get("canonical_slug", "")).lower()))
     return items
 
@@ -1782,6 +1856,8 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         or canonical_path.startswith("/leverantorskapell/")
     )
     temp_products_active = canonical_path == "/tillfalliga-produkter" or canonical_path.startswith("/tillfalliga-produkter/")
+    dynsatser_active = canonical_path.startswith("/dynsatser/")
+    batstolar_active = canonical_path == "/batstolar" or canonical_path.startswith("/batstolar/")
     return render_template_string(
         """<!DOCTYPE html>
 <html lang="sv">
@@ -2277,10 +2353,11 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
                 <a href="/om-oss">Om oss</a>
                 <a href="/bilder-och-exempel"{% if examples_active %} class="active"{% endif %}>Bilder &amp; exempel</a>
                 <details class="hb-nav-dropdown">
-                    <summary class="hb-nav-summary{% if temp_products_active %} active{% endif %}">Övriga produkter</summary>
+                    <summary class="hb-nav-summary{% if temp_products_active or dynsatser_active or batstolar_active %} active{% endif %}">Övriga produkter</summary>
                     <div class="hb-nav-submenu">
                         <a href="/tillbehor">Fenderstrumpor</a>
-                        <a href="/dynsatser">Dynsatser</a>
+                        <a href="/dynsatser"{% if dynsatser_active %} class="active"{% endif %}>Dynsatser</a>
+                        <a href="/batstolar"{% if batstolar_active %} class="active"{% endif %}>Båtstolar</a>
                         <a href="/tillfalliga-produkter"{% if temp_products_active %} class="active"{% endif %}>Tillfälliga produkter</a>
                     </div>
                 </details>
@@ -2330,6 +2407,7 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
                         <li><a href="/bilder-och-exempel">Bilder &amp; exempel</a></li>
                         <li><a href="/tillbehor">Fenderstrumpor</a></li>
                         <li><a href="/dynsatser">Dynsatser</a></li>
+                        <li><a href="/batstolar">Båtstolar</a></li>
                         <li><a href="/tillfalliga-produkter">Tillfälliga produkter</a></li>
                         <li><a href="/kontakt">Kontakt</a></li>
                     </ul>
@@ -2382,6 +2460,8 @@ def render_public_page(title: str, description: str, canonical_path: str, conten
         content_html=content_html,
         examples_active=examples_active,
         temp_products_active=temp_products_active,
+        dynsatser_active=dynsatser_active,
+        batstolar_active=batstolar_active,
     )
 
 
@@ -7670,8 +7750,10 @@ def enrich_boat_brands(brands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             slug = f"{base_slug}-{suffix}"
             suffix += 1
         used_slugs.add(slug)
+        kind = normalize_boat_brand_kind(brand.get("kind"))
+        brand["kind"] = kind
         brand["slug"] = slug
-        brand["href"] = f"/dynsatser/{slug}"
+        brand["href"] = f"{BOAT_BRAND_KINDS[kind]['path']}/{slug}"
         images = brand.get("images") if isinstance(brand.get("images"), list) else []
         cover_id = brand.get("cover_image_id")
         if cover_id is not None:
@@ -7690,7 +7772,84 @@ def get_boat_brand_by_slug(slug: str) -> Tuple[Optional[Dict[str, Any]], List[Di
     for brand in brands:
         if brand.get("slug") == clean_slug:
             return brand, brands
+    # Poster som slagits ihop behåller sina gamla adresser.
+    for brand in brands:
+        if clean_slug in (brand.get("legacy_slugs") or []):
+            return brand, brands
     return None, brands
+
+
+def merged_example_targets() -> Dict[str, str]:
+    """Gamla /exempel/-slugs (Båtstolar & Dynor) -> dynsats-/båtstolssidan
+    de slagits ihop med. Dynsatserna är enda stället de hanteras på nu."""
+    targets: Dict[str, str] = {}
+    for brand in enrich_boat_brands(_fetch_boat_brands(include_images=False)):
+        for legacy_slug in brand.get("legacy_slugs") or []:
+            targets.setdefault(legacy_slug, str(brand.get("href") or ""))
+    return targets
+
+
+def example_merge_target(record: Dict[str, Any], targets: Dict[str, str], *extra_slugs: str) -> str:
+    candidates = [
+        *extra_slugs,
+        str(record.get("canonical_slug", "") or ""),
+        str(record.get("fallback_slug", "") or ""),
+        extract_example_slug(str(record.get("source", "") or ""), ""),
+    ]
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if candidate and targets.get(candidate):
+            return targets[candidate]
+    return ""
+
+
+def normalize_model_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", normalize_search_text(value))
+
+
+# Ord som beskriver kapellet/dynorna snarare än båtmodellen ("512 Excel
+# originalkapell" är modellen "512 Excel").
+MODEL_DESCRIPTOR_WORDS = {
+    "original", "originalkapell", "orginal", "kapell", "hamnkapell", "akterkapell", "forkapell", "korkapell",
+    "batkapell", "pulpetkapell", "dynsats", "dynor", "dynset", "i", "med", "utan",
+}
+
+
+def model_tokens(value: Any) -> List[str]:
+    return [token for token in normalize_search_text(value).split() if token not in MODEL_DESCRIPTOR_WORDS]
+
+
+def model_starts_with(model: Any, boat_model: Any) -> bool:
+    """Samma båtmodell, bortsett från kapellord och årtal:
+    "Magnum original hamnkapell 02-10" är "Magnum" och "53BR" är "53 BR",
+    men "53 BR Cross" är en annan båt än "53 BR" och XL är inte XXL."""
+    tokens = model_tokens(model)
+    target = normalize_model_key(" ".join(model_tokens(boat_model)))
+    if not tokens or not target:
+        return False
+    joined = ""
+    for index, token in enumerate(tokens):
+        joined += token
+        if joined == target:
+            return all(rest.isdigit() for rest in tokens[index + 1:])
+        if len(joined) >= len(target):
+            return False
+    return False
+
+
+def boat_brand_matches_model(brand: Dict[str, Any], manufacturer: Any, model: Any, manufacturer_names: Dict[int, str]) -> bool:
+    """True när dynsatsen är kopplad till samma båtmodell som ett kapellexempel."""
+    boat_models = brand.get("boat_models") or []
+    if not boat_models:
+        return False
+    brand_mfr = manufacturer_names.get(int(brand.get("manufacturer_id") or 0), "")
+    if not brand_mfr or normalize_model_key(brand_mfr) != normalize_model_key(manufacturer):
+        return False
+    return any(model_starts_with(model, item) for item in boat_models)
+
+
+def dyn_manufacturer_names() -> Dict[int, str]:
+    return {int(item["id"]): str(item.get("name") or "") for item in _fetch_dyn_manufacturers() if item.get("id") is not None}
 
 
 def _fetch_dyn_manufacturers() -> List[Dict[str, Any]]:
@@ -8070,16 +8229,36 @@ def list_dyn_manufacturers():
 
 @app.route("/api/dynsatser_catalog", methods=["GET"])
 def dynsatser_catalog():
-    entries = enrich_boat_brands(_fetch_boat_brands(include_images=True))
+    """?kind=dynsats (standard), batstol eller all. Bilder & exempel hämtar
+    all så att dynsatser och båtstolar går att söka fram även där."""
+    requested_kind = str(request.args.get("kind", "") or "").strip().lower()
+    all_entries = enrich_boat_brands(_fetch_boat_brands(include_images=True))
+    if requested_kind == "all":
+        entries = all_entries
+    else:
+        kind = normalize_boat_brand_kind(requested_kind)
+        entries = [entry for entry in all_entries if entry.get("kind") == kind]
     manufacturers = enrich_dyn_manufacturers(entries=entries)
+    if requested_kind != "all":
+        # En tillverkare vars poster alla ligger i den andra fliken (t.ex.
+        # Flipper som bara har en båtstol) ska inte visas tom här.
+        other_ids = {int(e["manufacturer_id"]) for e in all_entries if e.get("manufacturer_id") is not None}
+        manufacturers = [m for m in manufacturers if m.get("entry_count") or int(m.get("id")) not in other_ids]
+    manufacturer_names = {int(m["id"]): m.get("name") or "" for m in manufacturers}
     public_entries = [
         {
             "id": entry.get("id"),
             "name": entry.get("name") or "",
+            "kind": entry.get("kind"),
             "manufacturer_id": entry.get("manufacturer_id"),
+            "manufacturer": manufacturer_names.get(int(entry.get("manufacturer_id") or 0), ""),
+            "description": entry.get("description") or "",
+            "boat_models": entry.get("boat_models") or [],
+            "legacy_slugs": entry.get("legacy_slugs") or [],
             "slug": entry.get("slug") or "",
             "href": entry.get("href") or "",
             "primary_image_url": entry.get("primary_image_url") or "",
+            "image_urls": [img.get("url") for img in entry.get("images") or [] if img.get("url")],
         }
         for entry in entries
     ]
@@ -8195,6 +8374,9 @@ def create_boat_brand():
             description=str(payload.get("description", "") or "").strip()[:4000],
             sort_order=int(payload.get("sort_order", next_order) or next_order),
             manufacturer_id=manufacturer_id,
+            kind=normalize_boat_brand_kind(payload.get("kind")),
+            boat_models="\n".join(split_lines(payload.get("boat_models")))[:2000],
+            legacy_slugs="\n".join(split_lines(payload.get("legacy_slugs")))[:2000],
         )
         db.add(brand)
         db.commit()
@@ -8235,6 +8417,12 @@ def update_boat_brand(brand_id: int):
                 brand.manufacturer_id = int(raw) if raw not in (None, "", "null") else None
             except (TypeError, ValueError):
                 brand.manufacturer_id = None
+        if "kind" in payload:
+            brand.kind = normalize_boat_brand_kind(payload.get("kind"))
+        if "boat_models" in payload:
+            brand.boat_models = "\n".join(split_lines(payload.get("boat_models")))[:2000]
+        if "legacy_slugs" in payload:
+            brand.legacy_slugs = "\n".join(split_lines(payload.get("legacy_slugs")))[:2000]
         if "cover_image_id" in payload:
             raw = payload.get("cover_image_id")
             try:
@@ -9004,6 +9192,7 @@ def search_page():
     examples = list_canonical_examples()
     if query:
         results = [item for item in examples if example_matches_search(item, query)]
+        results.extend(item for item in boat_brand_search_records() if example_matches_search(item, query))
     else:
         results = examples[:48]
 
@@ -9012,15 +9201,16 @@ def search_page():
         slug = str(item.get("canonical_slug", "") or "").strip()
         if not slug:
             continue
+        href = str(item.get("href") or f"/exempel/{slug}")
         title_text = " ".join(part for part in [str(item.get("manufacturer", "")).strip(), str(item.get("model", "")).strip()] if part).strip() or slug
         summary = str(item.get("description", "") or item.get("variant", "") or item.get("delivery", "") or GENERIC_EXAMPLE_DESCRIPTION).strip()
         result_items.append(
             f"""
             <article class="seo-search-item">
                 <div class="seo-kicker">{html.escape(str(item.get('category', '') or 'Exempel'))}</div>
-                <h2 style="margin:0; font-size:1.25rem;"><a href="/exempel/{html.escape(slug)}" style="color:inherit; text-decoration:none;">{html.escape(title_text)}</a></h2>
+                <h2 style="margin:0; font-size:1.25rem;"><a href="{html.escape(href)}" style="color:inherit; text-decoration:none;">{html.escape(title_text)}</a></h2>
                 <p style="margin:0; color:#5d5d5d;">{html.escape(summary[:260])}</p>
-                <div><a class="seo-btn" href="/exempel/{html.escape(slug)}">Läs mer</a></div>
+                <div><a class="seo-btn" href="{html.escape(href)}">Läs mer</a></div>
             </article>
             """
         )
@@ -9059,6 +9249,10 @@ def example_page(slug: str):
 
     registry = build_example_registry()
     item = registry.get(clean_slug)
+    merge_targets = merged_example_targets()
+    merge_target = example_merge_target(item or {}, merge_targets, clean_slug)
+    if merge_target:
+        return redirect(merge_target, code=301)
     if not item:
         # Legacy redirects are a fallback for slugs that no longer have an
         # example of their own. A real example always wins over the map.
@@ -9160,16 +9354,41 @@ def example_page(slug: str):
     </div>
     """
 
+    # Dynsatser och båtstolar kopplade till samma båtmodell visas först, så att
+    # den som tittar på kapellet till t.ex. Bella 512 Excel även ser dynsatsen.
+    related_cards = []
+    try:
+        manufacturer_names = dyn_manufacturer_names()
+        for brand in enrich_boat_brands(_fetch_boat_brands(include_images=True)):
+            if len(related_cards) >= 2:
+                break
+            if not boat_brand_matches_model(brand, manufacturer, model, manufacturer_names):
+                continue
+            brand_name = str(brand.get("name") or "")
+            brand_kind = BOAT_BRAND_KINDS[normalize_boat_brand_kind(brand.get("kind"))]
+            related_cards.append(
+                f"""
+            <a class="seo-related-card" href="{html.escape(str(brand.get('href') or brand_kind['path']))}">
+                <img src="{html.escape(image_variant_url(str(brand.get('primary_image_url') or '/logo.png'), 420, 72))}" alt="{html.escape(brand_name)}" loading="lazy"/>
+                <div class="seo-related-copy">
+                    <div class="seo-kicker">{html.escape(brand_kind['singular'])}</div>
+                    <strong>{html.escape(brand_kind['singular'])} {html.escape(brand_name)}</strong>
+                </div>
+            </a>
+            """
+            )
+    except Exception as exc:
+        print(f"example_page: could not match dynsatser: {exc}")
+
     related: List[Dict[str, Any]] = []
     for related_item in list_canonical_examples():
         if str(related_item.get("canonical_slug", "")) == canonical_slug:
             continue
         if str(related_item.get("category", "")).strip() == str(item.get("category", "")).strip():
             related.append(related_item)
-        if len(related) == 3:
+        if len(related) + len(related_cards) >= 4:
             break
 
-    related_cards = []
     for related_item in related:
         related_slug = str(related_item.get("canonical_slug", "")).strip()
         related_title = " ".join(
@@ -9202,7 +9421,7 @@ def example_page(slug: str):
             <aside class="seo-card">{meta_html}</aside>
         </section>
         <section class="seo-related">
-            <h2>Fler exempel</h2>
+            <h2>Andra tittade även på</h2>
             <div class="seo-related-grid">
                 {''.join(related_cards) if related_cards else '<div class="seo-card"><p style="margin:0;">Fler exempel publiceras löpande.</p></div>'}
             </div>
@@ -9447,53 +9666,93 @@ def temp_product_page(slug: str):
 
 @app.route("/dynsatser/<path:slug>", methods=["GET"])
 def boat_brand_page(slug: str):
+    return render_boat_brand_page(slug, BOAT_BRAND_KIND_DYNSATS)
+
+
+@app.route("/batstolar/<path:slug>", methods=["GET"])
+def batstol_page(slug: str):
+    return render_boat_brand_page(slug, BOAT_BRAND_KIND_BATSTOL)
+
+
+def render_boat_brand_page(slug: str, route_kind: str):
+    route_path = BOAT_BRAND_KINDS[route_kind]["path"]
     clean_slug = slug.strip().rstrip("/")
     if clean_slug.endswith(".html"):
-        return redirect(f"/dynsatser/{clean_slug[:-5]}", code=301)
+        return redirect(f"{route_path}/{clean_slug[:-5]}", code=301)
 
     brand, brands = get_boat_brand_by_slug(clean_slug)
     if not brand:
         abort(404)
 
     canonical_slug = str(brand.get("slug") or "").strip()
-    if clean_slug != canonical_slug:
-        return redirect(f"/dynsatser/{canonical_slug}", code=301)
+    kind = normalize_boat_brand_kind(brand.get("kind"))
+    if clean_slug != canonical_slug or kind != route_kind:
+        return redirect(str(brand.get("href") or f"{route_path}/{canonical_slug}"), code=301)
 
+    kind_info = BOAT_BRAND_KINDS[kind]
+    is_batstol = kind == BOAT_BRAND_KIND_BATSTOL
+    manufacturer_names = dyn_manufacturer_names()
+    manufacturer_name = manufacturer_names.get(int(brand.get("manufacturer_id") or 0), "")
     name_text = str(brand.get("name") or "Båtmärke").strip()
     description_text = str(brand.get("description") or "").strip()
     raw_images = [str(img.get("url", "") or "") for img in brand.get("images", []) if img.get("url")]
     images = [image_variant_url(img, 1400, 82) for img in raw_images]
     image_urls = images or [absolute_public_url("/logo.png")]
-    page_title = f"Dynsatser till {name_text} - Henricssons Båtkapell"
-    page_description = (description_text[:160] if description_text else f"Dynsatser och båtdynor till {name_text} hos Henricssons Båtkapell.")
+    if is_batstol:
+        page_title = f"{name_text} - båtstol - Henricssons Båtkapell"
+        page_description = description_text[:160] if description_text else f"Båtstol {name_text} hos Henricssons Båtkapell."
+    else:
+        page_title = f"Dynsatser till {name_text} - Henricssons Båtkapell"
+        page_description = (description_text[:160] if description_text else f"Dynsatser och båtdynor till {name_text} hos Henricssons Båtkapell.")
     contact_query = urlencode({"manufacturer": name_text})
     contact_href = f"/dynsatser?{contact_query}#dynForm"
 
-    other_brands: List[str] = []
-    for other in brands:
-        if other.get("slug") == canonical_slug:
-            continue
-        other_name = html.escape(str(other.get("name") or ""))
-        other_href = html.escape(str(other.get("href") or "/dynsatser"))
-        other_image = html.escape(image_variant_url(str(other.get("primary_image_url") or "/logo.png"), 520, 72))
-        other_brands.append(
-            f"""
-            <a class="seo-related-card" href="{other_href}">
-                <img src="{other_image}" alt="{other_name}" loading="lazy" decoding="async">
+    def related_card(href: str, image: str, title: str, kicker: str, cta: str) -> str:
+        return f"""
+            <a class="seo-related-card" href="{html.escape(href)}">
+                <img src="{html.escape(image_variant_url(image or '/logo.png', 520, 72))}" alt="{html.escape(title)}" loading="lazy" decoding="async">
                 <div class="seo-related-copy">
-                    <strong>{other_name}</strong>
-                    <span>Visa dynsatser</span>
+                    <div class="seo-kicker">{html.escape(kicker)}</div>
+                    <strong>{html.escape(title)}</strong>
+                    <span>{html.escape(cta)}</span>
                 </div>
             </a>
             """
-        )
+
+    # Kapellexempel för samma båtmodell först, sedan fler poster av samma typ
+    # (helst från samma tillverkare).
+    other_brands: List[str] = []
+    for example in list_canonical_examples():
+        if len(other_brands) >= 2:
+            break
+        if boat_brand_matches_model(brand, example.get("manufacturer"), example.get("model"), manufacturer_names):
+            example_title = " ".join(
+                part for part in [str(example.get("manufacturer", "")).strip(), str(example.get("model", "")).strip()] if part
+            )
+            other_brands.append(related_card(
+                f"/exempel/{example.get('canonical_slug')}",
+                str((example.get("images") or ["/logo.png"])[0]),
+                example_title,
+                str(example.get("category") or "Kapell"),
+                "Se kapellet",
+            ))
+    same_kind = [other for other in brands if other.get("slug") != canonical_slug and other.get("kind") == kind]
+    same_kind.sort(key=lambda other: other.get("manufacturer_id") != brand.get("manufacturer_id"))
+    for other in same_kind:
         if len(other_brands) >= 4:
             break
+        other_brands.append(related_card(
+            str(other.get("href") or route_path),
+            str(other.get("primary_image_url") or "/logo.png"),
+            str(other.get("name") or ""),
+            kind_info["singular"],
+            "Se bilder",
+        ))
 
     nav_style = "" if len(image_urls) > 1 else ' style="display:none;"'
     thumbs_html = "".join(
         f'<button type="button" class="seo-thumb{" is-active" if idx == 0 else ""}" data-index="{idx}"><img src="{html.escape(image_variant_url(raw, 180, 68))}" alt="{html.escape(name_text)} bild {idx + 1}" loading="lazy" decoding="async"></button>'
-        for idx, raw in enumerate(raw_images[:10])
+        for idx, raw in enumerate(raw_images[:BOAT_BRAND_MAX_IMAGES])
     )
     gallery_html = f"""
     <div class="seo-gallery">
@@ -9508,16 +9767,31 @@ def boat_brand_page(slug: str):
     </div>
     """
 
+    if is_batstol:
+        default_description = f"Båtstol {name_text}. Kontakta oss för mer information och prisförfrågan."
+        interest_text = f"Intresserad av {name_text}? Kontakta oss så återkommer vi."
+    else:
+        default_description = f"Vi tillverkar dynsatser anpassade för {name_text}. Kontakta oss för mer information och prisförfrågan."
+        interest_text = f"Intresserad av dynsatser till din {name_text}? Kontakta oss så återkommer vi."
+    boat_models = brand.get("boat_models") or []
+    manufacturer_html = ""
+    if manufacturer_name and boat_models:
+        manufacturer_html = (
+            '<div class="seo-meta-block"><div class="seo-meta-label">Passar båtmodell</div>'
+            f'<p style="margin:0;">{html.escape(", ".join(f"{manufacturer_name} {model}" for model in boat_models))}</p></div>'
+        )
+
     meta_html = f"""
     <div class="seo-meta">
         <div class="seo-meta-block">
             <div class="seo-meta-label">Om {html.escape(name_text)}</div>
-            <p style="margin:0;">{html.escape(description_text or f'Vi tillverkar dynsatser anpassade för {name_text}. Kontakta oss för mer information och prisförfrågan.')}</p>
+            <p style="margin:0;">{html.escape(description_text or default_description)}</p>
         </div>
-        <p class="seo-interest-text">Intresserad av dynsatser till din {html.escape(name_text)}? Kontakta oss så återkommer vi.</p>
+        {manufacturer_html}
+        <p class="seo-interest-text">{html.escape(interest_text)}</p>
         <div class="seo-cta-row">
             <a class="seo-btn seo-btn-primary" href="{html.escape(contact_href)}">Skicka förfrågan</a>
-            <a class="seo-btn" href="/dynsatser">Alla märken</a>
+            <a class="seo-btn" href="{route_path}">{'Alla båtstolar' if is_batstol else 'Alla märken'}</a>
         </div>
     </div>
     """
@@ -9528,11 +9802,11 @@ def boat_brand_page(slug: str):
             <nav class="seo-breadcrumbs" aria-label="Brödsmulor">
                 <a href="/">Hem</a>
                 <span>/</span>
-                <a href="/dynsatser">Dynsatser</a>
+                <a href="{route_path}">{html.escape(kind_info['label'])}</a>
                 <span>/</span>
                 <span>{html.escape(name_text)}</span>
             </nav>
-            <span class="seo-kicker">Dynsatser</span>
+            <span class="seo-kicker">{html.escape(kind_info['label'])}</span>
             <h1>{html.escape(name_text)}</h1>
         </section>
         <section class="seo-grid">
@@ -9540,15 +9814,15 @@ def boat_brand_page(slug: str):
             <aside class="seo-card">{meta_html}</aside>
         </section>
         <section class="seo-related">
-            <h2>Fler dynsatser</h2>
+            <h2>Andra tittade även på</h2>
             <div class="seo-related-grid">
-                {''.join(other_brands) if other_brands else '<div class="seo-card"><p style="margin:0;">Kontakta oss för information om fler dynsatser.</p></div>'}
+                {''.join(other_brands) if other_brands else f'<div class="seo-card"><p style="margin:0;">Kontakta oss för information om fler {kind_info["label"].lower()}.</p></div>'}
             </div>
         </section>
     </main>
     <script>
         (function () {{
-            const images = {json.dumps(image_urls[:10])};
+            const images = {json.dumps(image_urls[:BOAT_BRAND_MAX_IMAGES])};
             if (images.length < 2) return;
             const mainImage = document.getElementById('seoGalleryMainImage');
             const thumbs = Array.from(document.querySelectorAll('.seo-thumb'));
@@ -9569,9 +9843,64 @@ def boat_brand_page(slug: str):
     return render_public_page(
         title=page_title,
         description=page_description,
-        canonical_path=f"/dynsatser/{canonical_slug}",
+        canonical_path=f"{route_path}/{canonical_slug}",
         content_html=content_html,
         og_image=image_urls[0],
+    )
+
+
+@app.route("/batstolar", methods=["GET"])
+@app.route("/batstolar/", methods=["GET"])
+def batstolar_page():
+    manufacturer_names = dyn_manufacturer_names()
+    stolar = [
+        brand for brand in enrich_boat_brands(_fetch_boat_brands(include_images=True))
+        if brand.get("kind") == BOAT_BRAND_KIND_BATSTOL
+    ]
+    cards = []
+    for index, brand in enumerate(stolar):
+        name_text = str(brand.get("name") or "")
+        maker = manufacturer_names.get(int(brand.get("manufacturer_id") or 0), "")
+        image = image_variant_url(str(brand.get("primary_image_url") or "/logo.png"), 520, 72)
+        cards.append(f"""
+            <a class="seo-related-card" href="{html.escape(str(brand.get('href') or '/batstolar'))}">
+                <img src="{html.escape(image)}" alt="{html.escape(name_text)}" loading="{'eager' if index < 4 else 'lazy'}" decoding="async">
+                <div class="seo-related-copy">
+                    <div class="seo-kicker">{html.escape(maker or 'Båtstol')}</div>
+                    <strong>{html.escape(name_text)}</strong>
+                    <span>Se bilder</span>
+                </div>
+            </a>
+            """)
+    content_html = f"""
+    <main class="seo-page">
+        <section class="seo-hero">
+            <nav class="seo-breadcrumbs" aria-label="Brödsmulor">
+                <a href="/">Hem</a>
+                <span>/</span>
+                <span>Båtstolar</span>
+            </nav>
+            <span class="seo-kicker">Övriga produkter</span>
+            <h1>Båtstolar</h1>
+            <p style="max-width:720px;">Båtstolar som vi levererar, ofta som ersättning för originalstolar som inte längre går att få tag på. Dynsatser till din båtmodell hittar du under <a href="/dynsatser">Dynsatser</a>.</p>
+        </section>
+        <section class="seo-related">
+            <div class="seo-related-grid">
+                {''.join(cards) if cards else '<div class="seo-card"><p style="margin:0;">Kontakta oss för information om båtstolar.</p></div>'}
+            </div>
+            <div class="seo-cta-row" style="margin-top:2rem;">
+                <a class="seo-btn seo-btn-primary" href="/dynsatser#dynForm">Skicka förfrågan</a>
+                <a class="seo-btn" href="/dynsatser">Dynsatser</a>
+            </div>
+        </section>
+    </main>
+    """
+    return render_public_page(
+        title="Båtstolar - Henricssons Båtkapell",
+        description="Båtstolar från Henricssons Båtkapell, bland annat VA Mini GT, VA Elite S och ersättningsstolar till originalstolar som utgått.",
+        canonical_path="/batstolar",
+        content_html=content_html,
+        og_image=str(stolar[0].get("primary_image_url") or "/logo.png") if stolar else "/logo.png",
     )
 
 
