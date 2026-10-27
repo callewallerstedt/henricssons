@@ -9884,8 +9884,19 @@ def batstolar_page():
             <h1>Båtstolar</h1>
             <p style="max-width:720px;">Båtstolar som vi levererar, ofta som ersättning för originalstolar som inte längre går att få tag på. Dynsatser till din båtmodell hittar du under <a href="/dynsatser">Dynsatser</a>.</p>
         </section>
+        <style>
+            /* Stolarna är mest stående produktbilder: visa hela bilden i
+               stället för att beskära den till 4:3. */
+            .seo-batstolar-grid .seo-related-card img {{
+                aspect-ratio: 4 / 5;
+                object-fit: contain;
+                padding: 0.75rem;
+                box-sizing: border-box;
+                background: #fff;
+            }}
+        </style>
         <section class="seo-related">
-            <div class="seo-related-grid">
+            <div class="seo-related-grid seo-batstolar-grid">
                 {''.join(cards) if cards else '<div class="seo-card"><p style="margin:0;">Kontakta oss för information om båtstolar.</p></div>'}
             </div>
             <div class="seo-cta-row" style="margin-top:2rem;">
